@@ -1,7 +1,6 @@
 /**
- * @file The pane: a header with the project's name and root, a tab bar, the
- * open tab's body, and the refresh that keeps the toolchain current. The
- * class names say what each part is; the utility classes lay it out. `cwd` is the session's directory, `rest`
+ * @file The pane: the ProjectHeader, the Tabs, the open tab's body, and the
+ * refresh that keeps the toolchain current. `cwd` is the session's directory, `rest`
  * the backend call, `every` schedules the refresh and returns a disposer, and
  * `whenSettingsChange` subscribes to a save of the plugin's settings and
  * returns a disposer; all four come from the SDK in PaneWithSession.jsx and
@@ -10,7 +9,9 @@
 import { useEffect, useState } from 'react';
 import { Declaration } from './Declaration.jsx';
 import { Empty } from './Empty.jsx';
+import { ProjectHeader } from './ProjectHeader.jsx';
 import { Release } from './Release.jsx';
+import { Tabs } from './Tabs.jsx';
 import { Toolchain } from './Toolchain.jsx';
 import { load, refreshMs } from './project.js';
 import { useProject } from './store.js';
@@ -54,23 +55,8 @@ export function Pane({ store, cwd, rest, every, whenSettingsChange }) {
   const Body = BODIES[tab];
   return (
     <section className="workshop-pane flex h-full flex-col gap-2 overflow-auto p-3 text-sm">
-      <header className="workshop-project">
-        <h2 className="workshop-project-name text-sm font-medium">{project.name || 'Creature Workshop'}</h2>
-        <p className="workshop-project-root text-[0.6875rem] text-(--ui-text-tertiary)">{project.root}</p>
-      </header>
-      <nav className="workshop-tabs flex gap-1" aria-label="Pane tabs">
-        {TABS.map((name) => (
-          <button
-            key={name}
-            type="button"
-            className="rounded px-2 py-0.5 text-xs"
-            style={{ background: name === tab ? 'var(--ui-bg-tertiary, rgba(127,127,127,0.2))' : 'transparent' }}
-            onClick={() => setTab(name)}
-          >
-            {name}
-          </button>
-        ))}
-      </nav>
+      <ProjectHeader project={project} />
+      <Tabs names={TABS} open={tab} onOpen={setTab} />
       <Body project={project} />
     </section>
   );
