@@ -4,8 +4,8 @@ set -eu
 . "$(dirname "$0")/../../../.envrc"
 
 USAGE="$(cat <<HELP
-Runs every check of the Python sources and the one JavaScript file: the byte-compile of
-the plugin, the four house lints under shell/lint/, and the unit tests with
+Runs every check of the Python and JavaScript sources: the byte-compile of
+the plugin, the five house lints under shell/lint/, and the unit tests with
 the golden cases. The plugin/python job runs exactly this.
 
 Usage: shell/actions/hermes/check [-h,--help]
@@ -34,7 +34,7 @@ compile() {
 }
 
 : <<'FUN'
-Runs the house lints over the source files shell/lint/sources lists.
+Runs the four house lints over the source files shell/lint/sources lists.
 FUN
 lint() {
   # shellcheck disable=SC2046  # one argument per file is what the lints take
@@ -43,6 +43,8 @@ lint() {
   python3 shell/lint/module_docstring.py $(shell/lint/sources '*.py')
   # shellcheck disable=SC2046
   python3 shell/lint/jsdoc_file_block.py $(shell/lint/sources '*.js' '*.jsx')
+  # shellcheck disable=SC2046
+  python3 shell/lint/one_component_per_file.py $(shell/lint/sources '*.jsx')
   # shellcheck disable=SC2046
   python3 shell/lint/indent_width.py $(shell/lint/sources '*.py')
 }

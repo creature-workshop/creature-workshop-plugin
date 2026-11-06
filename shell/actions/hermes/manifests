@@ -75,6 +75,7 @@ write_dashboard_manifest() {
     '.version' "$3" \
     '.tab' "$__write_dashboard_manifest__tab" \
     '.entry' dist/index.js \
+    '.api' plugin_api.py \
     > "$PROJ/dashboard/manifest.json"
 }
 

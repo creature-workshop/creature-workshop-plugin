@@ -11,9 +11,10 @@ USAGE="$(cat <<HELP
 Builds the generated files in a scratch branch cut from the current commit and
 deploys them as one commit on top of it, on the built branch.
 
-The tracked tree carries source only. This action runs the generator,
-shell/actions/hermes/manifests, commits what it wrote (plugin.yaml and
-dashboard/manifest.json) on a scratch branch, and moves the built branch to that commit under a lease on
+The tracked tree carries source only. This action runs the two generators,
+shell/actions/hermes/manifests and shell/actions/hermes/build, commits what
+they wrote (plugin.yaml, dashboard/manifest.json, desktop/plugin.js) on a
+scratch branch, and moves the built branch to that commit under a lease on
 the tip it had, which is what the Hermes catalog pins and what Hermes
 installs. The scratch branch is deleted once the push is through, and the
 checkout is left where it was.
@@ -78,6 +79,7 @@ Writes every generated file from the source tree.
 FUN
 generate() {
   "$PROJ/shell/actions/hermes/manifests"
+  "$PROJ/shell/actions/hermes/build"
 }
 
 : <<'FUN'
@@ -85,9 +87,9 @@ Commits the generated files on top of $1, the source commit they come from.
 They are ignored in the tracked tree, so they are added by force.
 FUN
 commit_generated() {
-  git add -f plugin.yaml dashboard/manifest.json
+  git add -f plugin.yaml dashboard/manifest.json desktop/plugin.js
   git commit -q -m "build: the generated files for $1" \
-    -m "plugin.yaml and dashboard/manifest.json, written by shell/actions/hermes/manifests from the source at $1. This commit is what the catalog pins."
+    -m "plugin.yaml, dashboard/manifest.json and desktop/plugin.js, written by shell/actions/hermes/manifests and shell/actions/hermes/build from the source at $1. This commit is what the catalog pins."
 }
 
 : <<'FUN'

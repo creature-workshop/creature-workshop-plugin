@@ -4,7 +4,7 @@ A Hermes Agent plugin that puts a project's development lifecycle in front of
 the agent and in front of you. The project describes itself once, in its
 `.ops/` declaration, through [shellops](https://gitlab.creature-workshop.com/ksoft/shellops);
 the plugin reads that declaration, runs the project's own `shell/ops`, and
-hands the result to the agent.
+shows the result in a Desktop pane.
 
 ## What the agent gets
 
@@ -21,6 +21,18 @@ In a session whose directory is a shellops project, the system prompt gets a
 short section saying so, with the project's name, its tool count and its
 latest release, so the agent reaches for the tools without being told.
 
+## What you get
+
+A Desktop pane, **Creature Workshop**, docked on the right, with three tabs:
+
+- **Toolchain**: every declared tool with a green or red dot, its version and
+  its channel, re-read every twenty seconds.
+- **Declaration**: the files under `.ops/config/` as they are.
+- **Release**: the latest and stable versions the lock records.
+
+A status-bar chip reads `toolchain 2/2` and turns red when a declared tool is
+missing. Both follow the session's directory.
+
 ## Install
 
 ```bash
@@ -28,7 +40,7 @@ hermes plugins install creature-workshop
 hermes plugins enable creature-workshop
 ```
 
-Then restart Hermes. Only projects that have
+Then restart Hermes. The pane needs Hermes Desktop. Only projects that have
 `shell/ops` and `.ops/config/` are recognised; a project gets them with:
 
 ```bash
@@ -44,7 +56,8 @@ git submodule add https://gitlab.creature-workshop.com/ksoft/shellops.git shell/
   the channel the declaration names: the host's package manager, cargo, npm,
   go, a git repository, Flathub, or an installer script the project ships.
   With `check: true`, the default, nothing is installed.
-- The tools read files under the project only.
+- The backend in `dashboard/plugin_api.py` runs `shell/ops install --check`
+  for the pane on a timer. It reads files under the project only.
 - No network calls of the plugin's own, no telemetry, no credentials.
 
 ## Settings
@@ -56,21 +69,29 @@ tool reports a timeout instead of waiting.
 
 ```bash
 ln -s "$PWD" ~/.hermes/plugins/creature-workshop
+ln -s "$PWD/desktop" ~/.hermes/desktop-plugins/creature-workshop
 hermes plugins enable creature-workshop
 hermes plugins doctor . --ci
 shell/actions/hermes/check
 ```
 
-The tracked tree carries source only. Two files are generated and ignored:
+The tracked tree carries source only. Three files are generated and ignored:
 `plugin.yaml` and `dashboard/manifest.json`, which
 `shell/actions/hermes/manifests` writes from the `.ops/` declaration and the
-lock. Write them after a checkout and after an edit:
+lock, and `desktop/plugin.js`, the file Desktop loads, which
+`shell/actions/hermes/build` bundles with esbuild from the JSX under
+`desktop/src/`; esbuild is declared on the npm channel in
+`.ops/config/tools.yaml`, and `shell/ops install esbuild` fetches it. Write
+them after a checkout and after an edit:
 
 ```bash
-shell/actions/hermes/manifests
+shell/actions/hermes/manifests && shell/actions/hermes/build
 ```
 
-After each merge the pipeline writes them in a scratch branch and deploys
+While working on the pane, `shell/actions/hermes/build --watch` rewrites
+the output on every change, and Desktop reloads it.
+
+After each merge the pipeline builds them in a scratch branch and deploys
 one commit on top of main's to the `built` branch, with
 `shell/actions/hermes/deploy`. That commit is what the Hermes catalog pins
 and what Hermes installs; main never holds the generated files. The branch
@@ -97,12 +118,28 @@ four and generate the fifth, then read it before you commit it:
 UPDATE_GOLDENS=1 python3 -m unittest tests.test_goldens
 ```
 
-The scripts under `shell/lint/` are the house rules here: two-space
-indentation in Python; one blank line, exactly one, after every multi-line
-statement that a statement follows; a doc block at the top of every Python
-file; and a JSDoc `/** @file ... */` block at the top of every JavaScript
-file. `shell/actions/hermes/check` runs the byte-compile, all four and the tests,
+The pane is tested in a browser. `desktop/src/pane.ct.jsx` mounts the
+components through Playwright's component runner and drives them by role
+and by text, the way a user would: the toolchain rows and the chip's count,
+the tabs, the message outside a project. `pnpm install` fetches the runner
+and React (pnpm is declared on the npm channel, and `package.json` names it
+for corepack), `pnpm exec playwright install chromium` the browser, and
+then:
+
+```bash
+pnpm run test:pane
+```
+
+The scripts under `shell/lint/` are the house rules here: one React
+component per file, in a file of its name; two-space indentation in Python;
+one blank line, exactly one, after every multi-line statement that a
+statement follows; a doc block at the top of every Python file; and a JSDoc
+`/** @file ... */` block at the top of every JavaScript file.
+`shell/actions/hermes/check` runs the byte-compile, all five and the tests,
 and the plugin/python job runs exactly that.
 
-This repository is itself a shellops project, so the tools have something to
-read from its own checkout. The work is tracked in Linear under SHOP.
+This repository is itself a shellops project, so the pane has something to
+show from its own checkout. `plugin.yaml` and `dashboard/manifest.json` are
+written from `.ops/config/manifest.yaml` and the lock's release record by
+`shell/actions/hermes/manifests`; run it after changing either, and CI fails
+when they are stale. The work is tracked in Linear under SHOP.

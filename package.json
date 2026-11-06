@@ -1,0 +1,15 @@
+{
+  "name": "creature-workshop-plugin",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.18.0",
+  "description": "The dev dependencies of the Desktop pane's Playwright tests; the plugin itself needs none of them.",
+  "scripts": {
+    "test:pane": "playwright test -c playwright-ct.config.js"
+  },
+  "devDependencies": {
+    "@playwright/experimental-ct-react": "1.62.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  }
+}

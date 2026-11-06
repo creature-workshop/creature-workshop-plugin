@@ -1,0 +1,56 @@
+/**
+ * @file The pane: the project's name and root, three tabs, and the refresh
+ * that keeps the toolchain current. `cwd` is the session's directory, `rest`
+ * the backend call, `every` schedules the refresh and returns a disposer; all
+ * three come from the SDK in PaneWithSession.jsx and from the harness in the
+ * tests.
+ */
+import { useEffect, useState } from 'react';
+import { Declaration } from './Declaration.jsx';
+import { Empty } from './Empty.jsx';
+import { Release } from './Release.jsx';
+import { Toolchain } from './Toolchain.jsx';
+import { CHECK_EVERY_MS, load } from './project.js';
+import { useProject } from './store.js';
+
+export const TABS = ['Toolchain', 'Declaration', 'Release'];
+
+export function Pane({ store, cwd, rest, every }) {
+  const project = useProject(store);
+  const [tab, setTab] = useState(TABS[0]);
+
+  useEffect(() => {
+    load(rest, store, cwd, true);
+    return every(() => load(rest, store, cwd, true), CHECK_EVERY_MS);
+  }, [cwd, store]);
+
+  if (!project.found) {
+    return <Empty project={project} cwd={cwd} />;
+  }
+
+  const body = tab === 'Toolchain'
+    ? <Toolchain project={project} />
+    : tab === 'Declaration'
+      ? <Declaration project={project} />
+      : <Release project={project} />;
+  return (
+    <div className="flex h-full flex-col gap-2 overflow-auto p-3 text-sm">
+      <div className="font-medium">{project.name || 'Creature Workshop'}</div>
+      <div className="text-[0.6875rem] text-(--ui-text-tertiary)">{project.root}</div>
+      <div className="flex gap-1">
+        {TABS.map((name) => (
+          <button
+            key={name}
+            type="button"
+            className="rounded px-2 py-0.5 text-xs"
+            style={{ background: name === tab ? 'var(--ui-bg-tertiary, rgba(127,127,127,0.2))' : 'transparent' }}
+            onClick={() => setTab(name)}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
+      {body}
+    </div>
+  );
+}

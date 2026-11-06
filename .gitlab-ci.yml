@@ -34,6 +34,30 @@ plugin/manifests:
   script:
     - shell/actions/hermes/manifests
 
+# desktop/plugin.js is built from desktop/src/ by shell/actions/hermes/build;
+# this job proves the source still builds.
+plugin/desktop:
+  extends: [.shellops]
+  stage: validation
+  needs: []
+  script:
+    - $SHELLOPS_DIR/cli/install esbuild
+    - . ./.envrc
+    - shell/actions/hermes/build
+
+# The pane's behaviour, in Chromium: desktop/src/*.ct.jsx through Playwright's
+# component runner, on Playwright's own image so the browser is there. pnpm
+# comes from the version package.json names, since the image's corepack
+# cannot verify the registry's current signing key.
+plugin/pane:
+  stage: validation
+  image: mcr.microsoft.com/playwright:v1.62.1-noble
+  needs: []
+  script:
+    - npm install -g "$(node -p "require('./package.json').packageManager")"
+    - pnpm install --frozen-lockfile
+    - pnpm run test:pane
+
 # After each merge, the generated files are built in a scratch branch and
 # deployed as one commit on top of main's, on the built branch, which the
 # catalog pins until promotion carries the build (OPS-1701). The branch names
@@ -48,6 +72,7 @@ plugin/deploy:
     GIT_DEPTH: "0"
     GIT_STRATEGY: clone
   script:
+    - $SHELLOPS_DIR/cli/install esbuild
     - . ./.envrc
     - $SHELLOPS_DIR/action git config Blizz blizz@kernelle-soft.com
     - $SHELLOPS_DIR/action git auth Blizz "$FORGE_ADMIN_TOKEN"
