@@ -14,12 +14,12 @@ import { ToolchainRow } from './ToolchainRow.jsx';
 export function ToolchainTab({ project }) {
   const { rows, installed, total } = toolchainSummary(project);
   if (!project.toolchain) {
-    return <div className="text-xs text-(--ui-text-tertiary)">checking the toolchain…</div>;
+    return <div className="workshop-toolchain-pending text-xs text-(--ui-text-tertiary)">checking the toolchain…</div>;
   }
 
   return (
-    <div>
-      <div className="mb-1 text-xs text-(--ui-text-tertiary)">{`${installed} of ${total} declared tools installed`}</div>
+    <div className="workshop-toolchain">
+      <div className="workshop-toolchain-count mb-1 text-xs text-(--ui-text-tertiary)">{`${installed} of ${total} declared tools installed`}</div>
       {rows.map((row) => <ToolchainRow key={`${row.channel}/${row.tool}`} {...row} />)}
       {project.toolchain.stderr
         ? <pre className="mt-2 whitespace-pre-wrap text-[0.6875rem] text-(--ui-text-tertiary)">{project.toolchain.stderr}</pre>

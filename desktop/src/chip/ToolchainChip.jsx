@@ -28,12 +28,12 @@ function chipColor(installed, total) {
 export function ToolchainChip({ store }) {
   const project = useProject(store);
   if (!project.found) {
-    return <span role="status" className="px-1.5 text-[0.6875rem] text-(--ui-text-tertiary)">no .ops here</span>;
+    return <span role="status" className="workshop-toolchain-chip px-1.5 text-[0.6875rem] text-(--ui-text-tertiary)">no .ops here</span>;
   }
 
   const { installed, total } = toolchainSummary(project);
   return (
-    <span role="status" className="px-1.5 text-[0.6875rem]" style={{ color: chipColor(installed, total) }} title={project.summary || ''}>
+    <span role="status" className="workshop-toolchain-chip px-1.5 text-[0.6875rem]" style={{ color: chipColor(installed, total) }} title={project.summary || ''}>
       toolchain {`${installed}/${total}`}
     </span>
   );

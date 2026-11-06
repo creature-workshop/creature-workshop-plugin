@@ -12,7 +12,7 @@
 export function DeclarationFile({ name, text }) {
   return (
     <div className="workshop-declaration-file mb-3">
-      <div className="text-xs font-medium">{`.ops/config/${name}`}</div>
+      <div className="workshop-declaration-file-path text-xs font-medium">{`.ops/config/${name}`}</div>
       <pre className="whitespace-pre-wrap text-[0.6875rem] text-(--ui-text-secondary)">{text}</pre>
     </div>
   );

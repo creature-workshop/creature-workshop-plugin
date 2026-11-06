@@ -170,8 +170,10 @@ exported or not, with a description and one line per parameter; one React
 component per file, in a file of the component's name; a doc block above
 every `useEffect`, saying what the effect does and when it runs, because an
 effect is a side effect at the boundary of the UI with no name of its own;
-and no other comment inside a function body, because a step that needs one
-is its own function. The last three are the plugin under
+no other comment inside a function body, because a step that needs one is
+its own function; and a `workshop-` class on every `div` and `span`, saying
+what the box is, since a semantic element or a role already says it. The
+last four are the plugin under
 `shell/lint/eslint/`, tested with
 ESLint's RuleTester over the fixtures under `tests/fixtures/`. The one way
 to make an exception is ESLint's own `eslint-disable-next-line` comment,

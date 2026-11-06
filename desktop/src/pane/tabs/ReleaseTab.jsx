@@ -12,10 +12,10 @@ export function ReleaseTab({ project }) {
   const record = project.release || {};
   const declared = project.declared || [];
   return (
-    <div className="text-xs">
-      <div>{`latest: ${record.latest || 'none yet'}`}</div>
-      <div>{`stable: ${record.stable || 'none yet'}`}</div>
-      <div className="mt-2 text-(--ui-text-tertiary)">{`${declared.length} tools declared by this project`}</div>
+    <div className="workshop-release text-xs">
+      <div className="workshop-release-latest">{`latest: ${record.latest || 'none yet'}`}</div>
+      <div className="workshop-release-stable">{`stable: ${record.stable || 'none yet'}`}</div>
+      <div className="workshop-release-declared mt-2 text-(--ui-text-tertiary)">{`${declared.length} tools declared by this project`}</div>
     </div>
   );
 }

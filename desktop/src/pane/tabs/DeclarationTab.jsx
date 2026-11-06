@@ -13,11 +13,11 @@ export function DeclarationTab({ project }) {
   const files = project.declaration || {};
   const names = Object.keys(files);
   if (names.length === 0) {
-    return <div className="text-xs text-(--ui-text-tertiary)">no declaration files under .ops/config</div>;
+    return <div className="workshop-declaration-empty text-xs text-(--ui-text-tertiary)">no declaration files under .ops/config</div>;
   }
 
   return (
-    <div>
+    <div className="workshop-declaration">
       {names.map((name) => <DeclarationFile key={name} name={name} text={files[name]} />)}
     </div>
   );

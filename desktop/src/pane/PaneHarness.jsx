@@ -39,7 +39,7 @@ export function PaneHarness({ answer, later, cwd }) {
   };
   const whenSettingsChange = () => () => {};
   return (
-    <div>
+    <div className="workshop-harness">
       <ToolchainChip store={store} />
       <WorkshopPane store={store} cwd={cwd} rest={rest} every={every} whenSettingsChange={whenSettingsChange} />
     </div>
