@@ -139,7 +139,8 @@ UPDATE_GOLDENS=1 python3 -m unittest tests.test_goldens
 The pane is tested in a browser. `desktop/src/pane.ct.jsx` mounts the
 components through Playwright's component runner and drives them by role
 and by text, the way a user would: the toolchain rows and the chip's count,
-the tabs, the message outside a project. `pnpm install` fetches the runner
+the tabs, the message outside a project, and the error boundary around
+the pane. `pnpm install` fetches the runner
 and React (pnpm is declared on the npm channel, and `package.json` names it
 for corepack), `pnpm exec playwright install chromium` the browser, and
 then:

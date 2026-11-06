@@ -5,6 +5,7 @@
  */
 import { Chip } from './Chip.jsx';
 import { PLUGIN_ID } from './events.js';
+import { PaneBoundary } from './PaneBoundary.jsx';
 import { PaneWithSession } from './PaneWithSession.jsx';
 import { createStore } from './store.js';
 
@@ -23,7 +24,7 @@ export default {
       area: 'panes',
       title: 'Creature Workshop',
       data: { placement: 'right', width: '340px' },
-      render: () => <PaneWithSession ctx={ctx} store={store} />,
+      render: () => <PaneBoundary><PaneWithSession ctx={ctx} store={store} /></PaneBoundary>,
     });
     ctx.register({
       id: 'chip',

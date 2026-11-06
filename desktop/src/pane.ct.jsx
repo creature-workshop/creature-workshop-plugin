@@ -1,9 +1,12 @@
 /**
  * @file What a user can do with the pane: read the toolchain, switch tabs,
  * and see why there is nothing to show outside a project. Each test mounts
- * the harness over one backend answer and reads the page by role and text.
+ * the harness over one backend answer and reads the page by role and text;
+ * the last mounts a component that throws inside the pane's boundary.
  */
 import { test, expect } from '@playwright/experimental-ct-react';
+import { Broken } from './Broken.jsx';
+import { PaneBoundary } from './PaneBoundary.jsx';
 import { PaneHarness } from './PaneHarness.jsx';
 
 /**
@@ -70,4 +73,10 @@ test('the refresh runs at the interval the backend answers with', async ({ mount
   const component = await mount(<PaneHarness project={ANSWER} cwd="/home/someone/demo" />);
 
   await expect(component.getByTestId('refresh')).toHaveText('every 5000 ms');
+});
+
+test('a component that throws while rendering shows its error instead of taking the pane down', async ({ mount }) => {
+  const component = await mount(<PaneBoundary><Broken /></PaneBoundary>);
+
+  await expect(component.getByText('pane error: broken on purpose')).toBeVisible();
 });
