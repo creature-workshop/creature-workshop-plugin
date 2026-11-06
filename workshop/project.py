@@ -136,17 +136,20 @@ def declared_tools(root):
 
 
 def load_yaml(text):
-  """The document in text, parsed by Hermes's own YAML module inside Hermes and by PyYAML elsewhere.
+  """The document in text, parsed by ruamel.yaml inside Hermes, which ships it, and by PyYAML elsewhere.
 
   Raises ImportError when neither is installed, so a missing parser is an error the
-  tools report and never an empty declaration.
+  tools report and never an empty declaration. Both are public packages: the
+  catalog asks plugins to keep off Hermes's own modules.
   """
   try:
-    import hermes_yaml as parser
+    from ruamel.yaml import YAML
   except ImportError:
-    import yaml as parser
+    import yaml
 
-  return parser.safe_load(text)
+    return yaml.safe_load(text)
+
+  return YAML(typ="safe").load(text)
 
 
 def summary_line(root):
