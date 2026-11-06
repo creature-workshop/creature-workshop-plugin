@@ -1,5 +1,5 @@
 /**
- * @file Reading the toolchain out of a loaded project. ToolchainTab and Chip
+ * @file Reading the toolchain out of a loaded project. ToolchainTab and ToolchainChip
  * call toolchainSummary while rendering.
  */
 

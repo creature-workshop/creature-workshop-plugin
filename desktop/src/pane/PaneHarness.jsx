@@ -3,13 +3,13 @@
  * the Playwright tests. Playwright serialises props on their way into the
  * browser, so the test hands over the answer the backend would give, and the
  * harness turns it into the store, the backend call, the timer and the
- * settings subscription that Pane and Chip take. The timer is a real
+ * settings subscription that Pane and ToolchainChip take. The timer is a real
  * setInterval, and when the test gives a second answer, `later`, the backend
  * gives it to every call after the first, so a test can watch the pane
  * change on its refresh.
  */
 import { useRef, useState } from 'react';
-import { Chip } from '../chip/Chip.jsx';
+import { ToolchainChip } from '../chip/ToolchainChip.jsx';
 import { createStore } from '../project/store.js';
 import { Pane } from './Pane.jsx';
 
@@ -40,7 +40,7 @@ export function PaneHarness({ answer, later, cwd }) {
   const whenSettingsChange = () => () => {};
   return (
     <div>
-      <Chip store={store} />
+      <ToolchainChip store={store} />
       <Pane store={store} cwd={cwd} rest={rest} every={every} whenSettingsChange={whenSettingsChange} />
     </div>
   );

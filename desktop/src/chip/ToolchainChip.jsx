@@ -21,11 +21,11 @@ function chipColor(installed, total) {
 }
 
 /**
- * The chip.
+ * The chip: `toolchain <installed>/<declared>`, or a note outside a project.
  * @param props The component's props.
  * @param props.store The store the pane and the chip share.
  */
-export function Chip({ store }) {
+export function ToolchainChip({ store }) {
   const project = useProject(store);
   if (!project.found) {
     return <span role="status" className="px-1.5 text-[0.6875rem] text-(--ui-text-tertiary)">no .ops here</span>;
