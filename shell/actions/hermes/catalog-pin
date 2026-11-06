@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+set -eu
+# shellcheck disable=SC1091  # the project's own .envrc, which sets PROJ and SHELLOPS_DIR
+. "$(dirname "$0")/../../../.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/git/api.sh" \
+  "$SHELLOPS_DIR/lib/git/branches.sh" \
+  "$SHELLOPS_DIR/lib/git/remotes.sh" \
+  "$SHELLOPS_DIR/lib/releases/record/api.sh"
+
+USAGE="$(cat <<HELP
+Moves the Hermes catalog entry's pin to the commit the built branch holds, on
+the pull request branch of the org's fork of hermes-agent.
+
+The entry, plugin-catalog/creature-workshop.yaml on the branch
+catalog/creature-workshop of github.com/creature-workshop/hermes-agent, pins
+one commit by sha and labels it with a version. This action clones that branch
+into a scratch directory, rewrites the two lines, commits as the bot and pushes,
+so the pull request to NousResearch carries the new pin. The sha is the built
+branch's tip unless --sha names another commit, and the version is the lock's
+latest release unless --version names another label. An entry already at that
+pin is left alone.
+
+The push goes as the bot's own GitHub account through GITHUB_TOKEN; nothing
+here reads a person's credentials.
+
+Usage: shell/actions/hermes/catalog-pin [--sha <commit>] [--version <label>] [--no-push] [-h,--help]
+HELP
+)"
+
+CATALOG_REPOSITORY="https://github.com/creature-workshop/hermes-agent.git"
+CATALOG_HOST="https://github.com"
+CATALOG_BRANCH="catalog/creature-workshop"
+CATALOG_ENTRY="plugin-catalog/creature-workshop.yaml"
+BOT_USER="blizz-storm"
+
+ARG_SHA=""
+ARG_VERSION=""
+ARG_PUSH=true
+
+main() {
+  parse_args "$@"
+  require_token
+  __main__sha="${ARG_SHA:-$(built_commit)}"
+  __main__version="${ARG_VERSION:-$(latest_release)}"
+  __main__clone="$(clone_catalog_branch)"
+
+  if [ "$(entry_pinned_at "$__main__clone" "$__main__sha" "$__main__version")" = true ]; then
+    printf 'catalog entry already at %s, %s\n' "$__main__sha" "$__main__version"
+    return 0
+  fi
+
+  rewrite_entry "$__main__clone" "$__main__sha" "$__main__version"
+  commit_entry "$__main__clone" "$__main__sha" "$__main__version"
+  if [ "$ARG_PUSH" = true ]; then
+    push_entry "$__main__clone"
+  else
+    printf 'left in %s; no push\n' "$__main__clone"
+  fi
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) printf '%s\n' "$USAGE"; exit 0 ;;
+      --sha) ARG_SHA="$2"; shift ;;
+      --version) ARG_VERSION="$2"; shift ;;
+      --no-push) ARG_PUSH=false ;;
+      *) printf 'catalog-pin: unknown argument %s\n' "$1" >&2; exit 2 ;;
+    esac
+    shift
+  done
+}
+
+: <<'FUN'
+Exits when GITHUB_TOKEN is not set, since the clone and the push need it.
+FUN
+require_token() {
+  if [ -z "${GITHUB_TOKEN:-}" ]; then
+    printf 'catalog-pin: GITHUB_TOKEN is not set; it is the bot account that pushes the entry\n' >&2
+    exit 1
+  fi
+}
+
+: <<'FUN'
+Prints the commit the built branch holds on origin, or exits when the branch
+does not exist yet.
+FUN
+built_commit() {
+  __built_commit__sha="$(git__remote_branch_tip origin built)"
+  if [ -z "$__built_commit__sha" ]; then
+    printf 'catalog-pin: origin has no built branch; run shell/actions/hermes/deploy first\n' >&2
+    exit 1
+  fi
+  printf '%s\n' "$__built_commit__sha"
+}
+
+: <<'FUN'
+Prints the latest release the lock records.
+FUN
+latest_release() {
+  releases__record__get_latest
+}
+
+: <<'FUN'
+Clones the catalog branch, one commit deep, into a scratch directory, with the
+bot's token on the host and the bot as the committer, and prints the directory.
+FUN
+clone_catalog_branch() {
+  __clone_catalog_branch__dir="$(mktemp -d "${TMPDIR:-/tmp}/catalog-pin.XXXXXX")"
+  git -c "http.${CATALOG_HOST}/.extraheader=Authorization: Basic $(basic_credentials)" \
+    clone --quiet --depth 1 --branch "$CATALOG_BRANCH" "$CATALOG_REPOSITORY" "$__clone_catalog_branch__dir"
+  git -C "$__clone_catalog_branch__dir" config "http.${CATALOG_HOST}/.extraheader" "Authorization: Basic $(basic_credentials)"
+  git -C "$__clone_catalog_branch__dir" config user.name Blizz
+  git -C "$__clone_catalog_branch__dir" config user.email blizz@kernelle-soft.com
+  printf '%s\n' "$__clone_catalog_branch__dir"
+}
+
+: <<'FUN'
+Prints the bot's credentials as the Basic authorization value git sends.
+FUN
+basic_credentials() {
+  printf '%s:%s' "$BOT_USER" "$GITHUB_TOKEN" | base64 | tr -d '\n'
+}
+
+: <<'FUN'
+Prints true when the entry in the clone $1 already pins $2 at version $3.
+FUN
+entry_pinned_at() {
+  if grep -q "^sha: $2\$" "$1/$CATALOG_ENTRY" && grep -q "^version: \"$3\"\$" "$1/$CATALOG_ENTRY"; then
+    printf 'true\n'
+  else
+    printf 'false\n'
+  fi
+}
+
+: <<'FUN'
+Rewrites the entry's sha and version lines in the clone $1 to $2 and $3.
+FUN
+rewrite_entry() {
+  awk -v "sha=$2" -v "version=$3" -f "$PROJ/shell/actions/hermes/catalog_pin.awk" "$1/$CATALOG_ENTRY" > "$1/$CATALOG_ENTRY.next"
+  mv "$1/$CATALOG_ENTRY.next" "$1/$CATALOG_ENTRY"
+}
+
+: <<'FUN'
+Commits the rewritten entry in the clone $1, naming the pin $2 and the version $3.
+FUN
+commit_entry() {
+  git -C "$1" add "$CATALOG_ENTRY"
+  git -C "$1" commit -q -m "catalog: creature-workshop at ${2} as ${3}" \
+    -m "The built branch of ksoft/hermes/creature-workshop-plugin at ${2}, written by shell/actions/hermes/catalog-pin."
+  printf 'pinned %s as %s\n' "$2" "$3"
+}
+
+: <<'FUN'
+Pushes the clone $1's branch to the fork, and removes the clone.
+FUN
+push_entry() {
+  git -C "$1" push --quiet origin "HEAD:refs/heads/$CATALOG_BRANCH"
+  rm -rf "$1"
+  printf 'pushed %s to %s\n' "$CATALOG_BRANCH" "$CATALOG_REPOSITORY"
+}
+
+main "$@"

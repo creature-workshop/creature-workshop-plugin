@@ -77,6 +77,13 @@ and what Hermes installs; main never holds the generated files. The branch
 names no rung of shellops' ladder and the release job never moves it; when
 promotion carries the build (OPS-1701), the job goes away.
 
+The catalog entry follows: `shell/actions/hermes/catalog-pin` rewrites the
+`sha` and `version` of `plugin-catalog/creature-workshop.yaml` on the
+`catalog/creature-workshop` branch of the org's fork of hermes-agent and
+pushes it as the bot, so the pull request to NousResearch carries the new
+pin; the plugin/catalog job runs it after each deploy. Run it by hand with
+`--sha` and `--version` to pin another commit, or `--no-push` to look first.
+
 The tools are golden-tested. A case is a directory under
 `tests/goldens/cases/` in the shape of a shell-goldens fileset: `name.txt`
 and `about.txt` say what the case shows, `calls.txt` and `input/` are the
