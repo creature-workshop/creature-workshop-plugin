@@ -1,8 +1,9 @@
 /**
  * @file The error boundary around the pane: when a component below it throws
  * while rendering, the pane shows the error's message in place of the tree
- * instead of Desktop losing the plugin. React provides a boundary only as a
- * class component.
+ * instead of Desktop losing the plugin, and writes the error with its
+ * component stack to the console, which Desktop keeps in its chromium log.
+ * React provides a boundary only as a class component.
  */
 import { Component } from 'react';
 
@@ -15,6 +16,10 @@ export class PaneBoundary extends Component {
 
   static getDerivedStateFromError(error) {
     return { error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('creature-workshop pane', error, info.componentStack);
   }
 
   render() {

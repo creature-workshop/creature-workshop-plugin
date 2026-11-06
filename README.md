@@ -60,6 +60,10 @@ git submodule add https://gitlab.creature-workshop.com/ksoft/shellops.git shell/
 - The backend in `dashboard/plugin_api.py` runs `shell/ops install --check`
   for the pane on a timer. It reads files under the project only. What it
   answers with is the models in `workshop/answers.py`.
+- Every `shell/ops` run is logged under the `creature-workshop` logger,
+  which Hermes writes to `~/.hermes/logs/`: successes at INFO in agent.log,
+  failures at WARNING with their stderr in errors.log too, so `hermes logs`
+  shows what the plugin ran. The pane writes a render error to the console.
 - No network calls of the plugin's own, no telemetry, no credentials.
 
 ## Settings

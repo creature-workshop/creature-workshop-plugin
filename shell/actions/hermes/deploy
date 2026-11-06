@@ -7,7 +7,7 @@ import \
   "$SHELLOPS_DIR/lib/git/api.sh" \
   "$SHELLOPS_DIR/lib/git/branches.sh"
 
-USAGE="$(cat <<HELP
+USAGE="$(cat <<'HELP'
 Builds the generated files in a scratch branch cut from the current commit and
 deploys them as one commit on top of it, on the built branch.
 

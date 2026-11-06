@@ -9,7 +9,7 @@ import \
   "$SHELLOPS_DIR/lib/releases/record/api.sh" \
   "$SHELLOPS_DIR/lib/structs/api.sh"
 
-USAGE="$(cat <<HELP
+USAGE="$(cat <<'HELP'
 Writes the two manifests Hermes reads from what this repository declares.
 
 plugin.yaml and dashboard/manifest.json repeat the plugin's id, its name, its

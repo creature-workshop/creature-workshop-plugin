@@ -31,3 +31,6 @@ playwright/.cache/
 
 # uv, for the Python dev dependencies the checks need
 .venv/
+
+# coverage.py, written by shell/actions/hermes/check
+.coverage

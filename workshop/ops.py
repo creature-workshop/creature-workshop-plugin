@@ -3,12 +3,19 @@
 Every command runs in the project's root with its .envrc loaded, which is how
 shellops finds the project, and reports the same shape whether it succeeded,
 failed or timed out, so a tool can hand the result straight to the agent.
+Every run is logged under the `creature-workshop` logger, which Hermes writes
+to ~/.hermes/logs/: a success at INFO into agent.log, a failure at WARNING
+with its stderr into errors.log as well, so `hermes logs` shows what the
+plugin ran and what went wrong.
 """
+import logging
 import subprocess
 import time
 from pathlib import Path
 
 from . import settings
+
+log = logging.getLogger("creature-workshop")
 
 
 def run(root, args, timeout_seconds=None):
@@ -23,9 +30,20 @@ def run(root, args, timeout_seconds=None):
   limit = limit_of(timeout_seconds)
   completed, failure = attempted(lambda: dispatch(root, command, limit))
   if failure is not None:
-    return result(command, False, failure.stdout, failure.message, started)
+    return logged(result(command, False, failure.stdout, failure.message, started))
 
-  return result(command, completed.returncode == 0, completed.stdout, completed.stderr, started)
+  return logged(result(command, completed.returncode == 0, completed.stdout, completed.stderr, started))
+
+
+def logged(outcome):
+  """The outcome, after logging it: INFO when the command succeeded, WARNING with
+  its stderr when it did not."""
+  if outcome["ok"]:
+    log.info("%s in %dms", outcome["command"], outcome["duration_ms"])
+  else:
+    log.warning("%s failed in %dms: %s", outcome["command"], outcome["duration_ms"], outcome["stderr"].strip())
+
+  return outcome
 
 
 def limit_of(timeout_seconds):

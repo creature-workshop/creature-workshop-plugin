@@ -3,7 +3,7 @@ set -eu
 # shellcheck disable=SC1091  # the project's own .envrc, which sets PROJ and SHELLOPS_DIR
 . "$(dirname "$0")/../../../.envrc"
 
-USAGE="$(cat <<HELP
+USAGE="$(cat <<'HELP'
 Runs every check of the Python sources: the byte-compile of the plugin,
 the four house lints under shell/lint/, and the unit tests with the golden
 cases under coverage, with the report at the end. Run it as

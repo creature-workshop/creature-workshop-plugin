@@ -69,3 +69,23 @@ class Tools(unittest.TestCase):
 
 if __name__ == "__main__":
   unittest.main()
+
+
+class Logging(unittest.TestCase):
+  def test_a_failed_run_is_logged_as_a_warning_with_its_stderr(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      with self.assertLogs("creature-workshop", level="WARNING") as logged:
+        ops.run(tmp, ["install", "--check"])
+
+      self.assertIn("shell/ops install --check failed", logged.output[0])
+
+  def test_a_successful_run_is_logged_as_info(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      (root / "shell").mkdir()
+      (root / "shell" / "ops").write_text("#!/bin/sh\nexit 0\n")
+      (root / "shell" / "ops").chmod(0o755)
+      with self.assertLogs("creature-workshop", level="INFO") as logged:
+        ops.run(root, ["lint"])
+
+      self.assertIn("INFO:creature-workshop:shell/ops lint in", logged.output[0])

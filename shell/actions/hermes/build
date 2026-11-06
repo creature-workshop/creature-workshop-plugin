@@ -5,7 +5,7 @@ set -eu
 
 import "$SHELLOPS_DIR/lib/node/api.sh"
 
-USAGE="$(cat <<HELP
+USAGE="$(cat <<'HELP'
 Writes desktop/plugin.js, the file Hermes Desktop loads, from the JSX under
 desktop/src/.
 

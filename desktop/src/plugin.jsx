@@ -1,6 +1,7 @@
 /**
- * @file Creature Workshop in Hermes Desktop: registers the pane and the
- * status chip with the SDK. The tree under desktop/src is one folder per
+ * @file The entry point of the plugin's Desktop side: the one file Desktop
+ * loads, through the bundle built from it, and that bundle's only entry. It
+ * registers the pane and the status chip with the SDK. The tree under desktop/src is one folder per
  * surface Desktop registers, pane/ and chip/, plus project/, the loaded
  * project both of them read, and events.js, the names Hermes and the plugin
  * agree on. This is the source; shell/actions/hermes/build writes

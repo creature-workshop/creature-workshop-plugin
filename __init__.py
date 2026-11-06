@@ -1,6 +1,7 @@
-"""Creature Workshop: a project's shellops declaration, toolchain, tests and lint in Hermes.
+"""The entry point of the plugin's Python side: Creature Workshop, a project's
+shellops declaration, toolchain, tests and lint in Hermes.
 
-Hermes calls register(ctx) once at startup. It registers one tool per lifecycle
+Hermes imports this file as the plugin and calls register(ctx) once at startup. It registers one tool per lifecycle
 verb and a system prompt section that tells the agent, when the session's
 directory is a shellops project, what the project declares and which tools are
 missing. The Desktop pane in desktop/ reads the same facts through the backend
