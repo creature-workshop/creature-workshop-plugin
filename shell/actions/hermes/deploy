@@ -17,7 +17,10 @@ they wrote (plugin.yaml, dashboard/manifest.json, desktop/plugin.js) on a
 scratch branch, and moves the built branch to that commit under a lease on
 the tip it had, which is what the Hermes catalog pins and what Hermes
 installs. The scratch branch is deleted once the push is through, and the
-checkout is left where it was.
+checkout is left where it was. The plugin/deploy job runs this after each
+merge on main, pushing as the Blizz bot the way the release tag goes. The
+built branch names no rung of shellops' ladder and the release job never
+moves it; when promotion carries the build (OPS-1701), the job goes away.
 
 Usage: shell/actions/hermes/deploy [--branch <name>] [--no-push] [-h,--help]
 

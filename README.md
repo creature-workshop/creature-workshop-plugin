@@ -98,12 +98,15 @@ shell/actions/hermes/manifests && shell/actions/hermes/build
 While working on the pane, `shell/actions/hermes/build --watch` rewrites
 the output on every change, and Desktop reloads it.
 
-After each merge the pipeline builds them in a scratch branch and deploys
-one commit on top of main's to the `built` branch, with
-`shell/actions/hermes/deploy`. That commit is what the Hermes catalog pins
-and what Hermes installs; main never holds the generated files. The branch
-names no rung of shellops' ladder and the release job never moves it; when
-promotion carries the build (OPS-1701), the job goes away.
+The pipeline in `.gitlab-ci.yml` is the creatures catalog's `forge`,
+`linear` and `agents` components, which keep the merge request, its issues
+and its hat label in step, plus one job per action under
+`shell/actions/hermes/`: `plugin/python` runs `check`, `plugin/manifests`
+and `plugin/desktop` prove the two generators still run, `plugin/pane` runs
+the browser tests, and `plugin/deploy`, after each merge, builds the
+generated files in a scratch branch and deploys one commit on top of main's
+to the `built` branch. That commit is what the Hermes catalog pins and what
+Hermes installs; main never holds the generated files.
 
 The catalog entry follows: `shell/actions/hermes/catalog-pin` rewrites the
 `sha` and `version` of `plugin-catalog/creature-workshop.yaml` on the
@@ -137,16 +140,19 @@ then:
 pnpm run test:pane
 ```
 
+In CI the same tests run on Playwright's own image, so the browser is
+there, and pnpm is installed with npm at the version `package.json` names,
+because that image's corepack cannot verify the registry's current signing
+key.
+
 The scripts under `shell/lint/` are the house rules here: one React
 component per file, in a file of its name; two-space indentation in Python;
 one blank line, exactly one, after every multi-line statement that a
-statement follows; a doc block at the top of every Python file; and a JSDoc
-`/** @file ... */` block at the top of every JavaScript file.
-`shell/actions/hermes/check` runs the byte-compile, all five and the tests,
-and the plugin/python job runs exactly that.
+statement follows; a doc block at the top of every Python file; a JSDoc
+`/** @file ... */` block at the top of every JavaScript file; and no
+comments in YAML, where what a comment would say belongs with the thing it
+describes. `shell/actions/hermes/check` runs the byte-compile, all six and
+the tests, and the plugin/python job runs exactly that.
 
 This repository is itself a shellops project, so the pane has something to
-show from its own checkout. `plugin.yaml` and `dashboard/manifest.json` are
-written from `.ops/config/manifest.yaml` and the lock's release record by
-`shell/actions/hermes/manifests`; run it after changing either, and CI fails
-when they are stale. The work is tracked in Linear under SHOP.
+show from its own checkout. The work is tracked in Linear under SHOP.

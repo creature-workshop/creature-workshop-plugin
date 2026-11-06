@@ -1,8 +1,3 @@
-# The plugin's pipeline, from the creatures catalog: the governance and
-# release members of `forge`, `linear` to keep the merge request and its
-# issues in step, `agents` for the owning hat's label, and the plugin's own
-# jobs, each one call of an action under shell/actions/hermes/.
-
 include:
   - component: $CI_SERVER_FQDN/ksoft/creatures/forge@0.20.0-dev.17
   - component: $CI_SERVER_FQDN/ksoft/creatures/linear@0.20.0-dev.17
@@ -24,9 +19,6 @@ plugin/python:
     - pip install -q pyyaml
     - shell/actions/hermes/check
 
-# plugin.yaml and dashboard/manifest.json are written from the .ops declaration
-# and the lock by shell/actions/hermes/manifests; this job proves the source
-# still generates them.
 plugin/manifests:
   extends: [.shellops]
   stage: validation
@@ -34,8 +26,6 @@ plugin/manifests:
   script:
     - shell/actions/hermes/manifests
 
-# desktop/plugin.js is built from desktop/src/ by shell/actions/hermes/build;
-# this job proves the source still builds.
 plugin/desktop:
   extends: [.shellops]
   stage: validation
@@ -45,10 +35,6 @@ plugin/desktop:
     - . ./.envrc
     - shell/actions/hermes/build
 
-# The pane's behaviour, in Chromium: desktop/src/*.ct.jsx through Playwright's
-# component runner, on Playwright's own image so the browser is there. pnpm
-# comes from the version package.json names, since the image's corepack
-# cannot verify the registry's current signing key.
 plugin/pane:
   stage: validation
   image: mcr.microsoft.com/playwright:v1.62.1-noble
@@ -58,10 +44,6 @@ plugin/pane:
     - pnpm install --frozen-lockfile
     - pnpm run test:pane
 
-# After each merge, the generated files are built in a scratch branch and
-# deployed as one commit on top of main's, on the built branch, which the
-# catalog pins until promotion carries the build (OPS-1701). The branch names
-# no rung and the release job never touches it. The push goes as the Blizz bot, the way the release tag does.
 plugin/deploy:
   extends: [.shellops]
   stage: publishing

@@ -12,10 +12,11 @@ desktop/src/.
 esbuild bundles desktop/src/plugin.jsx into one readable ES module, with the
 JSX turned into React's runtime calls and the three modules Desktop provides
 left as imports: @hermes/plugin-sdk, react and react/jsx-runtime. The output
-is committed, because the catalog pins a tree Desktop loads as it is; the
-plugin/desktop job fails when a commit left it stale. esbuild comes from
-.ops/config/tools.yaml through ops install, and runs from its package home,
-because its bin is a native binary the npm channel's node shim cannot start.
+is not tracked: the plugin/desktop job runs this to prove the source still
+builds, and shell/actions/hermes/deploy commits what it wrote on the built
+branch, which the catalog pins. esbuild comes from .ops/config/tools.yaml
+through ops install, and runs from its package home, because its bin is a
+native binary the npm channel's node shim cannot start.
 
 With --watch, esbuild stays up and rewrites the output on every change under
 desktop/src/; Desktop reloads a user plugin's file when it changes, so that
