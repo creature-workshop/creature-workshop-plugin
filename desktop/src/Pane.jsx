@@ -14,8 +14,11 @@ import { Toolchain } from './Toolchain.jsx';
 import { load, refreshMs } from './project.js';
 import { useProject } from './store.js';
 
-/** The tabs, in order; the first is the one the pane opens on. */
-export const TABS = ['Toolchain', 'Declaration', 'Release'];
+/** The component of each tab, by the tab's name; the first is the one the pane opens on. */
+const BODIES = { Toolchain, Declaration, Release };
+
+/** The tabs, in order. */
+export const TABS = Object.keys(BODIES);
 
 /**
  * The pane.
@@ -31,22 +34,23 @@ export function Pane({ store, cwd, rest, every, whenSettingsChange }) {
   const [tab, setTab] = useState(TABS[0]);
   const intervalMs = refreshMs(project);
 
+  /** Loads the project when the directory changes, and again, without the check, on each save of the settings. */
   useEffect(() => {
     load(rest, store, cwd, true);
     return whenSettingsChange(() => load(rest, store, cwd, false));
   }, [cwd, store]);
 
-  useEffect(() => every(() => load(rest, store, cwd, true), intervalMs), [cwd, store, intervalMs]);
+  /** Re-runs the check on the interval, and reschedules when the interval setting changes. */
+  useEffect(() => {
+    const stop = every(() => load(rest, store, cwd, true), intervalMs);
+    return stop;
+  }, [cwd, store, intervalMs]);
 
   if (!project.found) {
     return <Empty project={project} cwd={cwd} />;
   }
 
-  const body = tab === 'Toolchain'
-    ? <Toolchain project={project} />
-    : tab === 'Declaration'
-      ? <Declaration project={project} />
-      : <Release project={project} />;
+  const Body = BODIES[tab];
   return (
     <div className="flex h-full flex-col gap-2 overflow-auto p-3 text-sm">
       <div className="font-medium">{project.name || 'Creature Workshop'}</div>
@@ -64,7 +68,7 @@ export function Pane({ store, cwd, rest, every, whenSettingsChange }) {
           </button>
         ))}
       </div>
-      {body}
+      <Body project={project} />
     </div>
   );
 }

@@ -29,6 +29,10 @@ export function createStore() {
  */
 export function useProject(store) {
   const [project, setProject] = useState(store.get());
-  useEffect(() => store.subscribe(setProject), [store]);
+  /** Subscribes to the store for as long as the caller is mounted, and again if the store changes. */
+  useEffect(() => {
+    const unsubscribe = store.subscribe(setProject);
+    return unsubscribe;
+  }, [store]);
   return project;
 }

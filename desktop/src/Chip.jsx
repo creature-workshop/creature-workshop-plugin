@@ -7,6 +7,19 @@ import { useProject } from './store.js';
 import { toolchainSummary } from './project.js';
 
 /**
+ * The chip's colour: muted with nothing declared, green with everything installed, red otherwise.
+ * @param installed How many declared tools are installed.
+ * @param total How many tools are declared.
+ */
+function chipColor(installed, total) {
+  if (total === 0) {
+    return 'var(--ui-text-tertiary)';
+  }
+
+  return installed === total ? '#3fb950' : '#f85149';
+}
+
+/**
  * The chip.
  * @param props The component's props.
  * @param props.store The store the pane and the chip share.
@@ -18,10 +31,8 @@ export function Chip({ store }) {
   }
 
   const { installed, total } = toolchainSummary(project);
-  const allThere = total > 0 && installed === total;
-  const color = total === 0 ? 'var(--ui-text-tertiary)' : allThere ? '#3fb950' : '#f85149';
   return (
-    <span className="px-1.5 text-[0.6875rem]" style={{ color }} title={project.summary || ''}>
+    <span className="px-1.5 text-[0.6875rem]" style={{ color: chipColor(installed, total) }} title={project.summary || ''}>
       toolchain {`${installed}/${total}`}
     </span>
   );

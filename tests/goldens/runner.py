@@ -85,6 +85,14 @@ def reply(line, root):
   return json.dumps(normalised(answer, root), indent=2, sort_keys=True, ensure_ascii=False)
 
 
+def normalised_field(key, item, root):
+  """One field of a reply: a duration as <ms>, anything else normalised like the reply."""
+  if key == "duration_ms":
+    return "<ms>"
+
+  return normalised(item, root)
+
+
 def parse_call(line):
   """`workshop_test {"verb": "plan"}`  ->  ("workshop_test", {"verb": "plan"})"""
   tool, _, rest = line.partition(" ")
@@ -94,7 +102,7 @@ def parse_call(line):
 def normalised(value, root):
   """The reply with the scratch root written as <root> and durations as <ms>."""
   if isinstance(value, dict):
-    return {key: "<ms>" if key == "duration_ms" else normalised(item, root) for key, item in value.items()}
+    return {key: normalised_field(key, item, root) for key, item in value.items()}
 
   if isinstance(value, list):
     return [normalised(item, root) for item in value]

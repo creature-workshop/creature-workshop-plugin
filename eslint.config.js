@@ -4,7 +4,8 @@
  * JSDoc block at the top of every file and on every top-level declaration,
  * exported or not, each with a description and one for every parameter, the
  * way a shellops doc block lists its args; one React component per file, in
- * a file of the component's name; and no comments inside a function body.
+ * a file of the component's name; a doc block on every useEffect; and no
+ * other comment inside a function body.
  * The one exception syntax is ESLint's own eslint-disable comment, with the
  * reason after two dashes.
  */
@@ -55,6 +56,7 @@ export default [
       'react/no-multi-comp': ['error', { ignoreStateless: false }],
       'react/prop-types': 'off',
       'house/no-comment-in-body': 'error',
+      'house/use-effect-doc': 'error',
     },
   },
   {

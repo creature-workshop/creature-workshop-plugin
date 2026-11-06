@@ -6,7 +6,8 @@ set -eu
 USAGE="$(cat <<HELP
 Runs every check of the Python sources: the byte-compile of the plugin,
 the four house lints under shell/lint/, and the unit tests with the golden
-cases. The plugin/python job runs exactly this. The JavaScript has its own
+cases under coverage, with the report at the end. The plugin/python job
+runs exactly this, after `pip install -r requirements-dev.txt`. The JavaScript has its own
 checks, through ESLint and the browser tests: `pnpm run lint`,
 `pnpm run test:lint` and `pnpm run test:pane`.
 
@@ -50,10 +51,13 @@ lint() {
 }
 
 : <<'FUN'
-Runs the unit tests and the golden cases under tests/.
+Runs the unit tests and the golden cases under tests/, measuring which
+lines of the plugin they reach, and prints the report with the lines each
+file misses.
 FUN
 test() {
-  python3 -m unittest discover -s tests -t . -v
+  python3 -m coverage run --source=workshop,dashboard -m unittest discover -s tests -t . -v
+  python3 -m coverage report -m
 }
 
 main "$@"

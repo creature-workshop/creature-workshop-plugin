@@ -1,9 +1,12 @@
 /**
  * @file The rule house/no-comment-in-body: no comment inside a function body.
  * A step that needs explaining is its own function, with the explanation in
- * its JSDoc block. An ESLint directive such as eslint-disable-next-line is
- * the exception syntax, not a comment about the code, so it is allowed.
+ * its JSDoc block. Two comments are allowed: an ESLint directive such as
+ * eslint-disable-next-line, which is the exception syntax and not a comment
+ * about the code, and the doc block of a useEffect, which
+ * house/use-effect-doc requires.
  */
+import { effectDoc, isEffectCall } from './effectDoc.js';
 
 /**
  * Whether the comment is an ESLint directive.
@@ -32,15 +35,21 @@ export default {
   },
   create(context) {
     const bodies = [];
+    const allowed = new Set();
     return {
       ':function'(node) {
         if (node.body.type === 'BlockStatement') {
           bodies.push(node.body.range);
         }
       },
+      CallExpression(node) {
+        if (isEffectCall(node)) {
+          allowed.add(effectDoc(context.sourceCode, node));
+        }
+      },
       'Program:exit'() {
         for (const comment of context.sourceCode.getAllComments()) {
-          if (!isDirective(comment) && insideAny(comment.range, bodies)) {
+          if (!isDirective(comment) && !allowed.has(comment) && insideAny(comment.range, bodies)) {
             context.report({ loc: comment.loc, messageId: 'inside' });
           }
         }

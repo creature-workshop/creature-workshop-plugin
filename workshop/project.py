@@ -89,7 +89,7 @@ def manifest(root):
   except Exception:
     return {}
 
-  return loaded if isinstance(loaded, dict) else {}
+  return mapping_or_empty(loaded)
 
 
 def lock(root):
@@ -106,8 +106,15 @@ def lock(root):
 
 def release(root):
   """The release record the lock carries: {"latest": ..., "stable": ...}, or empty."""
-  record = lock(root).get("release")
-  return record if isinstance(record, dict) else {}
+  return mapping_or_empty(lock(root).get("release"))
+
+
+def mapping_or_empty(value):
+  """The value when it is a mapping, else an empty one."""
+  if isinstance(value, dict):
+    return value
+
+  return {}
 
 
 def declared_tools(root):
@@ -129,10 +136,17 @@ def declared_tools(root):
       continue
 
     for tool, entry in entries.items():
-      version = entry.get("version", "") if isinstance(entry, dict) else ""
-      found.append((channel, tool, str(version)))
+      found.append((channel, tool, version_of(entry)))
 
   return found
+
+
+def version_of(entry):
+  """The version a tool's entry declares, as text; empty when the entry is not a mapping."""
+  if isinstance(entry, dict):
+    return str(entry.get("version", ""))
+
+  return ""
 
 
 def load_yaml(text):
@@ -159,7 +173,22 @@ def summary_line(root):
   """
   name = manifest(root).get("name") or Path(root).name
   tools = declared_tools(root)
-  latest = release(root).get("latest")
-  tail = f" and its latest release is {latest}" if latest else ""
   return (f'This directory is the shellops project "{name}" at {root}; '
-      f"it declares {len(tools)} tool{'s' if len(tools) != 1 else ''}{tail}.")
+      f"it declares {counted(len(tools), 'tool')}{release_tail(release(root))}.")
+
+
+def counted(count, noun):
+  """The count with the noun, plural except for one: counted(2, "tool") -> "2 tools"."""
+  if count == 1:
+    return f"1 {noun}"
+
+  return f"{count} {noun}s"
+
+
+def release_tail(record):
+  """The clause about the latest release for the summary, empty before the first release."""
+  latest = record.get("latest")
+  if not latest:
+    return ""
+
+  return f" and its latest release is {latest}"

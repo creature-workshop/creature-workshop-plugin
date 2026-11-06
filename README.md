@@ -58,7 +58,8 @@ git submodule add https://gitlab.creature-workshop.com/ksoft/shellops.git shell/
   go, a git repository, Flathub, or an installer script the project ships.
   With `check: true`, the default, nothing is installed.
 - The backend in `dashboard/plugin_api.py` runs `shell/ops install --check`
-  for the pane on a timer. It reads files under the project only.
+  for the pane on a timer. It reads files under the project only. What it
+  answers with is the models in `workshop/answers.py`.
 - No network calls of the plugin's own, no telemetry, no credentials.
 
 ## Settings
@@ -79,8 +80,14 @@ ln -s "$PWD" ~/.hermes/plugins/creature-workshop
 ln -s "$PWD/desktop" ~/.hermes/desktop-plugins/creature-workshop
 hermes plugins enable creature-workshop
 hermes plugins doctor . --ci
+pip install -r requirements-dev.txt
 shell/actions/hermes/check
 ```
+
+`requirements-dev.txt` is what the checks need and the plugin does not:
+PyYAML to read the declaration outside Hermes, FastAPI for the backend, and
+coverage. `check` runs the tests under coverage and ends with the report,
+file by file with the lines the tests miss.
 
 The tracked tree carries source only. Three files are generated and ignored:
 `plugin.yaml` and `dashboard/manifest.json`, which
@@ -158,9 +165,12 @@ The house rules for JavaScript are ESLint, configured in `eslint.config.js`:
 ESLint's and React's recommended rules; a JSDoc `/** @file ... */` block at
 the top of every file; a JSDoc block on every top-level declaration,
 exported or not, with a description and one line per parameter; one React
-component per file, in a file of the component's name; and no comments
-inside a function body, because a step that needs one is its own function.
-The last two are the plugin under `shell/lint/eslint/`, tested with
+component per file, in a file of the component's name; a doc block above
+every `useEffect`, saying what the effect does and when it runs, because an
+effect is a side effect at the boundary of the UI with no name of its own;
+and no other comment inside a function body, because a step that needs one
+is its own function. The last three are the plugin under
+`shell/lint/eslint/`, tested with
 ESLint's RuleTester over the fixtures under `tests/fixtures/`. The one way
 to make an exception is ESLint's own `eslint-disable-next-line` comment,
 with the reason after `--`.

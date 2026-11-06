@@ -21,7 +21,15 @@ def main(paths):
   for finding in findings:
     print(finding)
 
-  return 1 if findings else 0
+  return exit_status(findings)
+
+
+def exit_status(findings):
+  """1 when there is a finding to report, 0 otherwise."""
+  if findings:
+    return 1
+
+  return 0
 
 
 def check_file(path):
@@ -45,7 +53,9 @@ def has_comment(line):
   previous = " "
   for char in line:
     if quote:
-      quote = None if char == quote else quote
+      if char == quote:
+        quote = None
+
     elif char in "\"'":
       quote = char
     elif char == "#" and previous.isspace():

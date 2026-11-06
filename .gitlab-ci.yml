@@ -16,7 +16,7 @@ plugin/python:
   image: python:3.12-slim
   needs: []
   script:
-    - pip install -q pyyaml
+    - pip install -q -r requirements-dev.txt
     - shell/actions/hermes/check
 
 plugin/manifests:

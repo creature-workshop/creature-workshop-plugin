@@ -20,12 +20,20 @@ def run(root, args, timeout_seconds=None):
   """
   command = ["shell/ops", *args]
   started = time.monotonic()
-  limit = timeout_seconds if timeout_seconds is not None else settings.value("ops_timeout_seconds")
+  limit = limit_of(timeout_seconds)
   completed, failure = attempted(lambda: dispatch(root, command, limit))
   if failure is not None:
     return result(command, False, failure.stdout, failure.message, started)
 
   return result(command, completed.returncode == 0, completed.stdout, completed.stderr, started)
+
+
+def limit_of(timeout_seconds):
+  """The timeout the caller gave, or the ops_timeout_seconds setting when it gave none."""
+  if timeout_seconds is not None:
+    return timeout_seconds
+
+  return settings.value("ops_timeout_seconds")
 
 
 def dispatch(root, command, timeout_seconds):
@@ -71,7 +79,11 @@ def result(command, ok, stdout, stderr, started):
 
 
 def text_of(value):
-  return value.decode("utf-8", "replace") if isinstance(value, bytes) else (value or "")
+  """A stream's output as text: bytes decoded, None as the empty string."""
+  if isinstance(value, bytes):
+    return value.decode("utf-8", "replace")
+
+  return value or ""
 
 
 INSTALLED_MARK = "✓"

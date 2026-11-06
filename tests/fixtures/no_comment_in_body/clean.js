@@ -1,4 +1,4 @@
-/** @file Comments above declarations, and a directive inside a body. */
+/** @file Comments above declarations, a directive inside a body, and an effect's doc block. */
 
 /** Adds one. */
 export function addOne(value) {
@@ -9,5 +9,13 @@ export function addOne(value) {
 
 /** Doubles. */
 const double = (value) => value * 2;
+
+/** The project as state. */
+export function useProject(store, useEffect, useState) {
+  const [project, setProject] = useState(store.get());
+  /** Subscribes to the store for as long as the component is mounted. */
+  useEffect(() => store.subscribe(setProject), [store]);
+  return project;
+}
 
 export default double;
