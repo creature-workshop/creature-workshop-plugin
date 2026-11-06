@@ -7,7 +7,7 @@
  * from the harness in the tests.
  */
 import { useEffect, useState } from 'react';
-import { Empty } from './Empty.jsx';
+import { NoProject } from './NoProject.jsx';
 import { ProjectHeader } from './ProjectHeader.jsx';
 import { Tabs } from './Tabs.jsx';
 import { DeclarationTab } from './tabs/DeclarationTab.jsx';
@@ -32,7 +32,7 @@ export const TABS = Object.keys(BODIES);
  * @param props.every Schedules a function on an interval in milliseconds and returns a disposer.
  * @param props.whenSettingsChange Subscribes to a save of the plugin's settings and returns a disposer.
  */
-export function Pane({ store, cwd, rest, every, whenSettingsChange }) {
+export function WorkshopPane({ store, cwd, rest, every, whenSettingsChange }) {
   const project = useProject(store);
   const [tab, setTab] = useState(TABS[0]);
   const intervalMs = refreshMs(project);
@@ -50,7 +50,7 @@ export function Pane({ store, cwd, rest, every, whenSettingsChange }) {
   }, [cwd, store, intervalMs]);
 
   if (!project.found) {
-    return <Empty project={project} cwd={cwd} />;
+    return <NoProject project={project} cwd={cwd} />;
   }
 
   const Body = BODIES[tab];

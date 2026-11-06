@@ -5,7 +5,7 @@
  */
 import { host, useValue } from '@hermes/plugin-sdk';
 import { SETTINGS_CHANGED } from '../events.js';
-import { Pane } from './Pane.jsx';
+import { WorkshopPane } from './WorkshopPane.jsx';
 
 /**
  * The pane in the session.
@@ -16,7 +16,7 @@ import { Pane } from './Pane.jsx';
 export function SessionPane({ ctx, store }) {
   const cwd = useValue(host.state.cwd);
   return (
-    <Pane
+    <WorkshopPane
       store={store}
       cwd={cwd}
       rest={(path) => ctx.rest(path)}

@@ -10,7 +10,7 @@
  * @param props.project The project as loaded, which was not found.
  * @param props.cwd The session's directory.
  */
-export function Empty({ project, cwd }) {
+export function NoProject({ project, cwd }) {
   return (
     <div className="flex h-full flex-col gap-2 p-3 text-sm">
       <div className="font-medium">Creature Workshop</div>

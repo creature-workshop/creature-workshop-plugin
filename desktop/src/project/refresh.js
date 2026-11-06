@@ -1,7 +1,7 @@
 /**
  * @file How often the pane re-runs the check: the pane_refresh_seconds
  * setting once the backend has answered, and a fixed interval until then.
- * Pane calls refreshMs while rendering.
+ * WorkshopPane calls refreshMs while rendering.
  */
 
 /** The interval the pane refreshes on until the backend's first answer names one. */

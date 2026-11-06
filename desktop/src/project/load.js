@@ -1,6 +1,6 @@
 /**
  * @file Loading the project through the backend: a plain function with no
- * React in it. Pane's effects call load, which asks the backend and publishes
+ * React in it. WorkshopPane's effects call load, which asks the backend and publishes
  * the answer to the store; the hook that reads the store back is useProject
  * in store.js.
  */
