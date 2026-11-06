@@ -1,6 +1,9 @@
 /**
  * @file Loading the project through the backend and reading its toolchain:
- * the pure side of the pane, with no React in it.
+ * plain functions with no React in them. Pane's effects call load, which
+ * asks the backend and publishes the answer to the store; Pane calls
+ * refreshMs, and Toolchain and Chip call toolchainSummary, while rendering.
+ * The hook that reads the store back is useProject in store.js.
  */
 
 /** The interval the pane refreshes on until the backend's first answer names one. */
