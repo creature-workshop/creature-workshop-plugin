@@ -1,0 +1,4 @@
+The dispatcher reports rsync missing and exits 1, so workshop_project answers
+ok false with a red row for it, and workshop_install for rsync alone shows
+that one row. The agent sees which tool to install and the stderr it would
+read in a terminal.

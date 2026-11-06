@@ -1,0 +1,41 @@
+## workshop_test {"verb": "plan", "paths": ["lib/a.sh", "lib/b.sh"]}
+{
+  "command": "shell/ops test plan lib/a.sh lib/b.sh",
+  "duration_ms": "<ms>",
+  "ok": true,
+  "root": "<root>",
+  "stderr": "",
+  "stdout": "ran test plan lib/a.sh lib/b.sh\n"
+}
+## workshop_test {"verb": "all"}
+{
+  "command": "shell/ops test all",
+  "duration_ms": "<ms>",
+  "ok": true,
+  "root": "<root>",
+  "stderr": "",
+  "stdout": "ran test all\n"
+}
+## workshop_test {"verb": "nope"}
+{
+  "error": "verb must be plan, files or all, not 'nope'",
+  "ok": false
+}
+## workshop_lint {"paths": ["lib"]}
+{
+  "command": "shell/ops lint lib",
+  "duration_ms": "<ms>",
+  "ok": true,
+  "root": "<root>",
+  "stderr": "",
+  "stdout": "ran lint lib\n"
+}
+## workshop_lint {}
+{
+  "command": "shell/ops lint",
+  "duration_ms": "<ms>",
+  "ok": true,
+  "root": "<root>",
+  "stderr": "",
+  "stdout": "ran lint\n"
+}

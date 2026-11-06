@@ -1,0 +1,3 @@
+The case has no input/, so the calls run in an empty directory. Every tool
+answers ok false with the same error, which says what a project needs and
+how it gets it, and none of them raises.

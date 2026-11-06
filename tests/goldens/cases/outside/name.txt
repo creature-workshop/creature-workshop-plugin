@@ -1,0 +1,1 @@
+a directory that is not a shellops project\n

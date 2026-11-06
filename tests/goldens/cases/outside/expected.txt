@@ -1,0 +1,20 @@
+## workshop_project {}
+{
+  "error": "<root> is not inside a shellops project: no shell/ops and .ops/config above it. A project gets them from `git submodule add <shellops url> shell/.ops && shell/.ops/init`.",
+  "ok": false
+}
+## workshop_install {}
+{
+  "error": "<root> is not inside a shellops project: no shell/ops and .ops/config above it. A project gets them from `git submodule add <shellops url> shell/.ops && shell/.ops/init`.",
+  "ok": false
+}
+## workshop_test {"verb": "plan"}
+{
+  "error": "<root> is not inside a shellops project: no shell/ops and .ops/config above it. A project gets them from `git submodule add <shellops url> shell/.ops && shell/.ops/init`.",
+  "ok": false
+}
+## workshop_lint {}
+{
+  "error": "<root> is not inside a shellops project: no shell/ops and .ops/config above it. A project gets them from `git submodule add <shellops url> shell/.ops && shell/.ops/init`.",
+  "ok": false
+}

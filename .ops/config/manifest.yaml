@@ -1,0 +1,10 @@
+name: Creature Workshop Hermes Plugin
+command-name: creature-workshop
+description: 'Manage your project''s development lifecycle all in one place: the project.'
+linear-team: SHOP
+org: creature-workshop
+repo: creature-workshop-plugin
+naming:
+  major: Workshop
+  minor: Tool
+  patch: ""

@@ -1,0 +1,3 @@
+[submodule "shell/.ops"]
+	path = shell/.ops
+	url = https://gitlab.creature-workshop.com/ksoft/shellops.git

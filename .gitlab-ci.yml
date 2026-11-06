@@ -1,0 +1,54 @@
+# The plugin's pipeline, from the creatures catalog: the governance and
+# release members of `forge`, `linear` to keep the merge request and its
+# issues in step, `agents` for the owning hat's label, and the plugin's own
+# jobs, each one call of an action under shell/actions/hermes/.
+
+include:
+  - component: $CI_SERVER_FQDN/ksoft/creatures/forge@0.20.0-dev.17
+  - component: $CI_SERVER_FQDN/ksoft/creatures/linear@0.20.0-dev.17
+  - component: $CI_SERVER_FQDN/ksoft/creatures/agents@0.20.0-dev.17
+  - component: $CI_SERVER_FQDN/ksoft/creatures/shellops-base@0.20.0-dev.17
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+plugin/python:
+  extends: [.shellops]
+  stage: validation
+  image: python:3.12-slim
+  needs: []
+  script:
+    - pip install -q pyyaml
+    - shell/actions/hermes/check
+
+# plugin.yaml and dashboard/manifest.json are written from the .ops declaration
+# and the lock by shell/actions/hermes/manifests; this job proves the source
+# still generates them.
+plugin/manifests:
+  extends: [.shellops]
+  stage: validation
+  needs: []
+  script:
+    - shell/actions/hermes/manifests
+
+# After each merge, the generated files are built in a scratch branch and
+# deployed as one commit on top of main's, on the built branch, which the
+# catalog pins until promotion carries the build (OPS-1701). The branch names
+# no rung and the release job never touches it. The push goes as the Blizz bot, the way the release tag does.
+plugin/deploy:
+  extends: [.shellops]
+  stage: publishing
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "web"
+  variables:
+    GIT_DEPTH: "0"
+    GIT_STRATEGY: clone
+  script:
+    - . ./.envrc
+    - $SHELLOPS_DIR/action git config Blizz blizz@kernelle-soft.com
+    - $SHELLOPS_DIR/action git auth Blizz "$FORGE_ADMIN_TOKEN"
+    - shell/actions/hermes/deploy

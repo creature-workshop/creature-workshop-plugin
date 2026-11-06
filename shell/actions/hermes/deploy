@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+set -eu
+# shellcheck disable=SC1091  # the project's own .envrc, which sets PROJ and SHELLOPS_DIR
+. "$(dirname "$0")/../../../.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/git/api.sh" \
+  "$SHELLOPS_DIR/lib/git/branches.sh"
+
+USAGE="$(cat <<HELP
+Builds the generated files in a scratch branch cut from the current commit and
+deploys them as one commit on top of it, on the built branch.
+
+The tracked tree carries source only. This action runs the generator,
+shell/actions/hermes/manifests, commits what it wrote (plugin.yaml and
+dashboard/manifest.json) on a scratch branch, and moves the built branch to that commit under a lease on
+the tip it had, which is what the Hermes catalog pins and what Hermes
+installs. The scratch branch is deleted once the push is through, and the
+checkout is left where it was.
+
+Usage: shell/actions/hermes/deploy [--branch <name>] [--no-push] [-h,--help]
+
+  --branch <name>  the branch to deploy to; built when left out
+  --no-push        build and commit, print the commit, and leave the scratch
+                   branch in place for a look
+HELP
+)"
+
+ARG_BRANCH=built
+ARG_PUSH=true
+
+main() {
+  parse_args "$@"
+  require_clean_tree
+  __main__start="$(git rev-parse HEAD)"
+  __main__scratch="scratch/build-$(git rev-parse --short HEAD)"
+
+  git checkout -q -b "$__main__scratch" "$__main__start"
+  generate
+  commit_generated "$__main__start"
+  __main__built="$(git rev-parse HEAD)"
+  printf 'built %s on top of %s\n' "$__main__built" "$__main__start"
+
+  if [ "$ARG_PUSH" = true ]; then
+    deploy "$__main__built"
+    git checkout -q --detach "$__main__start"
+    git__branch_delete "$__main__scratch" >/dev/null
+  else
+    printf 'left on %s; no push\n' "$__main__scratch"
+  fi
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) printf '%s\n' "$USAGE"; exit 0 ;;
+      --branch) ARG_BRANCH="$2"; shift ;;
+      --no-push) ARG_PUSH=false ;;
+      *) printf 'deploy: unknown argument %s\n' "$1" >&2; exit 2 ;;
+    esac
+    shift
+  done
+}
+
+: <<'FUN'
+Exits when the tracked tree has uncommitted changes, since the build commit
+must carry the generated files alone.
+FUN
+require_clean_tree() {
+  if [ "$(git__worktree_clean "$PROJ")" != true ]; then
+    printf 'deploy: the tree has uncommitted or untracked changes; commit or discard them first\n' >&2
+    exit 1
+  fi
+}
+
+: <<'FUN'
+Writes every generated file from the source tree.
+FUN
+generate() {
+  "$PROJ/shell/actions/hermes/manifests"
+}
+
+: <<'FUN'
+Commits the generated files on top of $1, the source commit they come from.
+They are ignored in the tracked tree, so they are added by force.
+FUN
+commit_generated() {
+  git add -f plugin.yaml dashboard/manifest.json
+  git commit -q -m "build: the generated files for $1" \
+    -m "plugin.yaml and dashboard/manifest.json, written by shell/actions/hermes/manifests from the source at $1. This commit is what the catalog pins."
+}
+
+: <<'FUN'
+Moves the deploy branch to the build commit $1, under a lease on the tip the
+remote held when this run read it. The branch is only ever a source commit
+plus one build commit, so each deploy rewrites it; two deploys at once
+cannot both win, since the second's lease is stale.
+FUN
+deploy() {
+  __deploy__current="$(git__remote_branch_tip origin "$ARG_BRANCH")"
+  git__force_move_branch origin "$ARG_BRANCH" "$__deploy__current" "$1"
+  printf 'deployed %s to %s\n' "$1" "$ARG_BRANCH"
+}
+
+main "$@"

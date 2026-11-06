@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+set -eu
+# shellcheck disable=SC1091  # the project's own .envrc, which sets PROJ and SHELLOPS_DIR
+. "$(dirname "$0")/../../../.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/manifest/api.sh" \
+  "$SHELLOPS_DIR/lib/self/config.sh" \
+  "$SHELLOPS_DIR/lib/releases/record/api.sh" \
+  "$SHELLOPS_DIR/lib/structs/api.sh"
+
+USAGE="$(cat <<HELP
+Writes the two manifests Hermes reads from what this repository declares.
+
+plugin.yaml and dashboard/manifest.json repeat the plugin's id, its name, its
+version and its description. This action writes both from the one place those
+are declared: .ops/config/manifest.yaml for the id (command-name), the name
+and the description, and the lock's release record for the version. Run it
+after changing either; CI fails when a commit left the two files stale.
+
+Usage: shell/actions/hermes/manifests [-h,--help]
+HELP
+)"
+
+main() {
+  case "${1:-}" in
+    -h|--help)
+      printf '%s\n' "$USAGE"
+      return 0
+      ;;
+  esac
+  __main__id="$(manifest__get command_name)"
+  __main__name="$(@get "$(self__config__load manifest)" '.name')"
+  __main__description="$(manifest__get description)"
+  __main__version="$(releases__record__get_latest)"
+  __main__homepage="https://gitlab.creature-workshop.com/$(forge_path)"
+  write_plugin_yaml "$__main__id" "$__main__version" "$__main__description" "$__main__homepage"
+  write_dashboard_manifest "$__main__id" "$__main__name" "$__main__version" "$__main__description"
+  log "wrote plugin.yaml and dashboard/manifest.json for $__main__id $__main__version"
+}
+
+: <<'FUN'
+Prints the project's path on the forge, ksoft/hermes/<repo>, from the manifest's
+repo name. The group is this plugin's home on the box.
+FUN
+forge_path() {
+  printf 'ksoft/hermes/%s\n' "$(manifest__get repo)"
+}
+
+: <<'FUN'
+Fills plugin.yaml.template beside this script with the id, the version, the
+description and the homepage, and writes plugin.yaml at the project root.
+FUN
+write_plugin_yaml() {
+  sed \
+    -e "s|__NAME__|$(sed_safe "$1")|" \
+    -e "s|__VERSION__|$(sed_safe "$2")|" \
+    -e "s|__DESCRIPTION__|$(sed_safe "$3")|" \
+    -e "s|__HOMEPAGE__|$(sed_safe "$4")|" \
+    "$(dirname "$0")/plugin.yaml.template" \
+    > "$PROJ/plugin.yaml"
+}
+
+: <<'FUN'
+Writes dashboard/manifest.json: the backend's entry for the gateway, with the
+tab hidden because the plugin's face is the Desktop pane.
+FUN
+write_dashboard_manifest() {
+  __write_dashboard_manifest__tab="$(@obj '.path' "/$1" '.hidden' true)"
+  @obj \
+    '.name' "$1" \
+    '.label' "$2" \
+    '.description' "$4" \
+    '.icon' Wrench \
+    '.version' "$3" \
+    '.tab' "$__write_dashboard_manifest__tab" \
+    '.entry' dist/index.js \
+    > "$PROJ/dashboard/manifest.json"
+}
+
+: <<'FUN'
+Prints a value with the characters sed would read as syntax escaped, so it can
+be a replacement in an expression delimited by |.
+FUN
+sed_safe() {
+  printf '%s' "$1" | sed -e 's/[\\&|]/\\&/g'
+}
+
+main "$@"

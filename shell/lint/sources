@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+set -eu
+# shellcheck disable=SC1091  # the project's own .envrc, which sets PROJ and SHELLOPS_DIR
+. "$(dirname "$0")/../../.envrc"
+
+import "$SHELLOPS_DIR/lib/git/index.sh"
+
+USAGE="$(cat <<HELP
+Prints the project's source files that match the name patterns given, one per
+line, relative to the project root.
+
+The files come from the git index, the way shellops' own lint gates find
+theirs: what is tracked or staged is a source, and nothing else is, so the
+submodule, the tool cache, node_modules and a stray file are never linted.
+The lint fixtures under tests/fixtures/ are left out, since they are the
+lints' own samples of what to reject. Stage a new file before trusting a
+clean run over it.
+
+  shell/lint/sources '*.py'          ->  __init__.py workshop/ops.py ...
+  shell/lint/sources '*.js' '*.jsx'  ->  dashboard/dist/index.js ...
+
+Usage: shell/lint/sources <pattern>... [-h,--help]
+HELP
+)"
+
+main() {
+  case "${1:-}" in
+    -h|--help)
+      printf '%s\n' "$USAGE"
+      return 0
+      ;;
+    '')
+      printf '%s\n' "$USAGE" >&2
+      return 2
+      ;;
+  esac
+  git__index__files "$PROJ" . | select_sources "$@"
+}
+
+: <<'FUN'
+Keeps the lines of stdin whose file name matches one of the patterns given
+and that do not lie under tests/fixtures/.
+FUN
+select_sources() {
+  while IFS= read -r __select_sources__path; do
+    if [ "$(is_source "$__select_sources__path" "$@")" = true ]; then
+      printf '%s\n' "$__select_sources__path"
+    fi
+  done
+}
+
+: <<'FUN'
+Prints true when the path $1 is outside tests/fixtures/ and its file name
+matches one of the patterns that follow it, false otherwise.
+FUN
+is_source() {
+  __is_source__path="$1"
+  shift
+  case "$__is_source__path" in
+    tests/fixtures/*)
+      printf 'false\n'
+      return 0
+      ;;
+  esac
+  for __is_source__pattern in "$@"; do
+    # shellcheck disable=SC2254  # the pattern is meant to glob
+    case "${__is_source__path##*/}" in
+      $__is_source__pattern)
+        printf 'true\n'
+        return 0
+        ;;
+    esac
+  done
+  printf 'false\n'
+}
+
+main "$@"

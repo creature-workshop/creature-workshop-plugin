@@ -1,0 +1,4 @@
+The project declares two system tools and its dispatcher reports both
+installed, so workshop_project answers ok with two green rows, and
+workshop_install with check true repeats the table without installing. The
+stub dispatcher logs the table on stderr, as shellops does.
