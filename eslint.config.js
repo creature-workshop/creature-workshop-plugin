@@ -5,14 +5,17 @@
  * exported or not, each with a description and one for every parameter, the
  * way a shellops doc block lists its args; one React component per file, in
  * a file of the component's name; a doc block on every useEffect; no other
- * comment inside a function body; and a class name with the workshop- prefix
- * on every div and span, saying what the box is.
+ * comment inside a function body; a class name with the workshop- prefix on
+ * every div and span, saying what the box is; and, in the browser tests,
+ * Playwright's recommended rules with its locator rules, plus no test ids:
+ * a test finds the page by role and by text, as a user does.
  * The one exception syntax is ESLint's own eslint-disable comment, with the
  * reason after two dashes.
  */
 import js from '@eslint/js';
 import globals from 'globals';
 import jsdoc from 'eslint-plugin-jsdoc';
+import playwright from 'eslint-plugin-playwright';
 import react from 'eslint-plugin-react';
 import house from './shell/lint/eslint/house.js';
 
@@ -58,6 +61,7 @@ export default [
       'react/no-multi-comp': ['error', { ignoreStateless: false }],
       'react/prop-types': 'off',
       'house/no-comment-in-body': 'error',
+      'house/no-test-id': 'error',
       'house/use-effect-doc': 'error',
     },
   },
@@ -68,5 +72,17 @@ export default [
   {
     files: ['**/*.jsx'],
     rules: { 'house/component-file-name': 'error', 'house/named-element': 'error' },
+  },
+  {
+    ...playwright.configs['flat/recommended'],
+    files: ['**/*.ct.jsx'],
+  },
+  {
+    files: ['**/*.ct.jsx'],
+    rules: {
+      'playwright/no-raw-locators': 'error',
+      'playwright/prefer-native-locators': 'error',
+      'playwright/prefer-locator': 'error',
+    },
   },
 ];
