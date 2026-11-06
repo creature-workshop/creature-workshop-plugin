@@ -13,7 +13,7 @@ import { Pane } from './Pane.jsx';
  * @param props.ctx The plugin context the SDK hands register().
  * @param props.store The store the pane and the chip share.
  */
-export function PaneWithSession({ ctx, store }) {
+export function SessionPane({ ctx, store }) {
   const cwd = useValue(host.state.cwd);
   return (
     <Pane

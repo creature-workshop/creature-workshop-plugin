@@ -6,7 +6,7 @@
 import { Chip } from './Chip.jsx';
 import { PLUGIN_ID } from './events.js';
 import { PaneBoundary } from './PaneBoundary.jsx';
-import { PaneWithSession } from './PaneWithSession.jsx';
+import { SessionPane } from './SessionPane.jsx';
 import { createStore } from './store.js';
 
 /** The plugin as Desktop loads it: its id, its name and its register hook. */
@@ -24,7 +24,7 @@ export default {
       area: 'panes',
       title: 'Creature Workshop',
       data: { placement: 'right', width: '340px' },
-      render: () => <PaneBoundary><PaneWithSession ctx={ctx} store={store} /></PaneBoundary>,
+      render: () => <PaneBoundary><SessionPane ctx={ctx} store={store} /></PaneBoundary>,
     });
     ctx.register({
       id: 'chip',

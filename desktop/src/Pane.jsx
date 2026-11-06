@@ -3,7 +3,7 @@
  * refresh that keeps the toolchain current. `cwd` is the session's directory, `rest`
  * the backend call, `every` schedules the refresh and returns a disposer, and
  * `whenSettingsChange` subscribes to a save of the plugin's settings and
- * returns a disposer; all four come from the SDK in PaneWithSession.jsx and
+ * returns a disposer; all four come from the SDK in SessionPane.jsx and
  * from the harness in the tests.
  */
 import { useEffect, useState } from 'react';
