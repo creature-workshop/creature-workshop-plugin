@@ -1,8 +1,9 @@
 /**
  * @file What a user can do with the pane: read the toolchain, switch tabs,
- * and see why there is nothing to show outside a project. Each test mounts
- * the harness over one backend answer and reads the page by role and text;
- * the last mounts a component that throws inside the pane's boundary.
+ * see why there is nothing to show outside a project, and see the toolchain
+ * change after a refresh. Each test mounts the harness over the backend's
+ * answers and reads the page by role and text, never by a test id; the last
+ * mounts a component that throws inside the pane's boundary.
  */
 import { test, expect } from '@playwright/experimental-ct-react';
 import { Broken } from './Broken.jsx';
@@ -41,16 +42,16 @@ const ANSWER = {
 };
 
 test('the toolchain tab lists every declared tool with its state, and the chip counts them', async ({ mount }) => {
-  const component = await mount(<PaneHarness project={ANSWER} cwd="/home/someone/demo" />);
+  const component = await mount(<PaneHarness answer={ANSWER} cwd="/home/someone/demo" />);
 
   await expect(component.getByText('1 of 2 declared tools installed')).toBeVisible();
   await expect(component.getByText('ffmpeg')).toBeVisible();
   await expect(component.getByText('rsync')).toBeVisible();
-  await expect(component.getByTestId('status-bar')).toHaveText('toolchain 1/2');
+  await expect(component.getByRole('status')).toHaveText('toolchain 1/2');
 });
 
 test('the Declaration and Release tabs show the files and the release record', async ({ mount }) => {
-  const component = await mount(<PaneHarness project={ANSWER} cwd="/home/someone/demo" />);
+  const component = await mount(<PaneHarness answer={ANSWER} cwd="/home/someone/demo" />);
 
   await component.getByRole('button', { name: 'Declaration' }).click();
   await expect(component.getByText('.ops/config/tools.yaml')).toBeVisible();
@@ -62,17 +63,26 @@ test('the Declaration and Release tabs show the files and the release record', a
 });
 
 test('outside a project the pane says so and how a project gets one', async ({ mount }) => {
-  const component = await mount(<PaneHarness project={{ found: false }} cwd="/home/someone/elsewhere" />);
+  const component = await mount(<PaneHarness answer={{ found: false }} cwd="/home/someone/elsewhere" />);
 
   await expect(component.getByText('No shellops project at /home/someone/elsewhere.')).toBeVisible();
   await expect(component.getByText('shell/.ops/init')).toBeVisible();
-  await expect(component.getByTestId('status-bar')).toHaveText('no .ops here');
+  await expect(component.getByRole('status')).toHaveText('no .ops here');
 });
 
-test('the refresh runs at the interval the backend answers with', async ({ mount }) => {
-  const component = await mount(<PaneHarness project={ANSWER} cwd="/home/someone/demo" />);
+/** The same project after rsync was installed: what the backend answers once the toolchain changed. */
+const ALL_INSTALLED = {
+  ...ANSWER,
+  toolchain: { ...ANSWER.toolchain, ok: true, rows: ANSWER.toolchain.rows.map((row) => ({ ...row, installed: true })) },
+};
 
-  await expect(component.getByTestId('refresh')).toHaveText('every 5000 ms');
+test('the pane re-reads the toolchain on the interval the backend answers with', async ({ mount }) => {
+  const soon = { ...ANSWER, refresh_seconds: 1 };
+  const component = await mount(<PaneHarness answer={soon} later={ALL_INSTALLED} cwd="/home/someone/demo" />);
+
+  await expect(component.getByRole('status')).toHaveText('toolchain 1/2');
+  await expect(component.getByRole('status')).toHaveText('toolchain 2/2');
+  await expect(component.getByText('2 of 2 declared tools installed')).toBeVisible();
 });
 
 test('a component that throws while rendering shows its error instead of taking the pane down', async ({ mount }) => {

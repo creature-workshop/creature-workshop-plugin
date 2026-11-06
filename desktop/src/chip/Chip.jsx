@@ -1,7 +1,8 @@
 /**
  * @file The status-bar chip: how many declared tools are installed, green
  * when all of them are, red when one is missing, and a note when the
- * session is not in a project.
+ * session is not in a project. It is a status role, which is what it is in
+ * Desktop's bar and how the tests find it.
  */
 import { useProject } from '../project/store.js';
 import { toolchainSummary } from '../project/toolchain.js';
@@ -27,12 +28,12 @@ function chipColor(installed, total) {
 export function Chip({ store }) {
   const project = useProject(store);
   if (!project.found) {
-    return <span className="px-1.5 text-[0.6875rem] text-(--ui-text-tertiary)">no .ops here</span>;
+    return <span role="status" className="px-1.5 text-[0.6875rem] text-(--ui-text-tertiary)">no .ops here</span>;
   }
 
   const { installed, total } = toolchainSummary(project);
   return (
-    <span className="px-1.5 text-[0.6875rem]" style={{ color: chipColor(installed, total) }} title={project.summary || ''}>
+    <span role="status" className="px-1.5 text-[0.6875rem]" style={{ color: chipColor(installed, total) }} title={project.summary || ''}>
       toolchain {`${installed}/${total}`}
     </span>
   );

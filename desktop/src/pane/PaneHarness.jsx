@@ -1,35 +1,46 @@
 /**
  * @file The pane and the chip as one component with plain data for props, for
  * the Playwright tests. Playwright serialises props on their way into the
- * browser, so the test hands over the project the backend would answer with,
- * and the harness turns it into the store, the backend call, the timer and
- * the settings subscription that Pane and Chip take. The refresh timer never
- * fires; the harness shows the interval it was last scheduled with.
+ * browser, so the test hands over the answer the backend would give, and the
+ * harness turns it into the store, the backend call, the timer and the
+ * settings subscription that Pane and Chip take. The timer is a real
+ * setInterval, and when the test gives a second answer, `later`, the backend
+ * gives it to every call after the first, so a test can watch the pane
+ * change on its refresh.
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Chip } from '../chip/Chip.jsx';
 import { createStore } from '../project/store.js';
 import { Pane } from './Pane.jsx';
 
 /**
- * The pane and the chip over one backend answer.
+ * Schedules a function on an interval and returns the function that stops it.
+ * @param fn What to run.
+ * @param ms The interval in milliseconds.
+ */
+function every(fn, ms) {
+  const id = setInterval(fn, ms);
+  return () => clearInterval(id);
+}
+
+/**
+ * The pane and the chip over the backend's answers.
  * @param props The component's props.
- * @param props.project The project the backend answers with.
+ * @param props.answer The answer the backend gives to the first call.
+ * @param props.later The answer the backend gives to every call after the first; the first again when absent.
  * @param props.cwd The session's directory.
  */
-export function PaneHarness({ project, cwd }) {
+export function PaneHarness({ answer, later, cwd }) {
   const [store] = useState(createStore);
-  const [scheduledMs, setScheduledMs] = useState(null);
-  const rest = async () => project;
-  const every = (fn, ms) => {
-    setScheduledMs(ms);
-    return () => {};
+  const calls = useRef(0);
+  const rest = async () => {
+    calls.current += 1;
+    return calls.current === 1 ? answer : later || answer;
   };
   const whenSettingsChange = () => () => {};
   return (
     <div>
-      <div data-testid="status-bar"><Chip store={store} /></div>
-      <div data-testid="refresh">{scheduledMs === null ? '' : `every ${scheduledMs} ms`}</div>
+      <Chip store={store} />
       <Pane store={store} cwd={cwd} rest={rest} every={every} whenSettingsChange={whenSettingsChange} />
     </div>
   );
