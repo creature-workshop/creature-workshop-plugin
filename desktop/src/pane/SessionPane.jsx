@@ -4,7 +4,7 @@
  * event from the plugin context.
  */
 import { host, useValue } from '@hermes/plugin-sdk';
-import { SETTINGS_CHANGED } from './events.js';
+import { SETTINGS_CHANGED } from '../events.js';
 import { Pane } from './Pane.jsx';
 
 /**

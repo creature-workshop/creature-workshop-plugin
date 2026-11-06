@@ -3,7 +3,7 @@
  * declared tool, and what install --check said on stderr when it said
  * anything.
  */
-import { toolchainSummary } from '../project.js';
+import { toolchainSummary } from '../../project/toolchain.js';
 import { ToolchainRow } from './ToolchainRow.jsx';
 
 /**

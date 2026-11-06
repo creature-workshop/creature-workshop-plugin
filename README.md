@@ -136,7 +136,7 @@ four and generate the fifth, then read it before you commit it:
 UPDATE_GOLDENS=1 python3 -m unittest tests.test_goldens
 ```
 
-The pane is tested in a browser. `desktop/src/pane.ct.jsx` mounts the
+The pane is tested in a browser. `desktop/src/pane/pane.ct.jsx` mounts the
 components through Playwright's component runner and drives them by role
 and by text, the way a user would: the toolchain rows and the chip's count,
 the tabs, the message outside a project, and the error boundary around

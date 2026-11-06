@@ -13,8 +13,9 @@ import { Tabs } from './Tabs.jsx';
 import { DeclarationTab } from './tabs/DeclarationTab.jsx';
 import { ReleaseTab } from './tabs/ReleaseTab.jsx';
 import { ToolchainTab } from './tabs/ToolchainTab.jsx';
-import { load, refreshMs } from './project.js';
-import { useProject } from './store.js';
+import { load } from '../project/load.js';
+import { refreshMs } from '../project/refresh.js';
+import { useProject } from '../project/store.js';
 
 /** The component of each tab, by the tab's name; the first is the one the pane opens on. */
 const BODIES = { Toolchain: ToolchainTab, Declaration: DeclarationTab, Release: ReleaseTab };

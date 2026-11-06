@@ -3,8 +3,8 @@
  * when all of them are, red when one is missing, and a note when the
  * session is not in a project.
  */
-import { useProject } from './store.js';
-import { toolchainSummary } from './project.js';
+import { useProject } from '../project/store.js';
+import { toolchainSummary } from '../project/toolchain.js';
 
 /**
  * The chip's colour: muted with nothing declared, green with everything installed, red otherwise.

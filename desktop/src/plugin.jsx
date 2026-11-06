@@ -1,13 +1,16 @@
 /**
  * @file Creature Workshop in Hermes Desktop: registers the pane and the
- * status chip with the SDK. This is the source; shell/actions/hermes/build
- * writes desktop/plugin.js from it, which is what Desktop loads.
+ * status chip with the SDK. The tree under desktop/src is one folder per
+ * surface Desktop registers, pane/ and chip/, plus project/, the loaded
+ * project both of them read, and events.js, the names Hermes and the plugin
+ * agree on. This is the source; shell/actions/hermes/build writes
+ * desktop/plugin.js from it, which is what Desktop loads.
  */
-import { Chip } from './Chip.jsx';
+import { Chip } from './chip/Chip.jsx';
 import { PLUGIN_ID } from './events.js';
-import { PaneBoundary } from './PaneBoundary.jsx';
-import { SessionPane } from './SessionPane.jsx';
-import { createStore } from './store.js';
+import { PaneBoundary } from './pane/PaneBoundary.jsx';
+import { SessionPane } from './pane/SessionPane.jsx';
+import { createStore } from './project/store.js';
 
 /** The plugin as Desktop loads it: its id, its name and its register hook. */
 export default {

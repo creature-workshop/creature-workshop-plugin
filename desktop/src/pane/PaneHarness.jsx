@@ -7,9 +7,9 @@
  * fires; the harness shows the interval it was last scheduled with.
  */
 import { useState } from 'react';
-import { Chip } from './Chip.jsx';
+import { Chip } from '../chip/Chip.jsx';
+import { createStore } from '../project/store.js';
 import { Pane } from './Pane.jsx';
-import { createStore } from './store.js';
 
 /**
  * The pane and the chip over one backend answer.
