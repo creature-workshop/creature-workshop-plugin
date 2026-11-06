@@ -221,6 +221,21 @@
         "python3": {
           "version": "3.12.3"
         }
+      },
+      "npm": {
+        "esbuild": {
+          "version": "0.28.2",
+          "needs": [
+            "node"
+          ]
+        },
+        "pnpm": {
+          "bin": "bin/pnpm.mjs",
+          "version": "12.18.0",
+          "needs": [
+            "node"
+          ]
+        }
       }
     },
     "imports": {}
