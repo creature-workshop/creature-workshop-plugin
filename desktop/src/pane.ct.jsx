@@ -6,8 +6,12 @@
 import { test, expect } from '@playwright/experimental-ct-react';
 import { PaneHarness } from './PaneHarness.jsx';
 
-/** The backend's answer for a project that declares two tools, one of them missing. */
-const DEMO = {
+/**
+ * The backend's answer, GET /project, for a project that declares two tools,
+ * one of them missing: a workshop.answers.Project as the pane receives it, with
+ * nothing of Hermes's own state in it.
+ */
+const ANSWER = {
   found: true,
   root: '/home/someone/demo',
   name: 'Demo',
@@ -34,7 +38,7 @@ const DEMO = {
 };
 
 test('the toolchain tab lists every declared tool with its state, and the chip counts them', async ({ mount }) => {
-  const component = await mount(<PaneHarness project={DEMO} cwd="/home/someone/demo" />);
+  const component = await mount(<PaneHarness project={ANSWER} cwd="/home/someone/demo" />);
 
   await expect(component.getByText('1 of 2 declared tools installed')).toBeVisible();
   await expect(component.getByText('ffmpeg')).toBeVisible();
@@ -43,7 +47,7 @@ test('the toolchain tab lists every declared tool with its state, and the chip c
 });
 
 test('the Declaration and Release tabs show the files and the release record', async ({ mount }) => {
-  const component = await mount(<PaneHarness project={DEMO} cwd="/home/someone/demo" />);
+  const component = await mount(<PaneHarness project={ANSWER} cwd="/home/someone/demo" />);
 
   await component.getByRole('button', { name: 'Declaration' }).click();
   await expect(component.getByText('.ops/config/tools.yaml')).toBeVisible();
@@ -63,7 +67,7 @@ test('outside a project the pane says so and how a project gets one', async ({ m
 });
 
 test('the refresh runs at the interval the backend answers with', async ({ mount }) => {
-  const component = await mount(<PaneHarness project={DEMO} cwd="/home/someone/demo" />);
+  const component = await mount(<PaneHarness project={ANSWER} cwd="/home/someone/demo" />);
 
   await expect(component.getByTestId('refresh')).toHaveText('every 5000 ms');
 });
