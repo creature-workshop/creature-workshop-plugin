@@ -1,0 +1,16 @@
+[project]
+name = "creature-workshop-plugin"
+description = "A Hermes Agent plugin that puts a project's development lifecycle in front of the agent and in front of you."
+requires-python = ">=3.12"
+version = "0.0.0"
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "coverage==7.17.2",
+  "fastapi==0.162.0",
+  "pyyaml==6.0.3",
+]
+
+[tool.uv]
+package = false

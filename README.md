@@ -80,14 +80,15 @@ ln -s "$PWD" ~/.hermes/plugins/creature-workshop
 ln -s "$PWD/desktop" ~/.hermes/desktop-plugins/creature-workshop
 hermes plugins enable creature-workshop
 hermes plugins doctor . --ci
-pip install -r requirements-dev.txt
-shell/actions/hermes/check
+uv sync
+uv run shell/actions/hermes/check
 ```
 
-`requirements-dev.txt` is what the checks need and the plugin does not:
-PyYAML to read the declaration outside Hermes, FastAPI for the backend, and
-coverage. `check` runs the tests under coverage and ends with the report,
-file by file with the lines the tests miss.
+`pyproject.toml` lists, as its dev group, what the checks need and the
+plugin does not: PyYAML to read the declaration outside Hermes, FastAPI for
+the backend, and coverage; `uv.lock` pins them, and `uv sync` installs them
+into `.venv/`. `check` runs the tests under coverage and ends with the
+report, file by file with the lines the tests miss.
 
 The tracked tree carries source only. Three files are generated and ignored:
 `plugin.yaml` and `dashboard/manifest.json`, which

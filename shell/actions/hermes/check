@@ -6,10 +6,12 @@ set -eu
 USAGE="$(cat <<HELP
 Runs every check of the Python sources: the byte-compile of the plugin,
 the four house lints under shell/lint/, and the unit tests with the golden
-cases under coverage, with the report at the end. The plugin/python job
-runs exactly this, after `pip install -r requirements-dev.txt`. The JavaScript has its own
-checks, through ESLint and the browser tests: `pnpm run lint`,
-`pnpm run test:lint` and `pnpm run test:pane`.
+cases under coverage, with the report at the end. Run it as
+`uv run shell/actions/hermes/check`, so that python3 is the project's own
+environment with the dev dependencies pyproject.toml lists; the
+plugin/python job runs exactly that after `uv sync --frozen`. The
+JavaScript has its own checks, through ESLint and the browser tests:
+`pnpm run lint`, `pnpm run test:lint` and `pnpm run test:pane`.
 
 Usage: shell/actions/hermes/check [-h,--help]
 HELP

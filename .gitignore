@@ -28,3 +28,6 @@ playwright/.cache/
 /plugin.yaml
 /dashboard/manifest.json
 /desktop/plugin.js
+
+# uv, for the Python dev dependencies the checks need
+.venv/

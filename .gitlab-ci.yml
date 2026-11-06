@@ -13,11 +13,11 @@ workflow:
 plugin/python:
   extends: [.shellops]
   stage: validation
-  image: python:3.12-slim
+  image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
   needs: []
   script:
-    - pip install -q -r requirements-dev.txt
-    - shell/actions/hermes/check
+    - uv sync --frozen
+    - uv run shell/actions/hermes/check
 
 plugin/manifests:
   extends: [.shellops]
