@@ -4,10 +4,8 @@
  * event from the plugin context.
  */
 import { host, useValue } from '@hermes/plugin-sdk';
+import { SETTINGS_CHANGED } from './events.js';
 import { Pane } from './Pane.jsx';
-
-/** The event Hermes broadcasts when the plugin's settings are saved. */
-const SETTINGS_CHANGED = 'plugin.creature-workshop.settings.changed';
 
 /**
  * The pane in the session.

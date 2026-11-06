@@ -4,12 +4,13 @@
  * writes desktop/plugin.js from it, which is what Desktop loads.
  */
 import { Chip } from './Chip.jsx';
+import { PLUGIN_ID } from './events.js';
 import { PaneWithSession } from './PaneWithSession.jsx';
 import { createStore } from './store.js';
 
 /** The plugin as Desktop loads it: its id, its name and its register hook. */
 export default {
-  id: 'creature-workshop',
+  id: PLUGIN_ID,
   name: 'Creature Workshop',
   /**
    * Registers the pane and the chip, sharing one store between them.
