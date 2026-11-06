@@ -8,7 +8,7 @@
  * @param props The component's props.
  * @param props.project The loaded project.
  */
-export function Declaration({ project }) {
+export function DeclarationTab({ project }) {
   const files = project.declaration || {};
   const names = Object.keys(files);
   if (names.length === 0) {

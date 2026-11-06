@@ -8,7 +8,7 @@
  * @param props The component's props.
  * @param props.project The loaded project.
  */
-export function Release({ project }) {
+export function ReleaseTab({ project }) {
   const record = project.release || {};
   const declared = project.declared || [];
   return (

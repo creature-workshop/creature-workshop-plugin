@@ -7,17 +7,17 @@
  * from the harness in the tests.
  */
 import { useEffect, useState } from 'react';
-import { Declaration } from './Declaration.jsx';
 import { Empty } from './Empty.jsx';
 import { ProjectHeader } from './ProjectHeader.jsx';
-import { Release } from './Release.jsx';
 import { Tabs } from './Tabs.jsx';
-import { Toolchain } from './Toolchain.jsx';
+import { DeclarationTab } from './tabs/DeclarationTab.jsx';
+import { ReleaseTab } from './tabs/ReleaseTab.jsx';
+import { ToolchainTab } from './tabs/ToolchainTab.jsx';
 import { load, refreshMs } from './project.js';
 import { useProject } from './store.js';
 
 /** The component of each tab, by the tab's name; the first is the one the pane opens on. */
-const BODIES = { Toolchain, Declaration, Release };
+const BODIES = { Toolchain: ToolchainTab, Declaration: DeclarationTab, Release: ReleaseTab };
 
 /** The tabs, in order. */
 export const TABS = Object.keys(BODIES);

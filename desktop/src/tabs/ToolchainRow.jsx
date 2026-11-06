@@ -11,7 +11,7 @@
  * @param props.channel The channel the tool comes from.
  * @param props.installed Whether the tool is installed.
  */
-export function Row({ tool, version, channel, installed }) {
+export function ToolchainRow({ tool, version, channel, installed }) {
   return (
     <div className="flex items-center gap-2 py-0.5 text-xs">
       <span style={{ color: installed ? '#3fb950' : '#f85149' }}>{installed ? '●' : '○'}</span>
