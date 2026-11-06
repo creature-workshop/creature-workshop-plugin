@@ -52,3 +52,17 @@ plugin/deploy:
     - $SHELLOPS_DIR/action git config Blizz blizz@kernelle-soft.com
     - $SHELLOPS_DIR/action git auth Blizz "$FORGE_ADMIN_TOKEN"
     - shell/actions/hermes/deploy
+
+# After the deploy, the Hermes catalog entry on the org's fork of hermes-agent
+# is pinned to the built branch's commit, as the bot's own GitHub account
+# (GITHUB_TOKEN). The pull request to NousResearch carries the new pin.
+plugin/catalog:
+  extends: [.shellops]
+  stage: publishing
+  needs: [plugin/deploy]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "web"
+  script:
+    - . ./.envrc
+    - shell/actions/hermes/catalog-pin
