@@ -1,0 +1,3 @@
+The dispatcher echoes its arguments, so the transcript shows exactly which
+command each call runs: the test verb and its paths, the lint paths, and
+the refusal of a verb that is not plan, files or all before anything runs.

@@ -1,0 +1,13 @@
+#!/bin/sh
+# A stub of shellops' dispatcher: install --check logs a table with every tool installed.
+case "$*" in
+  'install --check'*)
+    cat >&2 <<'TABLE'
+Status     Tool                   Version        Channel
+------------------------------------------------------------
+  ✓      ffmpeg                 6.1.1          system
+  ✓      rsync                  3.2.7          system
+TABLE
+    ;;
+  *) echo "ran $*" ;;
+esac

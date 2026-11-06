@@ -1,0 +1,21 @@
+name: __NAME__
+version: __VERSION__
+manifest_version: 2
+api_version: 1
+description: "__DESCRIPTION__"
+author: Jerrod
+license: MIT
+homepage: __HOMEPAGE__
+tags: [devops, tools, desktop]
+requires_hermes: ">=0.23.0"
+provides_tools:
+  - workshop_project
+  - workshop_install
+  - workshop_test
+  - workshop_lint
+provides_hooks: []
+config_schema:
+  ops_timeout_seconds:
+    type: int
+    default: 120
+    description: How long one shell/ops command may run before the tool reports a timeout.

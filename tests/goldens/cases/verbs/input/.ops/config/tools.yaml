@@ -1,0 +1,5 @@
+system:
+  ffmpeg:
+    version: 6.1.1
+  rsync:
+    version: 3.2.7

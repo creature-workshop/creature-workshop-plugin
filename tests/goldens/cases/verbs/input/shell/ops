@@ -1,0 +1,3 @@
+#!/bin/sh
+# A stub of shellops' dispatcher: echoes the command it was given.
+echo "ran $*"

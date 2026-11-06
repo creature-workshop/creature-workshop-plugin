@@ -1,0 +1,4 @@
+workshop_project {}
+workshop_install {}
+workshop_test {"verb": "plan"}
+workshop_lint {}

@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -eu
+# shellcheck disable=SC1091  # the project's own .envrc, which sets PROJ and SHELLOPS_DIR
+. "$(dirname "$0")/../../../.envrc"
+
+USAGE="$(cat <<HELP
+Runs every check of the Python sources and the one JavaScript file: the byte-compile of
+the plugin, the four house lints under shell/lint/, and the unit tests with
+the golden cases. The plugin/python job runs exactly this.
+
+Usage: shell/actions/hermes/check [-h,--help]
+HELP
+)"
+
+main() {
+  case "${1:-}" in
+    -h|--help)
+      printf '%s\n' "$USAGE"
+      return 0
+      ;;
+  esac
+  cd "$PROJ"
+  compile
+  lint
+  test
+}
+
+: <<'FUN'
+Byte-compiles the plugin's own packages, so a syntax error fails before any
+lint reads the file.
+FUN
+compile() {
+  python3 -m compileall -q __init__.py workshop dashboard
+}
+
+: <<'FUN'
+Runs the house lints over the source files shell/lint/sources lists.
+FUN
+lint() {
+  # shellcheck disable=SC2046  # one argument per file is what the lints take
+  python3 shell/lint/blank_after_block.py $(shell/lint/sources '*.py')
+  # shellcheck disable=SC2046
+  python3 shell/lint/module_docstring.py $(shell/lint/sources '*.py')
+  # shellcheck disable=SC2046
+  python3 shell/lint/jsdoc_file_block.py $(shell/lint/sources '*.js' '*.jsx')
+  # shellcheck disable=SC2046
+  python3 shell/lint/indent_width.py $(shell/lint/sources '*.py')
+}
+
+: <<'FUN'
+Runs the unit tests and the golden cases under tests/.
+FUN
+test() {
+  python3 -m unittest discover -s tests -t . -v
+}
+
+main "$@"
