@@ -6,6 +6,7 @@
  */
 import { useEffect, useState } from 'react';
 
+/** A new store holding no project, with get, set and subscribe. */
 export function createStore() {
   let project = { found: false };
   const listeners = new Set();
@@ -22,7 +23,10 @@ export function createStore() {
   };
 }
 
-/** The store's project as React state, re-rendering the caller on every set. */
+/**
+ * The store's project as React state, re-rendering the caller on every set.
+ * @param store The store the pane and the chip share.
+ */
 export function useProject(store) {
   const [project, setProject] = useState(store.get());
   useEffect(() => store.subscribe(setProject), [store]);

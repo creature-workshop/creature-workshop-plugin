@@ -11,6 +11,12 @@ import { Chip } from './Chip.jsx';
 import { Pane } from './Pane.jsx';
 import { createStore } from './store.js';
 
+/**
+ * The pane and the chip over one backend answer.
+ * @param props The component's props.
+ * @param props.project The project the backend answers with.
+ * @param props.cwd The session's directory.
+ */
 export function PaneHarness({ project, cwd }) {
   const [store] = useState(createStore);
   const [scheduledMs, setScheduledMs] = useState(null);

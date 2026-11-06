@@ -102,8 +102,9 @@ The pipeline in `.gitlab-ci.yml` is the creatures catalog's `forge`,
 `linear` and `agents` components, which keep the merge request, its issues
 and its hat label in step, plus one job per action under
 `shell/actions/hermes/`: `plugin/python` runs `check`, `plugin/manifests`
-and `plugin/desktop` prove the two generators still run, `plugin/pane` runs
-the browser tests, and `plugin/deploy`, after each merge, builds the
+and `plugin/desktop` prove the two generators still run, `plugin/javascript`
+runs ESLint, the tests of its two house rules and the browser tests, and
+`plugin/deploy`, after each merge, builds the
 generated files in a scratch branch and deploys one commit on top of main's
 to the `built` branch. That commit is what the Hermes catalog pins and what
 Hermes installs; main never holds the generated files.
@@ -145,14 +146,28 @@ there, and pnpm is installed with npm at the version `package.json` names,
 because that image's corepack cannot verify the registry's current signing
 key.
 
-The scripts under `shell/lint/` are the house rules here: one React
-component per file, in a file of its name; two-space indentation in Python;
-one blank line, exactly one, after every multi-line statement that a
-statement follows; a doc block at the top of every Python file; a JSDoc
-`/** @file ... */` block at the top of every JavaScript file; and no
-comments in YAML, where what a comment would say belongs with the thing it
-describes. `shell/actions/hermes/check` runs the byte-compile, all six and
-the tests, and the plugin/python job runs exactly that.
+The house rules for Python and YAML are the scripts under `shell/lint/`:
+two-space indentation in Python; one blank line, exactly one, after every
+multi-line statement that a statement follows; a doc block at the top of
+every Python file; and no comments in YAML, where what a comment would say
+belongs with the thing it describes. `shell/actions/hermes/check` runs the
+byte-compile, all four and the tests, and the plugin/python job runs exactly
+that.
+
+The house rules for JavaScript are ESLint, configured in `eslint.config.js`:
+ESLint's and React's recommended rules; a JSDoc `/** @file ... */` block at
+the top of every file; a JSDoc block on every top-level declaration,
+exported or not, with a description and one line per parameter; one React
+component per file, in a file of the component's name; and no comments
+inside a function body, because a step that needs one is its own function.
+The last two are the plugin under `shell/lint/eslint/`, tested with
+ESLint's RuleTester over the fixtures under `tests/fixtures/`. The one way
+to make an exception is ESLint's own `eslint-disable-next-line` comment,
+with the reason after `--`.
+
+```bash
+pnpm run lint && pnpm run test:lint
+```
 
 This repository is itself a shellops project, so the pane has something to
 show from its own checkout. The work is tracked in Linear under SHOP.

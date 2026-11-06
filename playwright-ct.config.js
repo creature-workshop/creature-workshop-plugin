@@ -5,6 +5,7 @@
  */
 import { defineConfig, devices } from '@playwright/experimental-ct-react';
 
+/** The runner's configuration: the tests under desktop/src, one worker, Chromium. */
 export default defineConfig({
   testDir: './desktop/src',
   testMatch: /.*\.ct\.jsx/,

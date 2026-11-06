@@ -6,6 +6,11 @@
 import { useProject } from './store.js';
 import { toolchainSummary } from './project.js';
 
+/**
+ * The chip.
+ * @param props The component's props.
+ * @param props.store The store the pane and the chip share.
+ */
 export function Chip({ store }) {
   const project = useProject(store);
   if (!project.found) {

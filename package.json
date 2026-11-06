@@ -3,12 +3,19 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.18.0",
-  "description": "The dev dependencies of the Desktop pane's Playwright tests; the plugin itself needs none of them.",
+  "description": "The dev dependencies of the JavaScript's checks, ESLint and the Desktop pane's Playwright tests; the plugin itself needs none of them.",
   "scripts": {
+    "lint": "eslint .",
+    "test:lint": "node --test shell/lint/eslint/*.test.js",
     "test:pane": "playwright test -c playwright-ct.config.js"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@playwright/experimental-ct-react": "1.62.1",
+    "eslint": "10.14.0",
+    "eslint-plugin-jsdoc": "65.4.4",
+    "eslint-plugin-react": "7.37.5",
+    "globals": "17.14.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   }

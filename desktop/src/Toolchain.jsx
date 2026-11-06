@@ -6,6 +6,11 @@
 import { Row } from './Row.jsx';
 import { toolchainSummary } from './project.js';
 
+/**
+ * The Toolchain tab.
+ * @param props The component's props.
+ * @param props.project The loaded project.
+ */
 export function Toolchain({ project }) {
   const { rows, installed, total } = toolchainSummary(project);
   if (!project.toolchain) {

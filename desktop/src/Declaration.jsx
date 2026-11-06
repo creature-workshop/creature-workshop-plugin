@@ -3,6 +3,11 @@
  * text.
  */
 
+/**
+ * The Declaration tab.
+ * @param props The component's props.
+ * @param props.project The loaded project.
+ */
 export function Declaration({ project }) {
   const files = project.declaration || {};
   const names = Object.keys(files);

@@ -7,9 +7,14 @@ import { Chip } from './Chip.jsx';
 import { PaneWithSession } from './PaneWithSession.jsx';
 import { createStore } from './store.js';
 
+/** The plugin as Desktop loads it: its id, its name and its register hook. */
 export default {
   id: 'creature-workshop',
   name: 'Creature Workshop',
+  /**
+   * Registers the pane and the chip, sharing one store between them.
+   * @param ctx The plugin context the SDK hands over.
+   */
   register(ctx) {
     const store = createStore();
     ctx.register({

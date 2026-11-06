@@ -14,8 +14,18 @@ import { Toolchain } from './Toolchain.jsx';
 import { load, refreshMs } from './project.js';
 import { useProject } from './store.js';
 
+/** The tabs, in order; the first is the one the pane opens on. */
 export const TABS = ['Toolchain', 'Declaration', 'Release'];
 
+/**
+ * The pane.
+ * @param props The component's props.
+ * @param props.store The store the pane and the chip share.
+ * @param props.cwd The session's directory.
+ * @param props.rest The backend call, taking a path under the plugin's API.
+ * @param props.every Schedules a function on an interval in milliseconds and returns a disposer.
+ * @param props.whenSettingsChange Subscribes to a save of the plugin's settings and returns a disposer.
+ */
 export function Pane({ store, cwd, rest, every, whenSettingsChange }) {
   const project = useProject(store);
   const [tab, setTab] = useState(TABS[0]);

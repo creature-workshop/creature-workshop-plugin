@@ -6,6 +6,7 @@
 import { test, expect } from '@playwright/experimental-ct-react';
 import { PaneHarness } from './PaneHarness.jsx';
 
+/** The backend's answer for a project that declares two tools, one of them missing. */
 const DEMO = {
   found: true,
   root: '/home/someone/demo',

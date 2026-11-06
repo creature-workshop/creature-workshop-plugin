@@ -3,6 +3,14 @@
  * tool, its version and its channel.
  */
 
+/**
+ * One row of the Toolchain tab.
+ * @param props The component's props, one row of install --check.
+ * @param props.tool The tool's name.
+ * @param props.version The declared version.
+ * @param props.channel The channel the tool comes from.
+ * @param props.installed Whether the tool is installed.
+ */
 export function Row({ tool, version, channel, installed }) {
   return (
     <div className="flex items-center gap-2 py-0.5 text-xs">

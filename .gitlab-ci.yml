@@ -35,13 +35,15 @@ plugin/desktop:
     - . ./.envrc
     - shell/actions/hermes/build
 
-plugin/pane:
+plugin/javascript:
   stage: validation
   image: mcr.microsoft.com/playwright:v1.62.1-noble
   needs: []
   script:
     - npm install -g "$(node -p "require('./package.json').packageManager")"
     - pnpm install --frozen-lockfile
+    - pnpm run lint
+    - pnpm run test:lint
     - pnpm run test:pane
 
 plugin/deploy:
