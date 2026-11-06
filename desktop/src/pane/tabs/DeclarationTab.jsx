@@ -1,7 +1,8 @@
 /**
- * @file The Declaration tab: every file under .ops/config, by name, with its
- * text.
+ * @file The Declaration tab: every file under .ops/config, each a
+ * DeclarationFile, in name order.
  */
+import { DeclarationFile } from './DeclarationFile.jsx';
 
 /**
  * The Declaration tab.
@@ -17,12 +18,7 @@ export function DeclarationTab({ project }) {
 
   return (
     <div>
-      {names.map((name) => (
-        <div key={name} className="mb-3">
-          <div className="text-xs font-medium">{`.ops/config/${name}`}</div>
-          <pre className="whitespace-pre-wrap text-[0.6875rem] text-(--ui-text-secondary)">{files[name]}</pre>
-        </div>
-      ))}
+      {names.map((name) => <DeclarationFile key={name} name={name} text={files[name]} />)}
     </div>
   );
 }
