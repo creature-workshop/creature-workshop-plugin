@@ -1,6 +1,7 @@
 /**
- * @file The pane: the project's name and root, three tabs, and the refresh
- * that keeps the toolchain current. `cwd` is the session's directory, `rest`
+ * @file The pane: a header with the project's name and root, a tab bar, the
+ * open tab's body, and the refresh that keeps the toolchain current. The
+ * class names say what each part is; the utility classes lay it out. `cwd` is the session's directory, `rest`
  * the backend call, `every` schedules the refresh and returns a disposer, and
  * `whenSettingsChange` subscribes to a save of the plugin's settings and
  * returns a disposer; all four come from the SDK in PaneWithSession.jsx and
@@ -52,10 +53,12 @@ export function Pane({ store, cwd, rest, every, whenSettingsChange }) {
 
   const Body = BODIES[tab];
   return (
-    <div className="flex h-full flex-col gap-2 overflow-auto p-3 text-sm">
-      <div className="font-medium">{project.name || 'Creature Workshop'}</div>
-      <div className="text-[0.6875rem] text-(--ui-text-tertiary)">{project.root}</div>
-      <div className="flex gap-1">
+    <section className="workshop-pane flex h-full flex-col gap-2 overflow-auto p-3 text-sm">
+      <header className="workshop-project">
+        <h2 className="workshop-project-name text-sm font-medium">{project.name || 'Creature Workshop'}</h2>
+        <p className="workshop-project-root text-[0.6875rem] text-(--ui-text-tertiary)">{project.root}</p>
+      </header>
+      <nav className="workshop-tabs flex gap-1" aria-label="Pane tabs">
         {TABS.map((name) => (
           <button
             key={name}
@@ -67,8 +70,8 @@ export function Pane({ store, cwd, rest, every, whenSettingsChange }) {
             {name}
           </button>
         ))}
-      </div>
+      </nav>
       <Body project={project} />
-    </div>
+    </section>
   );
 }
