@@ -1,28 +1,32 @@
 /**
  * @file The pane: the project's name and root, three tabs, and the refresh
  * that keeps the toolchain current. `cwd` is the session's directory, `rest`
- * the backend call, `every` schedules the refresh and returns a disposer; all
- * three come from the SDK in PaneWithSession.jsx and from the harness in the
- * tests.
+ * the backend call, `every` schedules the refresh and returns a disposer, and
+ * `whenSettingsChange` subscribes to a save of the plugin's settings and
+ * returns a disposer; all four come from the SDK in PaneWithSession.jsx and
+ * from the harness in the tests.
  */
 import { useEffect, useState } from 'react';
 import { Declaration } from './Declaration.jsx';
 import { Empty } from './Empty.jsx';
 import { Release } from './Release.jsx';
 import { Toolchain } from './Toolchain.jsx';
-import { CHECK_EVERY_MS, load } from './project.js';
+import { load, refreshMs } from './project.js';
 import { useProject } from './store.js';
 
 export const TABS = ['Toolchain', 'Declaration', 'Release'];
 
-export function Pane({ store, cwd, rest, every }) {
+export function Pane({ store, cwd, rest, every, whenSettingsChange }) {
   const project = useProject(store);
   const [tab, setTab] = useState(TABS[0]);
+  const intervalMs = refreshMs(project);
 
   useEffect(() => {
     load(rest, store, cwd, true);
-    return every(() => load(rest, store, cwd, true), CHECK_EVERY_MS);
+    return whenSettingsChange(() => load(rest, store, cwd, false));
   }, [cwd, store]);
+
+  useEffect(() => every(() => load(rest, store, cwd, true), intervalMs), [cwd, store, intervalMs]);
 
   if (!project.found) {
     return <Empty project={project} cwd={cwd} />;

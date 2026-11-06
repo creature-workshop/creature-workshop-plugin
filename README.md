@@ -26,7 +26,8 @@ latest release, so the agent reaches for the tools without being told.
 A Desktop pane, **Creature Workshop**, docked on the right, with three tabs:
 
 - **Toolchain**: every declared tool with a green or red dot, its version and
-  its channel, re-read every twenty seconds.
+  its channel, re-read on the interval the `pane_refresh_seconds` setting
+  gives.
 - **Declaration**: the files under `.ops/config/` as they are.
 - **Release**: the latest and stable versions the lock records.
 
@@ -62,8 +63,14 @@ git submodule add https://gitlab.creature-workshop.com/ksoft/shellops.git shell/
 
 ## Settings
 
-`ops_timeout_seconds` (default 120): how long one command may run before a
-tool reports a timeout instead of waiting.
+Both are set under Settings → Plugins in Hermes Desktop, or under
+`plugins.entries.creature-workshop.settings` in Hermes's configuration.
+
+- `ops_timeout_seconds` (default 120): how long one command may run before a
+  tool reports a timeout instead of waiting. A tool call's own
+  `timeout_seconds` overrides it for that call.
+- `pane_refresh_seconds` (default 20): how often the pane re-runs
+  `install --check`. A save takes effect at once; the pane reloads on it.
 
 ## Development
 

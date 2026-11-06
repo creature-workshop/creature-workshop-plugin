@@ -8,18 +8,20 @@ import subprocess
 import time
 from pathlib import Path
 
-DEFAULT_TIMEOUT_SECONDS = 120
+from . import settings
 
 
-def run(root, args, timeout_seconds=DEFAULT_TIMEOUT_SECONDS):
-  """Runs `shell/ops <args>` in the project and returns what happened.
+def run(root, args, timeout_seconds=None):
+  """Runs `shell/ops <args>` in the project and returns what happened. Without a
+  timeout of its own, the call gets the ops_timeout_seconds setting.
 
     run(root, ["install", "--check"])  ->  {"ok": True, "command": "shell/ops install --check",
                         "stdout": "...", "stderr": "", "duration_ms": 1830}
   """
   command = ["shell/ops", *args]
   started = time.monotonic()
-  completed, failure = attempted(lambda: dispatch(root, command, timeout_seconds))
+  limit = timeout_seconds if timeout_seconds is not None else settings.value("ops_timeout_seconds")
+  completed, failure = attempted(lambda: dispatch(root, command, limit))
   if failure is not None:
     return result(command, False, failure.stdout, failure.message, started)
 

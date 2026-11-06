@@ -3,7 +3,8 @@
  * the pure side of the pane, with no React in it.
  */
 
-export const CHECK_EVERY_MS = 20000;
+/** The interval the pane refreshes on until the backend's first answer names one. */
+export const REFRESH_UNTIL_ANSWERED_MS = 20000;
 
 /** Loads the project for a directory through the backend and publishes it to the store. */
 export async function load(rest, store, cwd, withCheck) {
@@ -14,6 +15,11 @@ export async function load(rest, store, cwd, withCheck) {
   } catch (error) {
     store.set({ ...store.get(), error: String(error && error.message ? error.message : error) });
   }
+}
+
+/** The refresh interval in milliseconds: the backend's pane_refresh_seconds, once it has answered. */
+export function refreshMs(project) {
+  return typeof project.refresh_seconds === 'number' ? project.refresh_seconds * 1000 : REFRESH_UNTIL_ANSWERED_MS;
 }
 
 /** The rows of the toolchain and how many of them are installed. */

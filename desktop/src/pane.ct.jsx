@@ -16,6 +16,7 @@ const DEMO = {
     'tools.yaml': 'system:\n  ffmpeg:\n    version: 6.1.1\n  rsync:\n    version: 3.2.7\n',
   },
   release: { latest: '0.1.0-dev.1', stable: '0.0.0' },
+  refresh_seconds: 5,
   declared: [
     { channel: 'system', tool: 'ffmpeg', version: '6.1.1' },
     { channel: 'system', tool: 'rsync', version: '3.2.7' },
@@ -58,4 +59,10 @@ test('outside a project the pane says so and how a project gets one', async ({ m
   await expect(component.getByText('No shellops project at /home/someone/elsewhere.')).toBeVisible();
   await expect(component.getByText('shell/.ops/init')).toBeVisible();
   await expect(component.getByTestId('status-bar')).toHaveText('no .ops here');
+});
+
+test('the refresh runs at the interval the backend answers with', async ({ mount }) => {
+  const component = await mount(<PaneHarness project={DEMO} cwd="/home/someone/demo" />);
+
+  await expect(component.getByTestId('refresh')).toHaveText('every 5000 ms');
 });

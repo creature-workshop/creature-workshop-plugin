@@ -8,7 +8,7 @@ from the session's directory when there is none.
 import json
 import os
 
-from . import ops
+from . import ops, settings
 from .schemas import INSTALL_SCHEMA, LINT_SCHEMA, PROJECT_SCHEMA, TEST_SCHEMA
 from .project import declaration, declared_tools, find_project, release, summary_line
 
@@ -109,10 +109,11 @@ def workshop_lint(args, **kwargs):
 
 
 def timeout_of(args):
+  """The call's own timeout_seconds when it gives one, else the ops_timeout_seconds setting."""
   try:
-    return int(args.get("timeout_seconds") or ops.DEFAULT_TIMEOUT_SECONDS)
+    return int(args.get("timeout_seconds") or settings.value("ops_timeout_seconds"))
   except (TypeError, ValueError):
-    return ops.DEFAULT_TIMEOUT_SECONDS
+    return settings.value("ops_timeout_seconds")
 
 
 REGISTRY = [
