@@ -4,7 +4,7 @@ A Hermes Agent plugin that puts a project's development lifecycle in front of
 the agent and in front of you. The project describes itself once, in its
 `.ops/` declaration, through [shellops](https://gitlab.creature-workshop.com/ksoft/shellops);
 the plugin reads that declaration, runs the project's own `shell/ops`, and
-shows the result in a Desktop pane.
+hands the result to the agent.
 
 ## What the agent gets
 
@@ -28,7 +28,7 @@ hermes plugins install creature-workshop
 hermes plugins enable creature-workshop
 ```
 
-Then restart Hermes. The pane needs Hermes Desktop. Only projects that have
+Then restart Hermes. Only projects that have
 `shell/ops` and `.ops/config/` are recognised; a project gets them with:
 
 ```bash
@@ -44,8 +44,7 @@ git submodule add https://gitlab.creature-workshop.com/ksoft/shellops.git shell/
   the channel the declaration names: the host's package manager, cargo, npm,
   go, a git repository, Flathub, or an installer script the project ships.
   With `check: true`, the default, nothing is installed.
-- The backend in `dashboard/plugin_api.py` runs `shell/ops install --check`
-  for the pane on a timer. It reads files under the project only.
+- The tools read files under the project only.
 - No network calls of the plugin's own, no telemetry, no credentials.
 
 ## Settings
