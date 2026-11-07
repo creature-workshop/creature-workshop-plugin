@@ -1,6 +1,7 @@
 /**
  * @file The pane's tab bar: one button per tab, the open one shaded.
  */
+import { CLOSED_TAB, OPEN_TAB } from '../theme.js';
 
 /**
  * The tab bar.
@@ -17,7 +18,7 @@ export function Tabs({ names, open, onOpen }) {
           key={name}
           type="button"
           className="rounded px-2 py-0.5 text-xs"
-          style={{ background: name === open ? 'var(--ui-bg-tertiary, rgba(127,127,127,0.2))' : 'transparent' }}
+          style={{ background: name === open ? OPEN_TAB : CLOSED_TAB }}
           onClick={() => onOpen(name)}
         >
           {name}

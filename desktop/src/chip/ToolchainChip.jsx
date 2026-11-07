@@ -6,6 +6,7 @@
  */
 import { useProject } from '../project/store.js';
 import { toolchainSummary } from '../project/toolchain.js';
+import { INSTALLED, MISSING, MUTED } from '../theme.js';
 
 /**
  * The chip's colour: muted with nothing declared, green with everything installed, red otherwise.
@@ -14,10 +15,10 @@ import { toolchainSummary } from '../project/toolchain.js';
  */
 function chipColor(installed, total) {
   if (total === 0) {
-    return 'var(--ui-text-tertiary)';
+    return MUTED;
   }
 
-  return installed === total ? '#3fb950' : '#f85149';
+  return installed === total ? INSTALLED : MISSING;
 }
 
 /**
