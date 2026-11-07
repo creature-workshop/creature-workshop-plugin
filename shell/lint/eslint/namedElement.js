@@ -40,13 +40,24 @@ function names(className, sourceCode) {
   return sourceCode.getText(className.value).includes(PREFIX);
 }
 
+/**
+ * An example name for the message, from the file's own name: Tabs.jsx -> tabs.
+ * @param context The rule context.
+ */
+function exampleFor(context) {
+  const stem = context.filename.split('/').pop().replace(/\..*$/, '');
+  return stem.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
+}
+
 /** The rule, reporting each div or span without a role and without a naming class. */
 export default {
   meta: {
     type: 'suggestion',
     docs: { description: 'a div or a span carries a class that says what it is' },
     schema: [],
-    messages: { unnamed: 'a {{tag}} says what it is: a class name with the workshop- prefix, or a role' },
+    messages: {
+      unnamed: 'This <{{tag}}> says nothing about what it is, and a generic box is named. Add a class with the workshop- prefix beside its utility classes, for example workshop-{{example}}, or give it a role, or use the semantic element it stands for.',
+    },
   },
   create(context) {
     return {
@@ -57,7 +68,7 @@ export default {
 
         const className = attribute(opening, 'className');
         if (!className || !names(className, context.sourceCode)) {
-          context.report({ node: opening, messageId: 'unnamed', data: { tag: opening.name.name } });
+          context.report({ node: opening, messageId: 'unnamed', data: { tag: opening.name.name, example: exampleFor(context) } });
         }
       },
     };

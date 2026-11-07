@@ -17,6 +17,6 @@ const tester = new RuleTester({ languageOptions: { ecmaVersion: 2024, sourceType
 tester.run('no-comment-in-body', rule, {
   valid: [fixture('no_comment_in_body', 'clean.js')],
   invalid: [
-    { ...fixture('no_comment_in_body', 'commented.js'), errors: [{ messageId: 'inside', line: 7 }, { messageId: 'inside', line: 12 }] },
+    { ...fixture('no_comment_in_body', 'commented.js'), errors: [{ messageId: 'inside', data: { name: 'addOne' }, line: 7 }, { messageId: 'inside', data: { name: 'double' }, line: 12 }] },
   ],
 });

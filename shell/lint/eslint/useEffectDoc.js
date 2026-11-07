@@ -12,7 +12,9 @@ export default {
     type: 'suggestion',
     docs: { description: 'every useEffect has a doc block saying what it does and when it runs' },
     schema: [],
-    messages: { undocumented: 'a useEffect carries a doc block above it: what the effect does, and when it runs' },
+    messages: {
+      undocumented: 'This useEffect has no doc block above it, and an effect is a side effect with no name of its own. Put a /** ... */ block directly above the call that says what the effect does and when it runs.',
+    },
   },
   create(context) {
     return {

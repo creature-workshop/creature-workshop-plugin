@@ -26,18 +26,21 @@ export default {
     type: 'suggestion',
     docs: { description: 'no test ids: find the page by role and by text, as a user does' },
     schema: [],
-    messages: { testId: 'no test ids; find the element by its role or its text, the way a user does' },
+    messages: {
+      attribute: 'This data-testid plants a hook for the tests that a user never sees. Remove it, and let the test find the element by its role or its text; give it a role if it has none.',
+      query: 'This getByTestId finds the element by a hook a user never sees. Use getByRole or getByText, the way a user finds it.',
+    },
   },
   create(context) {
     return {
       JSXAttribute(attribute) {
         if (isTestIdAttribute(attribute)) {
-          context.report({ node: attribute, messageId: 'testId' });
+          context.report({ node: attribute, messageId: 'attribute' });
         }
       },
       CallExpression(call) {
         if (isTestIdQuery(call)) {
-          context.report({ node: call, messageId: 'testId' });
+          context.report({ node: call, messageId: 'query' });
         }
       },
     };

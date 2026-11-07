@@ -22,9 +22,9 @@ tester.run('named-element', rule, {
     {
       ...fixture('named_element', 'Unnamed.jsx'),
       errors: [
-        { messageId: 'unnamed', data: { tag: 'div' }, line: 6 },
-        { messageId: 'unnamed', data: { tag: 'div' }, line: 7 },
-        { messageId: 'unnamed', data: { tag: 'span' }, line: 8 },
+        { messageId: 'unnamed', data: { tag: 'div', example: 'unnamed' }, line: 6 },
+        { messageId: 'unnamed', data: { tag: 'div', example: 'unnamed' }, line: 7 },
+        { messageId: 'unnamed', data: { tag: 'span', example: 'unnamed' }, line: 8 },
       ],
     },
   ],

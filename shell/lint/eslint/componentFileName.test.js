@@ -24,6 +24,6 @@ tester.run('component-file-name', rule, {
     fixture('component_file_name', 'store.js'),
   ],
   invalid: [
-    { ...fixture('component_file_name', 'Other.jsx'), errors: [{ messageId: 'named', data: { name: 'Chip' }, line: 4 }] },
+    { ...fixture('component_file_name', 'Other.jsx'), errors: [{ messageId: 'named', data: { file: 'Other.jsx', name: 'Chip' }, line: 4 }] },
   ],
 });

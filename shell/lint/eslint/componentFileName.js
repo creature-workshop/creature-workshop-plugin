@@ -66,15 +66,18 @@ export default {
     type: 'problem',
     docs: { description: "a component's file is named after the component" },
     schema: [],
-    messages: { named: "a component's file takes its name: {{name}}.jsx" },
+    messages: {
+      named: '{{file}} declares the component {{name}}, and a file is named after the one component it declares. Rename this file to {{name}}.jsx, or move {{name}} into a file of that name.',
+    },
   },
   create(context) {
+    const file = basename(context.filename);
     const stem = basename(context.filename, extname(context.filename));
     return {
       Program(program) {
         for (const component of declaredComponents(program)) {
           if (component.name !== stem) {
-            context.report({ node: component.node, messageId: 'named', data: { name: component.name } });
+            context.report({ node: component.node, messageId: 'named', data: { file, name: component.name } });
           }
         }
       },

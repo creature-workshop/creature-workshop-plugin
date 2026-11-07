@@ -19,6 +19,6 @@ const tester = new RuleTester({
 tester.run('no-test-id', rule, {
   valid: [fixture('no_test_id', 'byRole.ct.jsx')],
   invalid: [
-    { ...fixture('no_test_id', 'byTestId.ct.jsx'), errors: [{ messageId: 'testId', line: 5 }, { messageId: 'testId', line: 6 }] },
+    { ...fixture('no_test_id', 'byTestId.ct.jsx'), errors: [{ messageId: 'attribute', line: 5 }, { messageId: 'query', line: 6 }] },
   ],
 });
