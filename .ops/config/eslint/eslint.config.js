@@ -1,6 +1,8 @@
 /**
  * @file The house rules for the JavaScript, which `pnpm run lint` runs over
- * every tracked .js and .jsx file: ESLint's and React's recommended rules; a
+ * every tracked .js and .jsx file of the project. ESLint takes the paths
+ * here relative to the directory it runs in, which is the project root,
+ * because the config is named with --config: ESLint's and React's recommended rules; a
  * JSDoc block at the top of every file and on every top-level declaration,
  * exported or not, each with a description and one for every parameter, the
  * way a shellops doc block lists its args; one React component per file, in
@@ -19,7 +21,7 @@ import globals from 'globals';
 import jsdoc from 'eslint-plugin-jsdoc';
 import playwright from 'eslint-plugin-playwright';
 import react from 'eslint-plugin-react';
-import house from './shell/lint/eslint/house.js';
+import house from '../../../shell/lint/eslint/house.js';
 
 /** The selectors of the declarations a file makes at its top level, inside or outside an export. */
 const TOP_LEVEL_DECLARATIONS = [
@@ -35,13 +37,11 @@ export default [
   {
     ignores: [
       'desktop/plugin.js',
-      '.venv/**',
       'tests/fixtures/**',
       'shell/.ops/**',
-      '.ops/**',
-      'playwright/.cache/**',
-      'test-results/**',
-      'playwright-report/**',
+      '.ops/cache/**',
+      '.ops/docs/**',
+      '.ops/__compiled__*/**',
     ],
   },
   js.configs.recommended,

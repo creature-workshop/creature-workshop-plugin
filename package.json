@@ -5,9 +5,9 @@
   "packageManager": "pnpm@12.18.0",
   "description": "The dev dependencies of the JavaScript's checks, ESLint and the Desktop pane's Playwright tests; the plugin itself needs none of them.",
   "scripts": {
-    "lint": "eslint .",
+    "lint": "eslint --config .ops/config/eslint/eslint.config.js .",
     "test:lint": "node --test shell/lint/eslint/*.test.js",
-    "test:pane": "playwright test -c playwright-ct.config.js"
+    "test:pane": "playwright test -c .ops/config/playwright/playwright-ct.config.js"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

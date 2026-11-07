@@ -85,20 +85,32 @@ package. `dashboard/plugin_api.py` is the backend, at the path the dashboard
 manifest names. Everything JavaScript is under `desktop/`, which Hermes
 Desktop loads, with the source under `desktop/src/`.
 
+`.ops/config/` is how the project describes itself: the YAML files at its
+top are the declaration, and each folder under it is one tool's own
+configuration, named after the tool, which shellops never reads: `eslint/`,
+`playwright/`, `uv/` and `gitlab/`. What a tool rebuilds from its
+configuration goes under `.ops/cache/<tool>/`, which is ignored. The two
+files that stay at the root do so because their tools insist: `package.json`
+with its lock, since Node resolves imports by walking up to `node_modules`,
+and `.gitlab-ci.yml`, two lines that include the real pipeline.
+
 ```bash
 ln -s "$PWD" ~/.hermes/plugins/creature-workshop
 ln -s "$PWD/desktop" ~/.hermes/desktop-plugins/creature-workshop
 hermes plugins enable creature-workshop
 hermes plugins doctor . --ci
+. ./.envrc
 uv sync
 uv run shell/actions/hermes/check
 ```
 
-`pyproject.toml` lists, as its dev group, what the checks need and the
-plugin does not: PyYAML to read the declaration outside Hermes, FastAPI for
-the backend, and coverage; `uv.lock` pins them, and `uv sync` installs them
-into `.venv/`. `check` runs the tests under coverage and ends with the
-report, file by file with the lines the tests miss.
+`.ops/config/uv/pyproject.toml` lists, as its dev group, what the checks
+need and the plugin does not: PyYAML to read the declaration outside Hermes,
+FastAPI for the backend, and coverage; `uv.lock` beside it pins them, and
+`uv sync` installs them into `.ops/cache/venv/`. The project's `.envrc`
+names both paths to uv, so load it first, which direnv does. `check` runs
+the tests under coverage and ends with the report, file by file with the
+lines the tests miss.
 
 The tracked tree carries source only. Three files are generated and ignored:
 `plugin.yaml` and `dashboard/manifest.json`, which
@@ -116,15 +128,17 @@ shell/actions/hermes/manifests && shell/actions/hermes/build
 While working on the pane, `shell/actions/hermes/build --watch` rewrites
 the output on every change, and Desktop reloads it.
 
-The pipeline in `.gitlab-ci.yml` is the creatures catalog's `forge`,
+The pipeline in `.ops/config/gitlab/ci.yml`, which the `.gitlab-ci.yml` at
+the root includes, is the creatures catalog's `forge`,
 `linear` and `agents` components, which keep the merge request, its issues
 and its hat label in step, plus one job per action under
 `shell/actions/hermes/`: `plugin/python` runs `check`, `plugin/manifests`
 and `plugin/desktop` prove the two generators still run, `plugin/javascript`
-runs ESLint, the tests of its two house rules and the browser tests, and
+runs ESLint, the tests of its two house rules and the browser tests,
 `plugin/deploy`, after each merge, builds the
 generated files in a scratch branch and deploys one commit on top of main's
-to the `built` branch. That commit is what the Hermes catalog pins and what
+to the `built` branch, and `plugin/catalog` then moves the catalog's pin to
+that commit. That commit is what the Hermes catalog pins and what
 Hermes installs; main never holds the generated files.
 
 The catalog entry follows: `shell/actions/hermes/catalog-pin` rewrites the
@@ -160,6 +174,10 @@ then:
 pnpm run test:pane
 ```
 
+The runner's configuration is `.ops/config/playwright/`, with the page each
+test mounts into under `template/` beside it, and what Playwright builds
+goes under `.ops/cache/playwright/`.
+
 In CI the same tests run on Playwright's own image, so the browser is
 there, and pnpm is installed with npm at the version `package.json` names,
 because that image's corepack cannot verify the registry's current signing
@@ -174,7 +192,8 @@ comments in YAML, where what a comment would say belongs with the thing it
 describes. `shell/actions/hermes/check` runs the byte-compile, all five and
 the tests, and the plugin/python job runs exactly that.
 
-The house rules for JavaScript are ESLint, configured in `eslint.config.js`:
+The house rules for JavaScript are ESLint, configured in
+`.ops/config/eslint/eslint.config.js`:
 ESLint's and React's recommended rules; a JSDoc `/** @file ... */` block at
 the top of every file; a JSDoc block on every top-level declaration,
 exported or not, with a description and one line per parameter; one React
