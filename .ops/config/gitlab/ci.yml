@@ -15,7 +15,7 @@ workflow:
     - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 plugin/python:
-  extends: [.shellops]
+  extends: [.shellops, .rules--check]
   stage: validation
   image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
   needs: []
@@ -25,14 +25,14 @@ plugin/python:
     - uv run shell/actions/hermes/check
 
 plugin/manifests:
-  extends: [.shellops]
+  extends: [.shellops, .rules--check]
   stage: validation
   needs: []
   script:
     - shell/actions/hermes/manifests
 
 plugin/desktop:
-  extends: [.shellops]
+  extends: [.shellops, .rules--check]
   stage: validation
   needs: []
   script:
@@ -41,6 +41,7 @@ plugin/desktop:
     - shell/actions/hermes/build
 
 plugin/javascript:
+  extends: [.rules--check]
   stage: validation
   image: mcr.microsoft.com/playwright:v1.62.1-noble
   needs: []
