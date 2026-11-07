@@ -13,7 +13,8 @@ provides_tools:
   - workshop_install
   - workshop_test
   - workshop_lint
-provides_hooks: []
+provides_hooks:
+  - pre_tool_call
 config_schema:
   ops_timeout_seconds:
     type: int

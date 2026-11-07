@@ -7,28 +7,16 @@ from the session's directory when there is none.
 """
 
 import json
-import os
 
-from . import check_table, ops, settings
+from . import check_table, guard, ops, session, settings
 from .schemas import INSTALL_SCHEMA, LINT_SCHEMA, PROJECT_SCHEMA, TEST_SCHEMA
 from .project import declaration, declared_tools, find_project, release, summary_line
-
-
-def session_directory():
-  """The directory the session works in: Hermes's configured one, else this process's."""
-
-  try:
-    from agent.runtime_cwd import resolve_agent_cwd
-
-    return str(resolve_agent_cwd())
-  except Exception:
-    return os.getcwd()
 
 
 def project_for(args):
   """(root, error) for the project the arguments point at; one of the two is None."""
 
-  start = args.get("path") or session_directory()
+  start = args.get("path") or session.directory()
   root = find_project(start)
   if root is None:
     return None, (f"{start} is not inside a shellops project: no shell/ops and .ops/config above it. "
@@ -81,6 +69,8 @@ def workshop_install(args, **kwargs):
   outcome["root"] = str(root)
   if args.get("check", True):
     outcome["toolchain"] = check_table.rows(outcome)
+  else:
+    guard.forget(root)
 
   return reply(outcome)
 

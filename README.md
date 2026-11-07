@@ -21,6 +21,15 @@ In a session whose directory is a shellops project, the system prompt gets a
 short section saying so, with the project's name, its tool count and its
 latest release, so the agent reaches for the tools without being told.
 
+And one hook, on every terminal command. When the command runs a program the
+project declares in `.ops/config/tools.yaml` and `install --check` reports
+missing, the hook blocks the command before it runs and tells the agent the
+tool, its declared version and channel, and the `workshop_install` call that
+installs it, so the agent installs and retries instead of failing on a
+command that was never going to work. A program the project does not declare
+passes, as does every command outside a project. The check behind the hook
+is cached for `pane_refresh_seconds` and forgotten after an install.
+
 ## What you get
 
 A Desktop pane, **Creature Workshop**, docked on the right, with three tabs:
@@ -57,6 +66,9 @@ git submodule add https://gitlab.creature-workshop.com/ksoft/shellops.git shell/
   the channel the declaration names: the host's package manager, cargo, npm,
   go, a git repository, Flathub, or an installer script the project ships.
   With `check: true`, the default, nothing is installed.
+- The hook on the terminal reads the command's text to find the programs it
+  runs and runs `shell/ops install --check` to know which are missing; it
+  never runs the command itself, and it blocks nothing outside a project.
 - The backend in `dashboard/plugin_api.py` runs `shell/ops install --check`
   for the pane on a timer. It reads files under the project only. What it
   answers with is the models in `workshop/answers.py`.
