@@ -12,7 +12,7 @@ from .workshop.project import find_project, summary_line
 
 
 def register(ctx):
-  for schema, handler in tools.REGISTRY:
+  for schema, handler in tools.registry():
     ctx.register_tool(name=schema["name"], toolset="workshop", schema=schema, handler=handler)
 
   ctx.register_system_prompt_section("creature-workshop", prompt_section, max_chars=800)

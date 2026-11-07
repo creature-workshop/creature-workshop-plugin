@@ -8,7 +8,9 @@
  * comment inside a function body; a class name with the workshop- prefix on
  * every div and span, saying what the box is; and, in the browser tests,
  * Playwright's recommended rules with its locator rules, plus no test ids:
- * a test finds the page by role and by text, as a user does.
+ * a test finds the page by role and by text, as a user does. Two more say
+ * when a file should split: its constants come before its first function,
+ * and no comment draws a banner across it.
  * The one exception syntax is ESLint's own eslint-disable comment, with the
  * reason after two dashes.
  */
@@ -60,6 +62,8 @@ export default [
       'jsdoc/require-returns-type': 'off',
       'react/no-multi-comp': ['error', { ignoreStateless: false }],
       'react/prop-types': 'off',
+      'house/declarations-first': 'error',
+      'house/no-banner-comment': 'error',
       'house/no-comment-in-body': 'error',
       'house/no-test-id': 'error',
       'house/use-effect-doc': 'error',

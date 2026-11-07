@@ -25,7 +25,7 @@ PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 if str(PLUGIN_ROOT) not in sys.path:
   sys.path.insert(0, str(PLUGIN_ROOT))
 
-from workshop import ops, settings  # noqa: E402
+from workshop import check_table, ops, settings  # noqa: E402
 from workshop.answers import DeclaredTool, NoProject, Project, Release, Toolchain  # noqa: E402
 from workshop.project import declaration, declared_tools, find_project, manifest, release, summary_line  # noqa: E402
 
@@ -64,7 +64,7 @@ def toolchain(root):
   outcome = ops.run(root, ["install", "--check"], settings.value("ops_timeout_seconds"))
   return Toolchain(
     ok=outcome["ok"],
-    rows=ops.check_table(outcome),
+    rows=check_table.rows(outcome),
     stderr=outcome["stderr"],
     duration_ms=outcome["duration_ms"],
   )

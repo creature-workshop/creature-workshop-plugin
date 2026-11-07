@@ -3,7 +3,8 @@
 Every command runs in the project's root with its .envrc loaded, which is how
 shellops finds the project, and reports the same shape whether it succeeded,
 failed or timed out, so a tool can hand the result straight to the agent.
-Every run is logged under the `creature-workshop` logger, which Hermes writes
+What `install --check` prints is read by check_table. Every run is
+logged under the `creature-workshop` logger, which Hermes writes
 to ~/.hermes/logs/: a success at INFO into agent.log, a failure at WARNING
 with its stderr into errors.log as well, so `hermes logs` shows what the
 plugin ran and what went wrong.
@@ -102,37 +103,3 @@ def text_of(value):
     return value.decode("utf-8", "replace")
 
   return value or ""
-
-
-INSTALLED_MARK = "✓"
-
-
-def check_table(outcome):
-  """The text of `ops install --check` as rows. The dispatcher logs the table on
-  stderr, so both streams are read."""
-  return parse_check_table(outcome["stdout"] + "\n" + outcome["stderr"])
-
-
-def parse_check_table(text):
-  """The rows of `ops install --check` as records.
-
-  The table is a header, a rule and one line per tool with a status mark, the
-  tool, its version and its channel:
-
-    parse_check_table("  ✓      ffmpeg    6.1.1    system\\n")
-     ->  [{"tool": "ffmpeg", "version": "6.1.1", "channel": "system", "installed": True}]
-  """
-  rows = []
-  for line in text.splitlines():
-    parts = line.split()
-    if len(parts) < 4 or parts[0] in ("Status",) or set(line.strip()) <= {"-"}:
-      continue
-
-    mark, tool, version, channel = parts[0], parts[1], parts[2], parts[3]
-    rows.append({"tool": tool, "version": version, "channel": channel, "installed": mark == INSTALLED_MARK})
-
-  return rows
-
-
-def envrc_present(root):
-  return (Path(root) / ".envrc").is_file()

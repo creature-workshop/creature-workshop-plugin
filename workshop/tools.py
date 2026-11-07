@@ -8,7 +8,7 @@ from the session's directory when there is none.
 import json
 import os
 
-from . import ops, settings
+from . import check_table, ops, settings
 from .schemas import INSTALL_SCHEMA, LINT_SCHEMA, PROJECT_SCHEMA, TEST_SCHEMA
 from .project import declaration, declared_tools, find_project, release, summary_line
 
@@ -56,7 +56,7 @@ def workshop_project(args, **kwargs):
     "declaration": declaration(root),
     "release": release(root),
     "declared": [{"channel": c, "tool": t, "version": v} for c, t, v in declared_tools(root)],
-    "toolchain": ops.check_table(check),
+    "toolchain": check_table.rows(check),
     "stderr": check["stderr"],
   })
 
@@ -75,7 +75,7 @@ def workshop_install(args, **kwargs):
   outcome = ops.run(root, command, timeout_of(args))
   outcome["root"] = str(root)
   if args.get("check", True):
-    outcome["toolchain"] = ops.check_table(outcome)
+    outcome["toolchain"] = check_table.rows(outcome)
 
   return reply(outcome)
 
@@ -116,9 +116,11 @@ def timeout_of(args):
     return settings.value("ops_timeout_seconds")
 
 
-REGISTRY = [
-  (PROJECT_SCHEMA, workshop_project),
-  (INSTALL_SCHEMA, workshop_install),
-  (TEST_SCHEMA, workshop_test),
-  (LINT_SCHEMA, workshop_lint),
-]
+def registry():
+  """Every tool as (schema, handler), in the order register hands them to Hermes."""
+  return [
+    (PROJECT_SCHEMA, workshop_project),
+    (INSTALL_SCHEMA, workshop_install),
+    (TEST_SCHEMA, workshop_test),
+    (LINT_SCHEMA, workshop_lint),
+  ]

@@ -168,10 +168,11 @@ key.
 The house rules for Python and YAML are the scripts under `shell/lint/`:
 two-space indentation in Python; one blank line, exactly one, after every
 multi-line statement that a statement follows; a doc block at the top of
-every Python file; and no comments in YAML, where what a comment would say
-belongs with the thing it describes. `shell/actions/hermes/check` runs the
-byte-compile, all four and the tests, and the plugin/python job runs exactly
-that.
+every Python file; a module's constants before its first function, and no
+banner comment, since either is the sign that a file should split; and no
+comments in YAML, where what a comment would say belongs with the thing it
+describes. `shell/actions/hermes/check` runs the byte-compile, all five and
+the tests, and the plugin/python job runs exactly that.
 
 The house rules for JavaScript are ESLint, configured in `eslint.config.js`:
 ESLint's and React's recommended rules; a JSDoc `/** @file ... */` block at
@@ -182,10 +183,12 @@ every `useEffect`, saying what the effect does and when it runs, because an
 effect is a side effect at the boundary of the UI with no name of its own;
 no other comment inside a function body, because a step that needs one is
 its own function; and a `workshop-` class on every `div` and `span`, saying
-what the box is, since a semantic element or a role already says it. The
+what the box is, since a semantic element or a role already says it; a
+module's constants before its first function, and no banner comment, the two
+signs that a file should split. The
 browser tests get Playwright's own rules on top, with its locator rules on,
 and no test ids anywhere: a test finds the page by role and by text, the
-way a user does. The last five are the plugin under
+way a user does. The last seven are the plugin under
 `shell/lint/eslint/`, tested with
 ESLint's RuleTester over the fixtures under `tests/fixtures/`. The one way
 to make an exception is ESLint's own `eslint-disable-next-line` comment,
