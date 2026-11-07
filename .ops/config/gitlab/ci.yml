@@ -4,6 +4,10 @@ include:
   - component: $CI_SERVER_FQDN/ksoft/creatures/agents@0.20.0-dev.17
   - component: $CI_SERVER_FQDN/ksoft/creatures/shellops-base@0.20.0-dev.17
 
+variables:
+  GIT_DEPTH: "0"
+  GIT_SUBMODULE_DEPTH: "1"
+
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"

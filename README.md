@@ -151,7 +151,12 @@ runs ESLint, the tests of its two house rules and the browser tests,
 generated files in a scratch branch and deploys one commit on top of main's
 to the `built` branch, and `plugin/catalog` then moves the catalog's pin to
 that commit. That commit is what the Hermes catalog pins and what
-Hermes installs; main never holds the generated files.
+Hermes installs; main never holds the generated files. Every job clones
+the repository's whole history (`GIT_DEPTH: "0"`), because the governance
+jobs read the merge base and main's tip, which a shallow clone of a long
+branch does not hold; the repository is small, so this costs under a
+second. The submodules stay at depth one, since shellops' history is the
+large one and no job reads it.
 
 The catalog entry follows: `shell/actions/hermes/catalog-pin` rewrites the
 `sha` and `version` of `plugin-catalog/creature-workshop.yaml` on the
