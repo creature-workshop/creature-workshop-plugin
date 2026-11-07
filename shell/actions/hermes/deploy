@@ -35,6 +35,7 @@ ARG_PUSH=true
 
 main() {
   parse_args "$@"
+  restore_lock
   require_clean_tree
   __main__start="$(git rev-parse HEAD)"
   __main__scratch="scratch/build-$(git rev-parse --short HEAD)"
@@ -67,12 +68,25 @@ parse_args() {
 }
 
 : <<'FUN'
+Puts .ops/lock back to the committed one. Every `ops install` run that is
+not a check records what it resolved in the lock, and the CI base runs one
+before this action, so the lock differs from the commit whenever a change
+to tools.yaml landed without the lock that goes with it. The lock is the
+release job's to commit, not the build's, so the build reads past it.
+FUN
+restore_lock() {
+  git -C "$PROJ" checkout -q -- .ops/lock
+}
+
+: <<'FUN'
 Exits when the tracked tree has uncommitted changes, since the build commit
-must carry the generated files alone.
+must carry the generated files alone. Names the changes, so a job log says
+which file was in the way.
 FUN
 require_clean_tree() {
   if [ "$(git__worktree_clean "$PROJ")" != true ]; then
-    printf 'deploy: the tree has uncommitted or untracked changes; commit or discard them first\n' >&2
+    printf 'deploy: the tree has uncommitted or untracked changes; commit or discard them first:\n' >&2
+    git -C "$PROJ" status --porcelain --ignore-submodules=all >&2
     exit 1
   fi
 }
