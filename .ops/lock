@@ -220,6 +220,9 @@
         },
         "python3": {
           "version": "3.12.3"
+        },
+        "uv": {
+          "version": "0.11.19"
         }
       },
       "npm": {
@@ -241,7 +244,7 @@
     "imports": {}
   },
   "release": {
-    "latest": "0.1.0-dev.3",
+    "latest": "0.1.0-dev.4",
     "stable": "0.0.0"
   }
 }
