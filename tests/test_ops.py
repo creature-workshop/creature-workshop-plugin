@@ -1,10 +1,11 @@
 """Covers workshop.ops: the check table's rows and the shape a run reports."""
+
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
-from workshop import ops, tools
+from workshop import check_table, ops, tools
 
 CHECK_TABLE = """Status     Tool                   Version        Channel
 ------------------------------------------------------------
@@ -15,14 +16,14 @@ CHECK_TABLE = """Status     Tool                   Version        Channel
 
 class ParseCheckTable(unittest.TestCase):
   def test_rows_with_installed_from_the_mark(self):
-    rows = ops.parse_check_table(CHECK_TABLE)
+    rows = check_table.parse(CHECK_TABLE)
     self.assertEqual(rows, [
       {"tool": "ffmpeg", "version": "6.1.1", "channel": "system", "installed": True},
       {"tool": "rsync", "version": "3.2.7", "channel": "system", "installed": False},
     ])
 
   def test_empty_text_gives_no_rows(self):
-    self.assertEqual(ops.parse_check_table(""), [])
+    self.assertEqual(check_table.parse(""), [])
 
 
 class Run(unittest.TestCase):
@@ -69,3 +70,23 @@ class Tools(unittest.TestCase):
 
 if __name__ == "__main__":
   unittest.main()
+
+
+class Logging(unittest.TestCase):
+  def test_a_failed_run_is_logged_as_a_warning_with_its_stderr(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      with self.assertLogs("creature-workshop", level="WARNING") as logged:
+        ops.run(tmp, ["install", "--check"])
+
+      self.assertIn("shell/ops install --check failed", logged.output[0])
+
+  def test_a_successful_run_is_logged_as_info(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      (root / "shell").mkdir()
+      (root / "shell" / "ops").write_text("#!/bin/sh\nexit 0\n")
+      (root / "shell" / "ops").chmod(0o755)
+      with self.assertLogs("creature-workshop", level="INFO") as logged:
+        ops.run(root, ["lint"])
+
+      self.assertIn("INFO:creature-workshop:shell/ops lint in", logged.output[0])

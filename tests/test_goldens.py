@@ -3,6 +3,7 @@
 UPDATE_GOLDENS=1 rewrites the expected transcripts instead of comparing them;
 read the diff before committing one.
 """
+
 import os
 import unittest
 

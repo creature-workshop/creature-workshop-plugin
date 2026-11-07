@@ -3,31 +3,65 @@
 Every command runs in the project's root with its .envrc loaded, which is how
 shellops finds the project, and reports the same shape whether it succeeded,
 failed or timed out, so a tool can hand the result straight to the agent.
+What `install --check` prints is read by check_table. Every run is
+logged under the `creature-workshop` logger, which Hermes writes
+to ~/.hermes/logs/: a success at INFO into agent.log, a failure at WARNING
+with its stderr into errors.log as well, so `hermes logs` shows what the
+plugin ran and what went wrong.
 """
+
+import logging
 import subprocess
 import time
 from pathlib import Path
 
-DEFAULT_TIMEOUT_SECONDS = 120
+from . import settings
+
+log = logging.getLogger("creature-workshop")
 
 
-def run(root, args, timeout_seconds=DEFAULT_TIMEOUT_SECONDS):
-  """Runs `shell/ops <args>` in the project and returns what happened.
+def run(root, args, timeout_seconds=None):
+  """Runs `shell/ops <args>` in the project and returns what happened. Without a
+  timeout of its own, the call gets the ops_timeout_seconds setting.
 
     run(root, ["install", "--check"])  ->  {"ok": True, "command": "shell/ops install --check",
                         "stdout": "...", "stderr": "", "duration_ms": 1830}
   """
+
   command = ["shell/ops", *args]
   started = time.monotonic()
-  completed, failure = attempted(lambda: dispatch(root, command, timeout_seconds))
+  limit = limit_of(timeout_seconds)
+  completed, failure = attempted(lambda: dispatch(root, command, limit))
   if failure is not None:
-    return result(command, False, failure.stdout, failure.message, started)
+    return logged(result(command, False, failure.stdout, failure.message, started))
 
-  return result(command, completed.returncode == 0, completed.stdout, completed.stderr, started)
+  return logged(result(command, completed.returncode == 0, completed.stdout, completed.stderr, started))
+
+
+def logged(outcome):
+  """The outcome, after logging it: INFO when the command succeeded, WARNING with
+  its stderr when it did not."""
+
+  if outcome["ok"]:
+    log.info("%s in %dms", outcome["command"], outcome["duration_ms"])
+  else:
+    log.warning("%s failed in %dms: %s", outcome["command"], outcome["duration_ms"], outcome["stderr"].strip())
+
+  return outcome
+
+
+def limit_of(timeout_seconds):
+  """The timeout the caller gave, or the ops_timeout_seconds setting when it gave none."""
+
+  if timeout_seconds is not None:
+    return timeout_seconds
+
+  return settings.value("ops_timeout_seconds")
 
 
 def dispatch(root, command, timeout_seconds):
   """Runs the command in the project with its .envrc loaded, the way a terminal there would."""
+
   return subprocess.run(
     ["bash", "-c", 'source ./.envrc >/dev/null 2>&1; exec "$@"', "ops", *command],
     cwd=str(root),
@@ -50,6 +84,7 @@ def attempted(call):
   """(value, None) when the call completes, (None, Failure) when the command
   timed out or could not start. The one place a dispatch's exceptions are
   caught, so run reads straight down."""
+
   try:
     return call(), None
   except subprocess.TimeoutExpired as error:
@@ -69,38 +104,9 @@ def result(command, ok, stdout, stderr, started):
 
 
 def text_of(value):
-  return value.decode("utf-8", "replace") if isinstance(value, bytes) else (value or "")
+  """A stream's output as text: bytes decoded, None as the empty string."""
 
+  if isinstance(value, bytes):
+    return value.decode("utf-8", "replace")
 
-INSTALLED_MARK = "✓"
-
-
-def check_table(outcome):
-  """The text of `ops install --check` as rows. The dispatcher logs the table on
-  stderr, so both streams are read."""
-  return parse_check_table(outcome["stdout"] + "\n" + outcome["stderr"])
-
-
-def parse_check_table(text):
-  """The rows of `ops install --check` as records.
-
-  The table is a header, a rule and one line per tool with a status mark, the
-  tool, its version and its channel:
-
-    parse_check_table("  ✓      ffmpeg    6.1.1    system\\n")
-     ->  [{"tool": "ffmpeg", "version": "6.1.1", "channel": "system", "installed": True}]
-  """
-  rows = []
-  for line in text.splitlines():
-    parts = line.split()
-    if len(parts) < 4 or parts[0] in ("Status",) or set(line.strip()) <= {"-"}:
-      continue
-
-    mark, tool, version, channel = parts[0], parts[1], parts[2], parts[3]
-    rows.append({"tool": tool, "version": version, "channel": channel, "installed": mark == INSTALLED_MARK})
-
-  return rows
-
-
-def envrc_present(root):
-  return (Path(root) / ".envrc").is_file()
+  return value or ""

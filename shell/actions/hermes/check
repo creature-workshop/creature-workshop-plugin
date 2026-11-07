@@ -3,10 +3,15 @@ set -eu
 # shellcheck disable=SC1091  # the project's own .envrc, which sets PROJ and SHELLOPS_DIR
 . "$(dirname "$0")/../../../.envrc"
 
-USAGE="$(cat <<HELP
-Runs every check of the Python sources and the one JavaScript file: the byte-compile of
-the plugin, the four house lints under shell/lint/, and the unit tests with
-the golden cases. The plugin/python job runs exactly this.
+USAGE="$(cat <<'HELP'
+Runs every check of the Python sources: the byte-compile of the plugin,
+the five house lints under shell/lint/, and the unit tests with the golden
+cases under coverage, with the report at the end. Run it as
+`uv run shell/actions/hermes/check`, so that python3 is the project's own
+environment with the dev dependencies pyproject.toml lists; the
+plugin/python job runs exactly that after `uv sync --frozen`. The
+JavaScript has its own checks, through ESLint and the browser tests:
+`pnpm run lint`, `pnpm run test:lint` and `pnpm run test:pane`.
 
 Usage: shell/actions/hermes/check [-h,--help]
 HELP
@@ -34,24 +39,29 @@ compile() {
 }
 
 : <<'FUN'
-Runs the house lints over the source files shell/lint/sources lists.
+Runs the five house lints over the source files shell/lint/sources lists.
 FUN
 lint() {
   # shellcheck disable=SC2046  # one argument per file is what the lints take
   python3 shell/lint/blank_after_block.py $(shell/lint/sources '*.py')
   # shellcheck disable=SC2046
-  python3 shell/lint/module_docstring.py $(shell/lint/sources '*.py')
-  # shellcheck disable=SC2046
-  python3 shell/lint/jsdoc_file_block.py $(shell/lint/sources '*.js' '*.jsx')
+  python3 shell/lint/docstrings.py $(shell/lint/sources '*.py')
   # shellcheck disable=SC2046
   python3 shell/lint/indent_width.py $(shell/lint/sources '*.py')
+  # shellcheck disable=SC2046
+  python3 shell/lint/yaml_comments.py $(shell/lint/sources '*.yml' '*.yaml')
+  # shellcheck disable=SC2046
+  python3 shell/lint/declarations_first.py $(shell/lint/sources '*.py')
 }
 
 : <<'FUN'
-Runs the unit tests and the golden cases under tests/.
+Runs the unit tests and the golden cases under tests/, measuring which
+lines of the plugin they reach, and prints the report with the lines each
+file misses.
 FUN
 test() {
-  python3 -m unittest discover -s tests -t . -v
+  python3 -m coverage run --source=workshop,dashboard -m unittest discover -s tests -t . -v
+  python3 -m coverage report -m
 }
 
 main "$@"

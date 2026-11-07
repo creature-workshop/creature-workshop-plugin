@@ -9,7 +9,7 @@ import \
   "$SHELLOPS_DIR/lib/git/remotes.sh" \
   "$SHELLOPS_DIR/lib/releases/record/api.sh"
 
-USAGE="$(cat <<HELP
+USAGE="$(cat <<'HELP'
 Moves the Hermes catalog entry's pin to the commit the built branch holds, on
 the pull request branch of the org's fork of hermes-agent.
 

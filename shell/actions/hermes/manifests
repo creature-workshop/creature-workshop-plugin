@@ -9,14 +9,16 @@ import \
   "$SHELLOPS_DIR/lib/releases/record/api.sh" \
   "$SHELLOPS_DIR/lib/structs/api.sh"
 
-USAGE="$(cat <<HELP
+USAGE="$(cat <<'HELP'
 Writes the two manifests Hermes reads from what this repository declares.
 
 plugin.yaml and dashboard/manifest.json repeat the plugin's id, its name, its
 version and its description. This action writes both from the one place those
 are declared: .ops/config/manifest.yaml for the id (command-name), the name
-and the description, and the lock's release record for the version. Run it
-after changing either; CI fails when a commit left the two files stale.
+and the description, and the lock's release record for the version. Neither
+file is tracked: the plugin/manifests job runs this to prove the source
+still generates them, and shell/actions/hermes/deploy commits what it wrote
+on the built branch.
 
 Usage: shell/actions/hermes/manifests [-h,--help]
 HELP
@@ -75,6 +77,7 @@ write_dashboard_manifest() {
     '.version' "$3" \
     '.tab' "$__write_dashboard_manifest__tab" \
     '.entry' dist/index.js \
+    '.api' plugin_api.py \
     > "$PROJ/dashboard/manifest.json"
 }
 
