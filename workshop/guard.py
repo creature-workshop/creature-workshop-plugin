@@ -129,8 +129,10 @@ def block_message(root, blocked):
     f"{tool} is declared in .ops/config/tools.yaml at {version} on the {channel} channel but is not installed, so this command would fail."
     for tool, version, channel in blocked
   ]
+
   names = ", ".join(tool for tool, _, _ in blocked)
   lines.append(
     f"Install it first with workshop_install, tools: [{names}], check: false, which runs shell/ops install {names} in {root}; then run the command again."
   )
+
   return "\n".join(lines)
