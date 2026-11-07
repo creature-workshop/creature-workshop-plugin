@@ -6,6 +6,7 @@
  * about the code, and the doc block of a useEffect, which
  * house/use-effect-doc requires.
  */
+
 import { effectDoc, isEffectCall } from './effectDoc.js';
 
 /**

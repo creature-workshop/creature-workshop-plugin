@@ -3,6 +3,7 @@
  * a div or span with a workshop- class or a role passes, as does any other
  * element, and one with neither fails on its opening tag.
  */
+
 import { describe, it } from 'node:test';
 import { RuleTester } from 'eslint';
 import rule from './namedElement.js';

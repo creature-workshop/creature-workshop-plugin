@@ -2,6 +2,7 @@
  * @file Reading the lint fixtures under tests/fixtures/ for the rule tests,
  * as the {code, filename} a RuleTester case takes.
  */
+
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 

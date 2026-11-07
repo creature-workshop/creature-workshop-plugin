@@ -5,6 +5,7 @@
  * const whose name starts with a capital letter. react/no-multi-comp keeps a
  * file to one component; this rule matches the file's name to it.
  */
+
 import { basename, extname } from 'node:path';
 
 /**

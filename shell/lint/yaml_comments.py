@@ -9,6 +9,7 @@ quoted scalar. What a comment would say belongs where the thing it describes
 is defined: a job's purpose in the doc block of the action the job calls, and
 the shape of a file in the README.
 """
+
 import sys
 from pathlib import Path
 
@@ -26,6 +27,7 @@ def main(paths):
 
 def exit_status(findings):
   """1 when there is a finding to report, 0 otherwise."""
+
   if findings:
     return 1
 
@@ -34,6 +36,7 @@ def exit_status(findings):
 
 def check_file(path):
   """The findings for one file, as `path:line: message` strings."""
+
   findings = []
   for number, line in enumerate(path.read_text().splitlines(), 1):
     if has_comment(line):
@@ -49,6 +52,7 @@ def has_comment(line):
     has_comment("key: value  # why") ->  True
     has_comment("key: 'a # b'")      ->  False
   """
+
   quote = None
   previous = " "
   for char in line:

@@ -45,7 +45,7 @@ lint() {
   # shellcheck disable=SC2046  # one argument per file is what the lints take
   python3 shell/lint/blank_after_block.py $(shell/lint/sources '*.py')
   # shellcheck disable=SC2046
-  python3 shell/lint/module_docstring.py $(shell/lint/sources '*.py')
+  python3 shell/lint/docstrings.py $(shell/lint/sources '*.py')
   # shellcheck disable=SC2046
   python3 shell/lint/indent_width.py $(shell/lint/sources '*.py')
   # shellcheck disable=SC2046

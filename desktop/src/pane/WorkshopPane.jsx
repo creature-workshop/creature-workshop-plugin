@@ -6,6 +6,7 @@
  * returns a disposer; all four come from the SDK in SessionPane.jsx and
  * from the harness in the tests.
  */
+
 import { useEffect, useState } from 'react';
 import { NoProject } from './NoProject.jsx';
 import { ProjectHeader } from './ProjectHeader.jsx';

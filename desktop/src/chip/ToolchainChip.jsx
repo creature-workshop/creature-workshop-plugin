@@ -4,6 +4,7 @@
  * session is not in a project. It is a status role, which is what it is in
  * Desktop's bar and how the tests find it.
  */
+
 import { useProject } from '../project/store.js';
 import { toolchainSummary } from '../project/toolchain.js';
 import { INSTALLED, MISSING, MUTED } from '../theme.js';

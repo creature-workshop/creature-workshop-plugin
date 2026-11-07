@@ -17,6 +17,7 @@ copied to a fresh directory before the calls run, so the replies name it as
 A case without an input/ runs in an empty directory, which is how the tools
 answer outside any project.
 """
+
 import json
 import shutil
 import tempfile
@@ -36,16 +37,19 @@ HANDLERS = {
 def cases():
   """The case directories, in directory order. The directory only locates a
   case; its name is in name.txt, through name_of."""
+
   return sorted(path for path in CASES.iterdir() if (path / "calls.txt").is_file())
 
 
 def name_of(case):
   """The case's name, the one line of its name.txt."""
+
   return (case / "name.txt").read_text().strip()
 
 
 def transcript(case):
   """The transcript of a case's calls, run in a fresh copy of its input."""
+
   with tempfile.TemporaryDirectory() as scratch:
     root = Path(scratch) / "project"
     copy_input(case, root)
@@ -56,6 +60,7 @@ def transcript(case):
 
 def copy_input(case, root):
   """Copies the case's input/ tree to root, or makes root empty when there is none."""
+
   source = case / "input"
   if source.is_dir():
     shutil.copytree(source, root)
@@ -65,12 +70,14 @@ def copy_input(case, root):
 
 def calls_of(case):
   """The call lines of the case, without blank lines and # comments."""
+
   lines = (case / "calls.txt").read_text().splitlines()
   return [line for line in lines if line.strip() and not line.lstrip().startswith("#")]
 
 
 def block(line, root):
   """One transcript block: the call line and the reply it produced in root."""
+
   return f"## {line}\n{reply(line, root)}\n"
 
 
@@ -87,6 +94,7 @@ def reply(line, root):
 
 def normalised_field(key, item, root):
   """One field of a reply: a duration as <ms>, anything else normalised like the reply."""
+
   if key == "duration_ms":
     return "<ms>"
 
@@ -95,12 +103,14 @@ def normalised_field(key, item, root):
 
 def parse_call(line):
   """`workshop_test {"verb": "plan"}`  ->  ("workshop_test", {"verb": "plan"})"""
+
   tool, _, rest = line.partition(" ")
   return tool, json.loads(rest or "{}")
 
 
 def normalised(value, root):
   """The reply with the scratch root written as <root> and durations as <ms>."""
+
   if isinstance(value, dict):
     return {key: normalised_field(key, item, root) for key, item in value.items()}
 

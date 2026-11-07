@@ -14,6 +14,7 @@ plugin's root is not on sys.path when the file runs. The imports come in
 three groups: the standard library, FastAPI, and then, once the root is on
 the path, the plugin's own package.
 """
+
 import asyncio
 import os
 import sys
@@ -61,6 +62,7 @@ def toolchain(root):
   project with the ops_timeout_seconds setting as its limit, parsed into one
   row per declared tool, with whether the command succeeded, what it wrote on
   stderr (where shellops logs the table and any error) and how long it took."""
+
   outcome = ops.run(root, ["install", "--check"], settings.value("ops_timeout_seconds"))
   return Toolchain(
     ok=outcome["ok"],

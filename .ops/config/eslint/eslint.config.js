@@ -1,6 +1,7 @@
 /**
  * @file The house rules for the JavaScript, which `pnpm run lint` runs over
- * every tracked .js and .jsx file of the project. ESLint takes the paths
+ * every tracked .js and .jsx file of the project, with one blank line after
+ * the file block. ESLint takes the paths
  * here relative to the directory it runs in, which is the project root,
  * because the config is named with --config: ESLint's and React's recommended rules; a
  * JSDoc block at the top of every file and on every top-level declaration,
@@ -16,6 +17,7 @@
  * The one exception syntax is ESLint's own eslint-disable comment, with the
  * reason after two dashes.
  */
+
 import js from '@eslint/js';
 import globals from 'globals';
 import jsdoc from 'eslint-plugin-jsdoc';
@@ -63,6 +65,7 @@ export default [
       'react/no-multi-comp': ['error', { ignoreStateless: false }],
       'react/prop-types': 'off',
       'house/declarations-first': 'error',
+      'house/file-block-blank-line': 'error',
       'house/no-banner-comment': 'error',
       'house/no-comment-in-body': 'error',
       'house/no-test-id': 'error',

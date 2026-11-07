@@ -1,4 +1,5 @@
 """Covers shell/lint/yaml_comments.py against the fixtures beside this file."""
+
 import importlib.util
 import unittest
 from pathlib import Path

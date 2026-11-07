@@ -7,6 +7,7 @@
  * agree on. This is the source; shell/actions/hermes/build writes
  * desktop/plugin.js from it, which is what Desktop loads.
  */
+
 import { ToolchainChip } from './chip/ToolchainChip.jsx';
 import { PLUGIN_ID } from './events.js';
 import { PaneBoundary } from './pane/PaneBoundary.jsx';

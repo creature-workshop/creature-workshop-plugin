@@ -1,4 +1,5 @@
 """Covers shell/lint/declarations_first.py against the fixtures beside this file."""
+
 import importlib.util
 import unittest
 from pathlib import Path

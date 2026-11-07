@@ -3,6 +3,7 @@
  * tests/fixtures/declarations_first/: constants above the functions pass,
  * and each variable declared after the first function fails.
  */
+
 import { describe, it } from 'node:test';
 import { RuleTester } from 'eslint';
 import rule from './declarationsFirst.js';

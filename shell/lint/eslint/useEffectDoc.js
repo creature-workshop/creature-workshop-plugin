@@ -4,6 +4,7 @@
  * is a side effect at the boundary of the UI, like a private function with
  * no name, so it is documented the way a function is.
  */
+
 import { effectDoc, isEffectCall } from './effectDoc.js';
 
 /** The rule, reporting each useEffect call without a doc block above its statement. */

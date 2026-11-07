@@ -7,6 +7,7 @@ directory is a shellops project, what the project declares and which tools are
 missing. The Desktop pane in desktop/ reads the same facts through the backend
 in dashboard/plugin_api.py.
 """
+
 from .workshop import tools
 from .workshop.project import find_project, summary_line
 
@@ -20,6 +21,7 @@ def register(ctx):
 
 def prompt_section(session_info):
   """One short paragraph for the system prompt, or nothing outside a shellops project."""
+
   root = find_project(tools.session_directory())
   if root is None:
     return ""

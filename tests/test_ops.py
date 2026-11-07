@@ -1,4 +1,5 @@
 """Covers workshop.ops: the check table's rows and the shape a run reports."""
+
 import json
 import tempfile
 import unittest

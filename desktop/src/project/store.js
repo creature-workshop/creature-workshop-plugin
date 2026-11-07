@@ -4,6 +4,7 @@
  * React state; they share this store, made once in register() and handed to
  * both.
  */
+
 import { useEffect, useState } from 'react';
 
 /** A new store holding no project, with get, set and subscribe. */

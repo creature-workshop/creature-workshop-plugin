@@ -2,6 +2,7 @@
  * @file One tool of the toolchain: a dot for installed or missing, the
  * tool, its version and its channel.
  */
+
 import { INSTALLED, MISSING } from '../../theme.js';
 
 /**

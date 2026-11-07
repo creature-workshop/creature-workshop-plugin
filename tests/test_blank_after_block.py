@@ -1,4 +1,5 @@
 """Covers shell/lint/blank_after_block.py against the fixtures beside this file."""
+
 import contextlib
 import importlib.util
 import io

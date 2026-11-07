@@ -1,5 +1,6 @@
 """Covers workshop.settings: a setting comes from Hermes's configuration or from the manifest's default,
 and the defaults the code falls back to are the ones the manifest template declares."""
+
 import unittest
 from pathlib import Path
 

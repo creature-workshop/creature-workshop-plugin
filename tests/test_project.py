@@ -1,4 +1,5 @@
 """Covers workshop.project: finding a project from inside it, reading what it declares."""
+
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,6 +9,7 @@ from workshop.project import declared_tools, find_project, release, summary_line
 
 def make_project(root):
   """A shellops project as init leaves it: the dispatcher, the declaration and a lock."""
+
   (root / "shell").mkdir(parents=True)
   (root / "shell" / "ops").write_text("#!/bin/sh\n")
   (root / ".ops" / "config").mkdir(parents=True)

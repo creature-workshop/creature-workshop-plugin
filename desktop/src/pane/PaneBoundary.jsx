@@ -5,6 +5,7 @@
  * component stack to the console, which Desktop keeps in its chromium log.
  * React provides a boundary only as a class component.
  */
+
 import { Component } from 'react';
 
 /** The boundary. Renders its children until one of them throws, then the error's message. */

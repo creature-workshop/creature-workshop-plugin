@@ -9,6 +9,7 @@ file, next to where it is used, or a banner comment such as `# ---- Helpers
 ----`, marks a part of the file as a separate unit that nothing enforces. The
 language's way to separate code is a file, so the part should move into one.
 """
+
 import ast
 import re
 import sys
@@ -31,6 +32,7 @@ def main(paths):
 
 def exit_status(findings):
   """1 when there is a finding to report, 0 otherwise."""
+
   if findings:
     return 1
 
@@ -39,6 +41,7 @@ def exit_status(findings):
 
 def check_file(path):
   """The findings for one file, as `path:line: message` strings, in line order."""
+
   source = path.read_text()
   findings = late_assignments(path, ast.parse(source)) + banners(path, source)
   return sorted(findings, key=line_of)
@@ -46,11 +49,13 @@ def check_file(path):
 
 def line_of(finding):
   """The line number a finding names, for sorting."""
+
   return int(finding.split(":")[1])
 
 
 def late_assignments(path, module):
   """A finding for each top-level assignment that follows the first function or class."""
+
   findings = []
   first = None
   for statement in module.body:
@@ -64,12 +69,14 @@ def late_assignments(path, module):
 
 def names_of(statement):
   """The names an assignment binds, joined for a message."""
+
   targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
   return ", ".join(ast.unparse(target) for target in targets)
 
 
 def banners(path, source):
   """A finding for each comment that draws a line across the file."""
+
   findings = []
   for token in tokenize.generate_tokens(iter(source.splitlines(keepends=True)).__next__):
     if token.type == tokenize.COMMENT and BANNER.search(token.string):

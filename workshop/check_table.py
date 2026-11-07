@@ -3,12 +3,14 @@
 The dispatcher logs the table on stderr, so rows reads both streams of the
 run.
 """
+
 INSTALLED_MARK = "✓"
 
 
 def rows(outcome):
   """The text of `ops install --check` as rows. The dispatcher logs the table on
   stderr, so both streams are read."""
+
   return parse(outcome["stdout"] + "\n" + outcome["stderr"])
 
 
@@ -21,6 +23,7 @@ def parse(text):
     parse("  ✓      ffmpeg    6.1.1    system\\n")
      ->  [{"tool": "ffmpeg", "version": "6.1.1", "channel": "system", "installed": True}]
   """
+
   rows = []
   for line in text.splitlines():
     parts = line.split()

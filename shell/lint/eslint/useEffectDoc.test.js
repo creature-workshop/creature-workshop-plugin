@@ -3,6 +3,7 @@
  * an effect with a JSDoc block above it passes, and one without, or with
  * only a line comment, fails on the call.
  */
+
 import { describe, it } from 'node:test';
 import { RuleTester } from 'eslint';
 import rule from './useEffectDoc.js';

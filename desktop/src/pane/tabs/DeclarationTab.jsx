@@ -2,6 +2,7 @@
  * @file The Declaration tab: every file under .ops/config, each a
  * DeclarationFile, in name order.
  */
+
 import { DeclarationFile } from './DeclarationFile.jsx';
 
 /**

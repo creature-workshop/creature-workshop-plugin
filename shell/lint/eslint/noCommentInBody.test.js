@@ -3,6 +3,7 @@
  * tests/fixtures/no_comment_in_body/: comments above declarations and an
  * ESLint directive in a body pass, and a comment in a body fails on its line.
  */
+
 import { describe, it } from 'node:test';
 import { RuleTester } from 'eslint';
 import rule from './noCommentInBody.js';

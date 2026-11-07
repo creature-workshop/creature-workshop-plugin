@@ -1,6 +1,7 @@
 /**
  * @file The pane's tab bar: one button per tab, the open one shaded.
  */
+
 import { CLOSED_TAB, OPEN_TAB } from '../theme.js';
 
 /**

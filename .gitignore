@@ -28,3 +28,6 @@ node_modules/
 
 # coverage.py, written by shell/actions/hermes/check
 .coverage
+
+# Playwright writes the last run here whatever outputDir says
+/test-results/

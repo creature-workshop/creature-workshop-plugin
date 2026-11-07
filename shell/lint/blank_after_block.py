@@ -15,6 +15,7 @@ two blank lines at module level, and a docstring, which the code follows at
 once. When the next statement is a definition, one blank line or two is
 accepted, so a module-level constant that spans lines can sit above a def.
 """
+
 import ast
 import sys
 from pathlib import Path
@@ -36,6 +37,7 @@ def main(paths):
 
 def exit_status(findings):
   """1 when there is a finding to report, 0 otherwise."""
+
   if findings:
     return 1
 
@@ -44,6 +46,7 @@ def exit_status(findings):
 
 def check_file(path):
   """The findings for one file, as `path:line: message` strings."""
+
   source = path.read_text()
   try:
     tree = ast.parse(source, filename=str(path))
@@ -56,6 +59,7 @@ def check_file(path):
 
 def findings_in(tree, lines):
   """(line, message) for every multi-line statement in the tree that the rule rejects."""
+
   found = []
   for body in statement_lists(tree):
     for statement, following in zip(body, body[1:]):
@@ -67,6 +71,7 @@ def findings_in(tree, lines):
 
 def statement_lists(tree):
   """Every list of statements in the tree: the module's, each function's, each branch's."""
+
   for node in ast.walk(tree):
     for field in BODY_FIELDS:
       value = getattr(node, field, None)
@@ -76,6 +81,7 @@ def statement_lists(tree):
 
 def spans_lines(statement):
   """Whether the statement takes more than one line and is one the rule covers."""
+
   if isinstance(statement, DEFINITIONS) or docstring(statement):
     return False
 
@@ -88,6 +94,7 @@ def docstring(statement):
 
 def check_gap(statement, following, lines):
   """The finding for the gap between a multi-line statement and the statement after it, if any."""
+
   blank = blank_lines_after(statement.end_lineno, lines)
   if blank == 1 or (blank == 2 and isinstance(following, DEFINITIONS)):
     return []
@@ -100,6 +107,7 @@ def check_gap(statement, following, lines):
 
 def blank_lines_after(line_number, lines):
   """How many whitespace-only lines follow the line at line_number (1-based)."""
+
   count = 0
   for line in lines[line_number:]:
     if line.strip():

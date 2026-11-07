@@ -3,6 +3,7 @@
  * a test that reads the page by role passes, and one that plants a
  * data-testid and queries getByTestId fails on both.
  */
+
 import { describe, it } from 'node:test';
 import { RuleTester } from 'eslint';
 import rule from './noTestId.js';

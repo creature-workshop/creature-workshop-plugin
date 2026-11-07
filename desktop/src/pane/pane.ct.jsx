@@ -5,6 +5,7 @@
  * answers and reads the page by role and text, never by a test id; the last
  * mounts a component that throws inside the pane's boundary.
  */
+
 import { test, expect } from '@playwright/experimental-ct-react';
 import { Broken } from './Broken.jsx';
 import { PaneBoundary } from './PaneBoundary.jsx';

@@ -3,6 +3,7 @@
  * tests/fixtures/no_banner_comment/: doc blocks, directives and a dash in
  * prose pass, and a comment that draws a line fails, in each of its forms.
  */
+
 import { describe, it } from 'node:test';
 import { RuleTester } from 'eslint';
 import rule from './noBannerComment.js';

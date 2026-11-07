@@ -3,6 +3,7 @@
  * the SDK's host state, and the backend call, the timer and the settings
  * event from the plugin context.
  */
+
 import { host, useValue } from '@hermes/plugin-sdk';
 import { SETTINGS_CHANGED } from '../events.js';
 import { WorkshopPane } from './WorkshopPane.jsx';

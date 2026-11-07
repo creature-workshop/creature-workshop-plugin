@@ -5,6 +5,7 @@ on success and on failure alike, and never raises: Hermes shows the agent
 whatever comes back. A handler finds the project from the `path` argument, or
 from the session's directory when there is none.
 """
+
 import json
 import os
 
@@ -15,6 +16,7 @@ from .project import declaration, declared_tools, find_project, release, summary
 
 def session_directory():
   """The directory the session works in: Hermes's configured one, else this process's."""
+
   try:
     from agent.runtime_cwd import resolve_agent_cwd
 
@@ -25,6 +27,7 @@ def session_directory():
 
 def project_for(args):
   """(root, error) for the project the arguments point at; one of the two is None."""
+
   start = args.get("path") or session_directory()
   root = find_project(start)
   if root is None:
@@ -44,6 +47,7 @@ def failure(message, **extra):
 
 def workshop_project(args, **kwargs):
   """What the project declares and what its toolchain looks like right now."""
+
   root, error = project_for(args)
   if error:
     return failure(error)
@@ -63,6 +67,7 @@ def workshop_project(args, **kwargs):
 
 def workshop_install(args, **kwargs):
   """Checks the declared tools, or installs the missing ones, or the ones named."""
+
   root, error = project_for(args)
   if error:
     return failure(error)
@@ -82,6 +87,7 @@ def workshop_install(args, **kwargs):
 
 def workshop_test(args, **kwargs):
   """The test plan for changed paths, the run of those paths, or the full suite."""
+
   root, error = project_for(args)
   if error:
     return failure(error)
@@ -98,6 +104,7 @@ def workshop_test(args, **kwargs):
 
 def workshop_lint(args, **kwargs):
   """The house-style lint over the paths named, or the whole project."""
+
   root, error = project_for(args)
   if error:
     return failure(error)
@@ -110,6 +117,7 @@ def workshop_lint(args, **kwargs):
 
 def timeout_of(args):
   """The call's own timeout_seconds when it gives one, else the ops_timeout_seconds setting."""
+
   try:
     return int(args.get("timeout_seconds") or settings.value("ops_timeout_seconds"))
   except (TypeError, ValueError):
@@ -118,6 +126,7 @@ def timeout_of(args):
 
 def registry():
   """Every tool as (schema, handler), in the order register hands them to Hermes."""
+
   return [
     (PROJECT_SCHEMA, workshop_project),
     (INSTALL_SCHEMA, workshop_install),

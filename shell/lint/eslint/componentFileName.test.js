@@ -4,6 +4,7 @@
  * passes, whichever form the component takes, and a file named otherwise
  * fails on the component.
  */
+
 import { describe, it } from 'node:test';
 import { RuleTester } from 'eslint';
 import rule from './componentFileName.js';

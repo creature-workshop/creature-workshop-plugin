@@ -4,6 +4,7 @@ The backend is loaded the way Hermes loads it, from the file's path, and
 called directly; the project is the golden case `installed`, whose shell/ops
 stub prints a check table with every tool installed.
 """
+
 import asyncio
 import importlib.util
 import shutil
@@ -20,6 +21,7 @@ INSTALLED = HERE / "goldens" / "cases" / "installed" / "input"
 
 def load_backend():
   """The backend module, imported from its path as Hermes imports it."""
+
   spec = importlib.util.spec_from_file_location("plugin_api", BACKEND)
   module = importlib.util.module_from_spec(spec)
   spec.loader.exec_module(module)
@@ -28,6 +30,7 @@ def load_backend():
 
 def answer_for(path, check="1"):
   """The backend's answer for a directory, as the model it returns."""
+
   return asyncio.run(load_backend().project(path=str(path), check=check))
 
 
