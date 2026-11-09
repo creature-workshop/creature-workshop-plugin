@@ -82,6 +82,8 @@ def block(line, root):
 
 
 def reply(line, root):
+  """The transcript entry for one tool call in a case: the tool's answer with the case's root replaced, or the error it raised."""
+
   tool, arguments = parse_call(line)
   arguments.setdefault("path", str(root))
   try:

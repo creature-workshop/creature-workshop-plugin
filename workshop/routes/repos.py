@@ -1,0 +1,41 @@
+"""The routes about the git repositories a folder holds, for the pane's header.
+
+GET /repos?path=<dir> answers with a workshop.models.repos.Repos, the
+repositories a session's folder holds, with `refresh_seconds`, the
+pane_refresh_seconds setting, so the pane reads their state again on that
+interval. GET /repos/status?root=<dir> answers with a RepoStatus, the state
+of one repository the way a shell prompt shows it, with `ok` false when git
+cannot read it.
+"""
+
+import asyncio
+import os
+
+from fastapi import Query
+
+from workshop import api, settings
+from workshop.models.repos import Repo, Repos, RepoStatus
+from workshop.repo_status import status_of
+from workshop.repos import repos_of
+
+
+@api.register("/repos", Repos)
+async def repos(path: str = Query(default="")):
+  """The repositories the folder at path holds, the server's working folder when path is empty."""
+
+  start = path or os.getcwd()
+  inside, roots = await asyncio.to_thread(repos_of, start)
+  return Repos(
+    start=start,
+    inside=inside,
+    repos=[Repo(root=str(root), name=root.name) for root in roots],
+    refresh_seconds=settings.value("pane_refresh_seconds"),
+  )
+
+
+@api.register("/repos/status", RepoStatus)
+async def repo_status(root: str = Query()):
+  """The prompt-style state of the repository at root, with ok false when git cannot read it."""
+
+  state = await asyncio.to_thread(status_of, root)
+  return RepoStatus(root=root, ok=state is not None, **(state or {}))

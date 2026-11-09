@@ -10,6 +10,8 @@ LINTER = HERE.parent / "shell" / "lint" / "docstrings.py"
 
 
 def load_linter():
+  """The linter module, imported from its path."""
+
   spec = importlib.util.spec_from_file_location("docstrings", LINTER)
   module = importlib.util.module_from_spec(spec)
   spec.loader.exec_module(module)
@@ -34,6 +36,15 @@ class Docstrings(unittest.TestCase):
     self.assertIn("crowded.py:1: the docstring of the module is followed by 0 blank lines", findings[0])
     self.assertIn("crowded.py:6: the docstring of add_limit is followed by 0 blank lines", findings[1])
     self.assertIn("crowded.py:11: the docstring of double is followed by 2 blank lines", findings[2])
+
+  def test_a_function_or_class_without_a_docstring_is_reported_by_name(self):
+    findings = self.linter.check_file(FIXTURES / "undocumented.py")
+    self.assertEqual(len(findings), 2)
+    self.assertIn("undocumented.py:3: add_limit has no docstring", findings[0])
+    self.assertIn("undocumented.py:10: reset has no docstring", findings[1])
+
+  def test_a_test_file_needs_no_docstring_on_its_test_classes_and_methods(self):
+    self.assertEqual(self.linter.check_file(HERE / "test_docstrings.py"), [])
 
 
 if __name__ == "__main__":

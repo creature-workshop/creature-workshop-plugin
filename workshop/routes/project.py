@@ -1,0 +1,62 @@
+"""GET /project?path=<dir>: the shellops project at or above a folder.
+
+The answer is a workshop.models.project.Project: its declaration files, its
+release record, the tools it declares and, when `check` is not "0", the
+toolchain as `ops install --check` reports it right now. Running the check
+costs a few seconds, which is why the pane asks for it on its own timer and
+not on every render. Outside a project the answer is a NoProject. Every
+answer carries `refresh_seconds`, the pane_refresh_seconds setting, so the
+pane schedules that timer from the setting without reading configuration
+itself.
+"""
+
+import asyncio
+import os
+
+from fastapi import Query
+
+from workshop import api, check_table, ops, settings
+from workshop.models.project import DeclaredTool, NoProject, Project, Release
+from workshop.models.toolchain import Toolchain
+from workshop.project import declaration, declared_tools, find_project, manifest, release, summary_line
+
+
+@api.register("/project", Project | NoProject)
+async def project(path: str = Query(default=""), check: str = Query(default="1")):
+  """The project at or above path, with its toolchain unless check is "0", or a NoProject outside one."""
+
+  start = path or os.getcwd()
+  root = find_project(start)
+  refresh_seconds = settings.value("pane_refresh_seconds")
+  if root is None:
+    return NoProject(start=start, refresh_seconds=refresh_seconds)
+
+  answer = Project(
+    root=str(root),
+    name=manifest(root).get("name") or root.name,
+    summary=summary_line(root),
+    declaration=declaration(root),
+    release=Release(**release(root)),
+    declared=[DeclaredTool(channel=c, tool=t, version=v) for c, t, v in declared_tools(root)],
+    refresh_seconds=refresh_seconds,
+  )
+
+  if check != "0":
+    answer.toolchain = await asyncio.to_thread(toolchain, root)
+
+  return answer
+
+
+def toolchain(root):
+  """The toolchain as the pane shows it: `shell/ops install --check`, run in the
+  project with the ops_timeout_seconds setting as its limit, parsed into one
+  row per declared tool, with whether the command succeeded, what it wrote on
+  stderr (where shellops logs the table and any error) and how long it took."""
+
+  outcome = ops.run(root, ["install", "--check"], settings.value("ops_timeout_seconds"))
+  return Toolchain(
+    ok=outcome["ok"],
+    rows=check_table.rows(outcome),
+    stderr=outcome["stderr"],
+    duration_ms=outcome["duration_ms"],
+  )
