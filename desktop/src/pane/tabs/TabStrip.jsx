@@ -14,7 +14,9 @@ const TRIGGER_STYLE = { borderRadius: 'max(0px, calc(var(--radius-scalar) * 0.75
 
 /**
  * Shows one pill button for each tab, in Desktop's tab strip. Must sit
- * inside the SDK's Tabs, which tracks the open tab.
+ * inside the SDK's Tabs, which tracks the open tab. A focused tab gets the
+ * same focus ring as Desktop's buttons, so every control in the pane
+ * shows keyboard focus the same way.
  *
  * @param props The component's props.
  * @param {readonly import('../../tabs/index.js').Tab[]} props.tabs The tabs, in order.
@@ -22,7 +24,11 @@ const TRIGGER_STYLE = { borderRadius: 'max(0px, calc(var(--radius-scalar) * 0.75
 export function TabStrip({ tabs }) {
   return (
     <TabsList aria-label="Workshop tabs" className={cn('self-start')}>
-      {tabs.map((each) => <TabsTrigger key={each.id} value={each.id} style={TRIGGER_STYLE}>{each.label}</TabsTrigger>)}
+      {tabs.map((each) => (
+        <TabsTrigger key={each.id} value={each.id} style={TRIGGER_STYLE} className={cn('focus-visible:ring-ring/50')}>
+          {each.label}
+        </TabsTrigger>
+      ))}
     </TabsList>
   );
 }

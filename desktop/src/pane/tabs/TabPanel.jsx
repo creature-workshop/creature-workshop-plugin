@@ -5,9 +5,19 @@
 import { cn } from '@hermes/plugin-sdk';
 
 /**
+ * Room around the content for what reaches past it, given as margin and
+ * taken back as padding. Inline, because Desktop's stylesheet has no class
+ * for a negative 8px margin.
+ */
+const ROOM = { margin: '-0.5rem', padding: '0.5rem' };
+
+/**
  * Shows the open tab's Panel in a scrolling area labelled with the tab's
  * name. The SDK does not export a tab panel, so this one sets the tabpanel
- * role itself.
+ * role itself. The area reaches 8px past the content on every side, with
+ * the same padding inside, because a scrolling area clips what it holds at
+ * its edge: a control may reach 4px past the content (as a group heading
+ * does) and Desktop draws a 3px focus ring outside it.
  *
  * @param props The component's props.
  * @param {import('../../tabs/index.js').Tab} props.tab The open tab.
@@ -17,6 +27,7 @@ export function TabPanel({ tab }) {
     <section
       role="tabpanel"
       aria-label={tab.label}
+      style={ROOM}
       className={cn(
         'workshop-tab-panel',
         'min-h-0',

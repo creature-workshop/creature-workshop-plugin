@@ -31,13 +31,22 @@ class Release(BaseModel):
   stable: str = ""
 
 
-class Identity(BaseModel):
-  """What the manifest says the project is; each field empty when the manifest does not set it."""
+class ManifestFields(BaseModel):
+  """The fields of .ops/config/manifest.yaml the pane shows and edits; each empty when the manifest does not set it."""
 
+  name: str = ""
   description: str = ""
   command_name: str = ""
   org: str = ""
   repo: str = ""
+
+
+class ManifestChange(BaseModel):
+  """The body of POST /project/manifest: the project's root, the manifest key to change, and its new value."""
+
+  root: str
+  key: str
+  value: str
 
 
 class Project(BaseModel):
@@ -48,7 +57,7 @@ class Project(BaseModel):
   name: str
   summary: str
   declaration: dict[str, str]
-  identity: Identity
+  manifest: ManifestFields
   release: Release
   declared: list[DeclaredTool]
   refresh_seconds: int

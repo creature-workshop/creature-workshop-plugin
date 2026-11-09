@@ -1,0 +1,10 @@
+# What this repository declares about itself, with a comment the edit keeps.
+name: Recording rig
+description: Records every working session.
+linear-team: SHOP
+org: creature-workshop
+repo: recording-rig
+naming:
+  major: Rig
+  minor: Capability
+  patch: ""

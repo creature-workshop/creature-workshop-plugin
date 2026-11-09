@@ -71,8 +71,8 @@ test('the Project Info tab shows what the manifest says and the releases of the 
   const component = await mount(<Adopted latest="0.1.0-dev.12" stable="0.0.0" />);
 
   const panel = component.getByRole('tabpanel', { name: 'Project Info' });
-  await expect(panel.getByRole('term')).toHaveText(['Name', 'Description', 'Command', 'Repository', 'Latest', 'Stable']);
-  await expect(panel.getByRole('definition')).toHaveText(['Notes', 'Notes, kept in git.', 'notes', 'someone/notes', '0.1.0-dev.12', '0.0.0']);
+  await expect(panel.getByRole('term')).toHaveText(['Name', 'Description', 'Command', 'Organization', 'Repository', 'Latest', 'Stable']);
+  await expect(panel.getByRole('definition')).toHaveText(['Notes', 'Notes, kept in git.', 'notes', 'someone', 'notes', '0.1.0-dev.12', '0.0.0']);
 });
 
 test('a release the lock does not record reads None yet', async ({ mount }) => {
