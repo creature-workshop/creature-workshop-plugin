@@ -8,6 +8,7 @@
 /**
  * Whether the top-level statement declares a function or a class, inside or
  * outside an export.
+ *
  * @param statement A top-level statement.
  */
 function declaresCode(statement) {
@@ -17,6 +18,7 @@ function declaresCode(statement) {
 
 /**
  * The VariableDeclaration a top-level statement is, or wraps in an export, or undefined.
+ *
  * @param statement A top-level statement.
  */
 function variableOf(statement) {
@@ -26,6 +28,7 @@ function variableOf(statement) {
 
 /**
  * The names a variable declaration declares, joined for a message.
+ *
  * @param declaration A VariableDeclaration.
  */
 function namesOf(declaration) {

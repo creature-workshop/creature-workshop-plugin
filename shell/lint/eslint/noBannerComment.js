@@ -12,6 +12,7 @@ const RULE = /[-=─—═_*#]{3,}/;
 /**
  * Whether a comment draws a line: a line of it is only banner characters and
  * spaces, or opens or closes with a run of them.
+ *
  * @param comment A comment token.
  */
 function drawsLine(comment) {

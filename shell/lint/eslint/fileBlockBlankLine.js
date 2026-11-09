@@ -7,6 +7,7 @@
 /**
  * The file's doc block: the first comment, when it is a JSDoc block that
  * names the file tag.
+ *
  * @param sourceCode The file's SourceCode.
  */
 function fileBlock(sourceCode) {
@@ -17,6 +18,7 @@ function fileBlock(sourceCode) {
 /**
  * How many blank lines separate the block from the next token or comment, or
  * undefined when nothing follows it.
+ *
  * @param sourceCode The file's SourceCode.
  * @param block The file's doc block.
  */

@@ -12,7 +12,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from workshop.answers import NoProject, Project
+from workshop.models.project import NoProject, Project
 
 HERE = Path(__file__).parent
 BACKEND = HERE.parent / "dashboard" / "plugin_api.py"

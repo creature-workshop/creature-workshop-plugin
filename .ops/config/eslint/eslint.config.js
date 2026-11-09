@@ -62,6 +62,8 @@ export default [
       'jsdoc/require-param-type': 'off',
       'jsdoc/require-returns': 'off',
       'jsdoc/require-returns-type': 'off',
+      'jsdoc/tag-lines': ['error', 'any', { startLines: 1 }],
+      'jsdoc/check-tag-names': ['error', { definedTags: ['effect', 'layoutEffect'] }],
       'react/no-multi-comp': ['error', { ignoreStateless: false }],
       'react/prop-types': 'off',
       'house/declarations-first': 'error',
@@ -69,7 +71,8 @@ export default [
       'house/no-banner-comment': 'error',
       'house/no-comment-in-body': 'error',
       'house/no-test-id': 'error',
-      'house/use-effect-doc': 'error',
+      'house/named-effect': 'error',
+      'house/tag-spacing': 'error',
     },
   },
   {

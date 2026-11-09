@@ -32,9 +32,11 @@ is cached for `pane_refresh_seconds` and forgotten after an install.
 
 ## What you get
 
-A Desktop pane, **Workshop**, docked on the right. It is empty: the pane is
-being rebuilt around the project's plan, one part at a time, and the parts
-arrive in later releases.
+A Desktop pane, **Workshop**, docked on the right. Its footer says which
+version of the plugin you are on (`release.latest` of the plugin's own
+`.ops/lock`) and which branch the checkout Hermes loaded it from is on. The
+rest of the pane is being rebuilt around the project's plan, one part at a
+time, and the parts arrive in later releases.
 
 ## Install
 
@@ -64,7 +66,7 @@ git submodule add https://gitlab.creature-workshop.com/ksoft/shellops.git shell/
   never runs the command itself, and it blocks nothing outside a project.
 - The backend in `dashboard/plugin_api.py` runs `shell/ops install --check`
   for the pane on a timer. It reads files under the project only. What it
-  answers with is the models in `workshop/answers.py`.
+  answers with is the models under `workshop/models/`, one module per concept.
 - Every `shell/ops` run is logged under the `creature-workshop` logger,
   which Hermes writes to `~/.hermes/logs/`: successes at INFO in agent.log,
   failures at WARNING with their stderr in errors.log too, so `hermes logs`
