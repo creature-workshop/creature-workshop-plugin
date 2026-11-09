@@ -7,6 +7,7 @@
  */
 
 import { cn } from '@hermes/plugin-sdk';
+import { sessionSubject } from '../subject.js';
 import { WorkshopProvider } from '../workshop/WorkshopProvider.jsx';
 import { WorkshopPane } from './WorkshopPane.jsx';
 
@@ -18,6 +19,9 @@ const DOCKED_WIDTH = 320;
 
 /** The session's directory in every story. */
 const CWD = '/home/someone/notes';
+
+/** The subject in every story: a chat session in CWD. */
+const SUBJECT = sessionSubject('stored-session-1', CWD);
 
 /** GET /repos for a directory that holds no repository. */
 const NO_REPOS = { start: CWD, inside: false, repos: [], refresh_seconds: 20 };
@@ -66,7 +70,7 @@ function backendWith(about) {
 function framed(rest, width) {
   return (
     <div className={cn('workshop-story')} style={{ width, height: HEIGHT, display: 'flex', flexDirection: 'column' }}>
-      <WorkshopProvider rest={rest} cwd={CWD}>
+      <WorkshopProvider rest={rest} subject={SUBJECT}>
         <WorkshopPane />
       </WorkshopProvider>
     </div>
