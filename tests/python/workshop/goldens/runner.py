@@ -1,6 +1,6 @@
 """Runs one golden case of the tools and writes its transcript.
 
-A case is a directory under tests/goldens/cases/ with the same shape as a
+A case is a directory under tests/python/workshop/goldens/cases/ with the same shape as a
 shell-goldens fileset:
 
   name.txt      one line that names the case

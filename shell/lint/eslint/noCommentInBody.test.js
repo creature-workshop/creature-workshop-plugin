@@ -1,6 +1,6 @@
 /**
  * @file house/no-comment-in-body over the fixtures under
- * tests/fixtures/no_comment_in_body/: comments above declarations and an
+ * shell/lint/eslint/fixtures/no_comment_in_body/: comments above declarations and an
  * ESLint directive in a body pass, and a comment in a body fails on its line.
  */
 

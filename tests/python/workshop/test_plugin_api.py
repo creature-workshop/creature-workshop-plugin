@@ -18,7 +18,7 @@ from pathlib import Path
 from workshop.models.project import NoProject, Project
 
 HERE = Path(__file__).parent
-BACKEND = HERE.parent / "dashboard" / "plugin_api.py"
+BACKEND = HERE.parents[2] / "dashboard" / "plugin_api.py"
 INSTALLED = HERE / "goldens" / "cases" / "installed" / "input"
 
 

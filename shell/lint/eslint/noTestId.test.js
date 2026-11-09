@@ -1,5 +1,5 @@
 /**
- * @file house/no-test-id over the fixtures under tests/fixtures/no_test_id/:
+ * @file house/no-test-id over the fixtures under shell/lint/eslint/fixtures/no_test_id/:
  * a test that reads the page by role passes, and one that plants a
  * data-testid and queries getByTestId fails on both.
  */

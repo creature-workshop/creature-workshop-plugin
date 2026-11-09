@@ -1,6 +1,6 @@
 /**
  * @file house/no-banner-comment over the fixtures under
- * tests/fixtures/no_banner_comment/: doc blocks, directives and a dash in
+ * shell/lint/eslint/fixtures/no_banner_comment/: doc blocks, directives and a dash in
  * prose pass, and a comment that draws a line fails, in each of its forms.
  */
 

@@ -1,5 +1,5 @@
 /**
- * @file house/named-element over the fixtures under tests/fixtures/named_element/:
+ * @file house/named-element over the fixtures under shell/lint/eslint/fixtures/named_element/:
  * a div or span with a workshop- class or a role passes, as does any other
  * element, and one with neither fails on its opening tag.
  */

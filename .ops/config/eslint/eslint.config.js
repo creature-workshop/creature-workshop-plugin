@@ -39,7 +39,7 @@ export default [
   {
     ignores: [
       'desktop/plugin.js',
-      'tests/fixtures/**',
+      'shell/lint/**/fixtures/**',
       'shell/.ops/**',
       '.ops/cache/**',
       '.ops/docs/**',
@@ -81,11 +81,15 @@ export default [
   },
   {
     files: ['**/*.jsx'],
-    rules: { 'house/component-file-name': 'error', 'house/named-element': 'error' },
+    rules: { 'house/class-name': 'error', 'house/component-file-name': 'error', 'house/named-element': 'error' },
   },
   {
     files: ['**/*.story.jsx'],
     rules: { 'react/no-multi-comp': 'off', 'house/component-file-name': 'off' },
+  },
+  {
+    files: ['.ops/config/playwright/plugin-sdk.js'],
+    rules: { 'react/no-multi-comp': 'off' },
   },
   {
     ...playwright.configs['flat/recommended'],

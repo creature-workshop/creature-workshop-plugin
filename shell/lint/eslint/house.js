@@ -1,8 +1,9 @@
 /**
- * @file The ESLint plugin `house`: the nine rules of the house style that
+ * @file The ESLint plugin `house`: the ten rules of the house style that
  * no published rule covers. eslint.config.js loads it and turns them on.
  */
 
+import className from './className.js';
 import componentFileName from './componentFileName.js';
 import declarationsFirst from './declarationsFirst.js';
 import fileBlockBlankLine from './fileBlockBlankLine.js';
@@ -17,6 +18,7 @@ import tagSpacing from './tagSpacing.js';
 export default {
   meta: { name: 'house' },
   rules: {
+    'class-name': className,
     'component-file-name': componentFileName,
     'declarations-first': declarationsFirst,
     'file-block-blank-line': fileBlockBlankLine,
