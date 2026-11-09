@@ -3,7 +3,7 @@
 Every command runs in the project's root with its .envrc loaded, which is how
 shellops finds the project, and reports the same shape whether it succeeded,
 failed or timed out, so a tool can hand the result straight to the agent.
-What `install --check` prints is read by check_table. Every run is
+What `install --check` prints is read by workshop.project.check_table. Every run is
 logged under the `creature-workshop` logger, which Hermes writes
 to ~/.hermes/logs/: a success at INFO into agent.log, a failure at WARNING
 with its stderr into errors.log as well, so `hermes logs` shows what the
@@ -15,7 +15,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from . import settings
+from .. import settings
 
 log = logging.getLogger("creature-workshop")
 

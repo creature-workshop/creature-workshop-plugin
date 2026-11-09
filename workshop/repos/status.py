@@ -11,7 +11,7 @@ import json
 import subprocess
 from pathlib import Path
 
-ACTION = Path(__file__).resolve().parents[1] / "shell" / "actions" / "git" / "status"
+ACTION = Path(__file__).resolve().parents[2] / "shell" / "actions" / "git" / "status"
 
 TIMEOUT_SECONDS = 10
 

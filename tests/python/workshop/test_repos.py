@@ -1,4 +1,4 @@
-"""Covers workshop.repos and workshop.repo_status over real repositories made in a scratch folder:
+"""Covers workshop.repos.discovery and workshop.repos.status over real repositories made in a scratch folder:
 which repositories a directory holds, and the prompt-style state of one."""
 
 import subprocess
@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from workshop.repo_status import status_of
-from workshop.repos import repos_of
+from workshop.repos.status import status_of
+from workshop.repos.discovery import repos_of
 
 
 def git_command(root, *args):

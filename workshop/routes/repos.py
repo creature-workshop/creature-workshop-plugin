@@ -15,8 +15,8 @@ from fastapi import Query
 
 from workshop import api, settings
 from workshop.models.repos import Repo, Repos, RepoStatus
-from workshop.repo_status import status_of
-from workshop.repos import repos_of
+from workshop.repos.discovery import repos_of
+from workshop.repos.status import status_of
 
 
 @api.register("/repos", Repos)

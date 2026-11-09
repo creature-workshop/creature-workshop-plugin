@@ -23,7 +23,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from workshop import tools
+from workshop.agent import tools
 
 CASES = Path(__file__).parent / "cases"
 HANDLERS = {

@@ -1,4 +1,4 @@
-"""Covers workshop.guard: which terminal commands the hook blocks, what it says, and when it re-runs the check.
+"""Covers workshop.agent.guard: which terminal commands the hook blocks, what it says, and when it re-runs the check.
 
 The project is the golden case `missing`, whose shell/ops stub reports ffmpeg
 installed and rsync missing.
@@ -10,7 +10,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from workshop import guard, ops
+from workshop.agent import guard
+from workshop.run import ops
 
 HERE = Path(__file__).parent
 MISSING = HERE / "goldens" / "cases" / "missing" / "input"

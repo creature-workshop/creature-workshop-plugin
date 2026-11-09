@@ -15,10 +15,12 @@ import os
 
 from fastapi import Query
 
-from workshop import api, check_table, ops, settings
+from workshop import api, settings
 from workshop.models.project import DeclaredTool, NoProject, Project, Release
 from workshop.models.toolchain import Toolchain
-from workshop.project import declaration, declared_tools, find_project, manifest, release, summary_line
+from workshop.project import check_table
+from workshop.project.declaration import declaration, declared_tools, find_project, manifest, release, summary_line
+from workshop.run import ops
 
 
 @api.register("/project", Project | NoProject)
