@@ -1,10 +1,12 @@
 /**
- * @file The state the whole pane shares: what the plugin is, the subject the
- * pane is about, the git repositories the subject's folder holds, and which
- * of them is selected. WorkshopProvider holds it at the top of the pane, and
- * any part of the pane reads it with useWorkshop. The provider also connects
- * the backend's client to the backend call it is given, before anything
- * below it renders.
+ * @file The state the whole pane shares, held by WorkshopProvider at the top
+ * of the pane and read anywhere below it with useWorkshop. It holds:
+ *
+ * - `about`: the plugin's version and branch;
+ * - `subject`: what the pane is about;
+ * - `repos`: the git repositories in the subject's folder;
+ * - `selected`: the root of the selected repository;
+ * - `project`: the shellops project of the selected repository.
  */
 
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
@@ -17,11 +19,15 @@ const UNKNOWN_ABOUT = { version: '', branch: '' };
 const WorkshopContext = createContext(null);
 
 /**
- * Holds the pane's shared state for its children, connecting the client to
- * the backend call first. It asks the backend what the plugin is once, and
- * which repositories the subject's folder holds whenever the folder
- * changes. When the folder holds exactly one repository, that one is
- * selected; otherwise none is, until a part of the pane selects one.
+ * Provides the pane's shared state to its children.
+ *
+ * It connects the client to `rest` before anything renders, then loads:
+ *
+ * - `about`, once;
+ * - `repos`, each time the subject's folder changes;
+ * - `project`, each time the selected repository changes.
+ *
+ * When the folder has exactly one repository, it is selected automatically.
  *
  * @param props The component's props.
  * @param props.rest The backend call, taking a path under the plugin's API.
@@ -35,27 +41,32 @@ export function WorkshopProvider({ rest, subject, children }) {
   const [picked, setPicked] = useState('');
   useEffect(askAbout(setAbout), [rest]);
   useEffect(askRepos(subject.folder, setRepos, setPicked), [rest, subject.folder]);
+  const [project, setProject] = useState(null);
   const selected = repos?.repos.length === 1 ? repos.repos[0].root : picked;
-  const value = useMemo(() => ({ about, subject, repos, selected, select: setPicked }), [about, subject, repos, selected]);
+  useEffect(askProject(selected, setProject), [rest, selected]);
+  const value = useMemo(() => ({ about, subject, repos, selected, select: setPicked, project }), [about, subject, repos, selected, project]);
 
   return <WorkshopContext.Provider value={value}>{children}</WorkshopContext.Provider>;
 }
 
 /**
- * The pane's shared state: {about, subject, repos, selected, select}.
- * `repos` is the answer to GET /repos, or null until it arrives; `selected`
- * is the root of the selected repository, or empty; `select` takes a root.
+ * Returns the pane's shared state: `{about, subject, repos, selected, select, project}`.
+ *
+ * - `repos` is the answer to GET /repos, or null while loading.
+ * - `selected` is the selected repository's root, or an empty string.
+ * - `select(root)` selects a repository.
+ * - `project` is the answer to GET /project for the selected repository, or
+ *   null while loading or when no repository is selected.
  */
 export function useWorkshop() {
   return useContext(WorkshopContext);
 }
 
 /**
- * The effect that asks the backend what the plugin is, and keeps the answer
- * unless the provider went away first.
+ * Loads `about` from GET /about.
  *
  * @effect
- * @param setAbout The setter of the answer.
+ * @param setAbout Stores the answer.
  */
 function askAbout(setAbout) {
   return () => {
@@ -66,20 +77,39 @@ function askAbout(setAbout) {
 }
 
 /**
- * The effect that asks the backend which repositories a folder holds,
- * clears the selection, which belonged to the folder before, and keeps the
- * answer unless the folder changed or the provider went away first.
+ * Loads `repos` from GET /repos for the folder, and clears the selection.
+ * An answer that arrives after the folder changes is dropped.
  *
  * @effect
  * @param folder The subject's folder.
- * @param setRepos The setter of the answer.
- * @param setPicked The setter of the selection.
+ * @param setRepos Stores the answer.
+ * @param setPicked Sets the selection.
  */
 function askRepos(folder, setRepos, setPicked) {
   return () => {
     let open = true;
     setPicked('');
     client.repos(folder).then((answer) => open && setRepos(answer));
+    return () => { open = false; };
+  };
+}
+
+/**
+ * Loads `project` from GET /project for the selected repository, without
+ * the toolchain check. Sets it to null when no repository is selected. An
+ * answer that arrives after the selection changes is dropped.
+ *
+ * @effect
+ * @param selected The selected repository's root, or an empty string.
+ * @param setProject Stores the answer.
+ */
+function askProject(selected, setProject) {
+  return () => {
+    let open = true;
+    setProject(null);
+    if (selected) {
+      client.project(selected, false).then((answer) => open && setProject(answer));
+    }
     return () => { open = false; };
   };
 }

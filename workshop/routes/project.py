@@ -1,7 +1,7 @@
 """GET /project?path=<dir>: the shellops project at or above a folder.
 
-The answer is a workshop.models.project.Project: its declaration files, its
-release record, the tools it declares and, when `check` is not "0", the
+The answer is a workshop.models.project.Project: its declaration files, what
+its manifest says it is, its release record, the tools it declares and, when `check` is not "0", the
 toolchain as `ops install --check` reports it right now. Running the check
 costs a few seconds, which is why the pane asks for it on its own timer and
 not on every render. Outside a project the answer is a NoProject. Every
@@ -16,10 +16,10 @@ import os
 from fastapi import Query
 
 from workshop import api, settings
-from workshop.models.project import DeclaredTool, NoProject, Project, Release
+from workshop.models.project import DeclaredTool, Identity, NoProject, Project, Release
 from workshop.models.toolchain import Toolchain
 from workshop.project import check_table
-from workshop.project.declaration import declaration, declared_tools, find_project, manifest, release, summary_line
+from workshop.project.declaration import declaration, declared_tools, find_project, identity, manifest, release, summary_line
 from workshop.run import ops
 
 
@@ -38,6 +38,7 @@ async def project(path: str = Query(default=""), check: str = Query(default="1")
     name=manifest(root).get("name") or root.name,
     summary=summary_line(root),
     declaration=declaration(root),
+    identity=Identity(**identity(root)),
     release=Release(**release(root)),
     declared=[DeclaredTool(channel=c, tool=t, version=v) for c, t, v in declared_tools(root)],
     refresh_seconds=refresh_seconds,

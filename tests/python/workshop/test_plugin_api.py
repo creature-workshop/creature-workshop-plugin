@@ -70,7 +70,11 @@ class InsideAProject(unittest.TestCase):
 
   def test_the_answer_carries_every_field_the_pane_reads(self):
     fields = set(answer_for(self.root).model_dump())
-    self.assertEqual(fields, {"found", "root", "name", "summary", "declaration", "release", "declared", "refresh_seconds", "toolchain"})
+    self.assertEqual(fields, {"found", "root", "name", "summary", "declaration", "identity", "release", "declared", "refresh_seconds", "toolchain"})
+
+  def test_the_identity_is_what_the_manifest_says_with_empty_fields_for_what_it_leaves_out(self):
+    identity = answer_for(self.root, check="0").identity
+    self.assertEqual(identity.model_dump(), {"description": "", "command_name": "", "org": "creature-workshop", "repo": "demo"})
 
 
 class OutsideAProject(unittest.TestCase):
