@@ -25,6 +25,8 @@ DEFINITIONS = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
 
 def main(paths):
+  """Prints the findings for every file named, and gives the exit status: 1 when there is any."""
+
   findings = []
   for path in paths:
     findings.extend(check_file(Path(path)))
@@ -89,6 +91,8 @@ def spans_lines(statement):
 
 
 def docstring(statement):
+  """Whether a statement is a docstring: an expression that is only a string."""
+
   return isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant) and isinstance(statement.value.value, str)
 
 

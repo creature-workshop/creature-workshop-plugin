@@ -17,6 +17,8 @@ STEP = 2
 
 
 def main(paths):
+  """Prints the findings for every file named, and gives the exit status: 1 when there is any."""
+
   findings = []
   for path in paths:
     findings.extend(check_file(Path(path)))

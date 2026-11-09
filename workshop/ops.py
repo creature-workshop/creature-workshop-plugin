@@ -76,6 +76,8 @@ class Failure:
   stdout the command had written by then."""
 
   def __init__(self, message, stdout=""):
+    """Keeps the message for the caller and the stdout written before the failure."""
+
     self.message = message
     self.stdout = stdout
 
@@ -94,6 +96,8 @@ def attempted(call):
 
 
 def result(command, ok, stdout, stderr, started):
+  """A dispatch's outcome as callers read it: whether it succeeded, the command line, its output as text, and how long it took."""
+
   return {
     "ok": ok,
     "command": " ".join(command),

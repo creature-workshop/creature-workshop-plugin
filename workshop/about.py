@@ -7,8 +7,7 @@ short commit when HEAD is detached, as a catalog install is, and empty
 where the root is not in a git checkout at all.
 """
 
-import subprocess
-
+from workshop.git import git
 from workshop.project import release
 
 
@@ -34,17 +33,3 @@ def branch_of(root):
     return git(root, "rev-parse", "--short", "HEAD")
 
   return name
-
-
-def git(root, *args):
-  """What `git <args>` prints at root, stripped, or "" when git fails or is missing."""
-
-  try:
-    done = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, timeout=5)
-  except (OSError, subprocess.TimeoutExpired):
-    return ""
-
-  if done.returncode != 0:
-    return ""
-
-  return done.stdout.strip()

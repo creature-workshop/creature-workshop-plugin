@@ -34,6 +34,8 @@ def find_project(start):
 
 
 def is_project(candidate):
+  """Whether a folder is the root of a shellops project: it has shell/ops and a .ops/config folder."""
+
   return (candidate / "shell" / "ops").is_file() and (candidate / ".ops" / "config").is_dir()
 
 

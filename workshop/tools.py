@@ -26,10 +26,14 @@ def project_for(args):
 
 
 def reply(payload):
+  """A tool's answer as Hermes takes it: the payload as a JSON string."""
+
   return json.dumps(payload, ensure_ascii=False)
 
 
 def failure(message, **extra):
+  """A tool's answer for a failure: ok false, the message, and any extra fields."""
+
   return reply({"ok": False, "error": message, **extra})
 
 

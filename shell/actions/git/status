@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+set -eu
+
+USAGE="$(cat <<'HELP'
+Prints the state of the git repository at a path as one line of JSON, the
+way a shell prompt shows it, and exits 1 when git cannot read the
+repository there. GET /repos/status runs this through
+workshop/repo_status.py.
+
+It runs with nothing but git, awk and a POSIX shell, and does not load the
+project's .envrc, because Hermes installs the plugin without its shellops
+submodule.
+
+Usage: shell/actions/git/status <path> [-h,--help]
+HELP
+)"
+
+ARG_PATH=""
+
+: <<'FUN'
+Prints the state of the repository at the path the command names.
+FUN
+main() {
+  parse_args "$@"
+  PROJ="$(plugin_root)"
+  # shellcheck source=shell/lib/git/status/api.sh
+  . "$PROJ/shell/lib/git/status/api.sh"
+  git__status__read "$ARG_PATH"
+}
+
+: <<'FUN'
+Reads the command line into ARG_PATH, and prints the help and exits for -h
+or --help, or when the path is missing.
+FUN
+parse_args() {
+  case "${1:-}" in
+    -h | --help) print_help 0 ;;
+    "") print_help 2 ;;
+    *) ARG_PATH="$1" ;;
+  esac
+}
+
+: <<'FUN'
+Prints the help, to stdout when it was asked for and to stderr otherwise,
+and exits with the status given.
+FUN
+print_help() {
+  if [ "$1" -eq 0 ]; then
+    printf '%s\n' "$USAGE"
+  else
+    printf '%s\n' "$USAGE" >&2
+  fi
+  exit "$1"
+}
+
+: <<'FUN'
+Prints the plugin's root: three folders above this file.
+FUN
+plugin_root() {
+  __plugin_root__here="$(dirname "$0")"
+  cd "$__plugin_root__here/../../.." && pwd
+}
+
+main "$@"

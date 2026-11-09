@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""A doc block at the top of every Python file, and exactly one blank line after every docstring.
+"""A doc block at the top of every Python file and on every function and
+class, and exactly one blank line after every docstring.
 
   docstrings.py FILE...
 
@@ -7,7 +8,10 @@ Prints one line per finding, `file:line: message`, and exits 1 when there is
 any. The file's doc block is the module's docstring: the first statement of
 the file, a string, with at least one word in it. A shebang or an encoding
 comment above it is fine; a comment or code above it is not, because then it
-is not the docstring. After the module's docstring, and after the docstring
+is not the docstring. Every function and class carries a docstring too, as
+every JavaScript function carries a JSDoc block, except in a test file
+(test_*.py), where a test class, a `test_*` method and the setUp and
+tearDown methods are named for what they do. After the module's docstring, and after the docstring
 of every function and class, exactly one blank line separates it from the
 code that follows, so the docstring reads as the thing's own and not as a
 note on the first line of its body. A docstring with nothing after it needs
@@ -18,8 +22,12 @@ import ast
 import sys
 from pathlib import Path
 
+TEST_FIXTURE_METHODS = {"setUp", "tearDown", "setUpClass", "tearDownClass"}
+
 
 def main(paths):
+  """Prints the findings for every file named, and gives the exit status: 1 when there is any."""
+
   findings = []
   for path in paths:
     findings.extend(check_file(Path(path)))
@@ -51,7 +59,40 @@ def check_file(path):
   if not (ast.get_docstring(tree) or "").strip():
     return [f"{path}:1: this file has no doc block at its top, and every file opens with one. Add a docstring as the first statement, saying what the file is for."]
 
-  return spacing_findings(path, source.splitlines(), tree)
+  return missing_findings(path, tree) + spacing_findings(path, source.splitlines(), tree)
+
+
+def missing_findings(path, tree):
+  """A finding for each function and class without a docstring that needs one."""
+
+  return [missing_finding(path, node) for node in ast.walk(tree) if needs_docstring(path, node) and docstring_of(node) is None]
+
+
+def missing_finding(path, node):
+  """The finding for a function or class without a docstring."""
+
+  return f"{path}:{node.lineno}: {node.name} has no docstring, and every function and class says what it does for its caller. Add one as the first statement of its body."
+
+
+def needs_docstring(path, node):
+  """Whether a node is a function or class that must carry a docstring: any, except the test classes and test methods of a test file."""
+
+  if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+    return False
+
+  return not (is_test_file(path) and is_test_part(node))
+
+
+def is_test_file(path):
+  """Whether a file is a test module, test_*.py."""
+
+  return path.name.startswith("test_")
+
+
+def is_test_part(node):
+  """Whether a node in a test file is named for what it does: a class, a `test_*` method, or a setUp or tearDown method."""
+
+  return isinstance(node, ast.ClassDef) or node.name.startswith("test_") or node.name in TEST_FIXTURE_METHODS
 
 
 def spacing_findings(path, lines, tree):

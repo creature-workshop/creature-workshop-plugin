@@ -18,6 +18,8 @@ class Goldens(unittest.TestCase):
 
 
 def check(test, case):
+  """Compares a golden case's transcript with its expected.txt, or writes the file when UPDATE_GOLDENS is 1."""
+
   actual = runner.transcript(case)
   expected_file = case / "expected.txt"
   if os.environ.get("UPDATE_GOLDENS") == "1":

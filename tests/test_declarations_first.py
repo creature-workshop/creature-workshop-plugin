@@ -10,6 +10,8 @@ LINTER = HERE.parent / "shell" / "lint" / "declarations_first.py"
 
 
 def load_linter():
+  """The linter module, imported from its path."""
+
   spec = importlib.util.spec_from_file_location("declarations_first", LINTER)
   module = importlib.util.module_from_spec(spec)
   spec.loader.exec_module(module)

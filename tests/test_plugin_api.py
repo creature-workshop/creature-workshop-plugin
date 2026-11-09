@@ -1,11 +1,14 @@
-"""Covers dashboard/plugin_api.py: the shape of GET /project, inside a project and outside one.
+"""Covers dashboard/plugin_api.py and the routes it includes: that Hermes can
+load it by its path and mount every route, and the shape of GET /project,
+inside a project and outside one.
 
-The backend is loaded the way Hermes loads it, from the file's path, and
-called directly; the project is the golden case `installed`, whose shell/ops
-stub prints a check table with every tool installed.
+The backend is loaded the way Hermes loads it, from the file's path, and the
+route is called directly; the project is the golden case `installed`, whose
+shell/ops stub prints a check table with every tool installed.
 """
 
 import asyncio
+import importlib
 import importlib.util
 import shutil
 import tempfile
@@ -29,9 +32,17 @@ def load_backend():
 
 
 def answer_for(path, check="1"):
-  """The backend's answer for a directory, as the model it returns."""
+  """GET /project's answer for a directory, as the model it returns, once the backend is loaded."""
 
-  return asyncio.run(load_backend().project(path=str(path), check=check))
+  load_backend()
+  route = importlib.import_module("workshop.routes.project")
+  return asyncio.run(route.project(path=str(path), check=check))
+
+
+class Mounting(unittest.TestCase):
+  def test_the_router_carries_every_route_the_pane_reads(self):
+    paths = {route.path for route in load_backend().router.routes}
+    self.assertEqual(paths, {"/about", "/project", "/repos", "/repos/status"})
 
 
 class InsideAProject(unittest.TestCase):
