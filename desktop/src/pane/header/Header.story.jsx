@@ -6,6 +6,7 @@
  */
 
 import { cn } from '@hermes/plugin-sdk';
+import { sessionSubject } from '../../subject.js';
 import { WorkshopProvider } from '../../workshop/WorkshopProvider.jsx';
 import { Header } from './Header.jsx';
 
@@ -14,6 +15,12 @@ const DOCKED_WIDTH = 320;
 
 /** The session's directory in every story. */
 const CWD = '/home/someone/code';
+
+/** A folder beside CWD that holds no repository. */
+const NOTES = '/home/someone/notes';
+
+/** The subject in every story but Following: a chat session in CWD. */
+const SUBJECT = sessionSubject('stored-session-1', CWD);
 
 /** A repository on main, two commits ahead, with one staged and three untracked paths. */
 const DEMO = { root: '/home/someone/code/demo', name: 'demo' };
@@ -52,14 +59,26 @@ export function Several() {
 }
 
 /**
+ * The header for whichever of two sessions is focused: the first works in
+ * CWD, which holds two repositories; the second works in NOTES, which holds none.
+ *
+ * @param props The story's props.
+ * @param props.second Whether the second session is the one focused.
+ */
+export function Following({ second = false }) {
+  return docked(severalBackend, second ? sessionSubject('stored-session-2', NOTES) : SUBJECT);
+}
+
+/**
  * The header in a box as wide as the docked pane, under a provider over a backend call.
  *
  * @param rest The backend call the header makes.
+ * @param subject What the pane is about.
  */
-function docked(rest) {
+function docked(rest, subject = SUBJECT) {
   return (
     <div className={cn('workshop-story')} style={{ width: DOCKED_WIDTH }}>
-      <WorkshopProvider rest={rest} cwd={CWD}>
+      <WorkshopProvider rest={rest} subject={subject}>
         <Header />
       </WorkshopProvider>
     </div>
@@ -67,9 +86,10 @@ function docked(rest) {
 }
 
 /**
- * A backend call that answers GET /repos with repos, and GET /repos/status from STATUSES.
+ * A backend call that answers GET /repos with repos for CWD and none for
+ * any other folder, and GET /repos/status from STATUSES.
  *
- * @param repos The repositories GET /repos lists.
+ * @param repos The repositories GET /repos lists for CWD.
  */
 function backendOver(repos) {
   return async (path) => (path.startsWith('/repos/status') ? STATUSES[rootOf(path)] : answerFor(path, repos));
@@ -79,10 +99,20 @@ function backendOver(repos) {
  * The answer to GET /about or GET /repos.
  *
  * @param path The path asked for.
- * @param repos The repositories GET /repos lists.
+ * @param repos The repositories GET /repos lists for CWD.
  */
 function answerFor(path, repos) {
-  return path.startsWith('/about') ? { version: '0.1.0-dev.9', branch: 'main' } : { start: CWD, inside: false, repos, refresh_seconds: 20 };
+  return path.startsWith('/about') ? { version: '0.1.0-dev.9', branch: 'main' } : reposIn(queryOf(path).get('path'), repos);
+}
+
+/**
+ * The answer to GET /repos for a folder: repos for CWD, none for any other.
+ *
+ * @param folder The folder asked about.
+ * @param repos The repositories CWD holds.
+ */
+function reposIn(folder, repos) {
+  return { start: folder, inside: false, repos: folder === CWD ? repos : [], refresh_seconds: 20 };
 }
 
 /**
@@ -91,5 +121,14 @@ function answerFor(path, repos) {
  * @param path The path, with its query.
  */
 function rootOf(path) {
-  return new URLSearchParams(path.split('?')[1]).get('root');
+  return queryOf(path).get('root');
+}
+
+/**
+ * The query of a path, as search parameters.
+ *
+ * @param path The path, with its query.
+ */
+function queryOf(path) {
+  return new URLSearchParams(path.split('?')[1]);
 }

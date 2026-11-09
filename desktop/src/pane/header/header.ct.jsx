@@ -1,12 +1,12 @@
 /**
  * @file What a user sees in the header: that no git repository was found,
  * the one repository's name and state, or a selector over several that
- * shows the selected one's state. The tests mount the header's stories and read it
+ * shows the selected one's state; and that it follows the focused session. The tests mount the header's stories and read it
  * by role and by text, never by a test id.
  */
 
 import { test, expect } from '@playwright/experimental-ct-react';
-import { Empty, Several, Single } from './Header.story.jsx';
+import { Empty, Following, Several, Single } from './Header.story.jsx';
 
 test('a directory with no git repository says so', async ({ mount }) => {
   const component = await mount(<Empty />);
@@ -39,4 +39,18 @@ test('selecting a repository shows its state beside the selector', async ({ moun
 
   await expect(component.getByRole('combobox', { name: 'Repository' })).toHaveText('site');
   await expect(component.getByText('feat/x ✓')).toBeVisible();
+});
+
+test('focusing another session shows its folder and drops the selection', async ({ mount, page }) => {
+  const component = await mount(<Following />);
+
+  await component.getByRole('combobox', { name: 'Repository' }).click();
+  await page.getByRole('option', { name: 'site' }).click();
+  await expect(component.getByText('feat/x ✓')).toBeVisible();
+
+  await component.update(<Following second />);
+  await expect(component.getByRole('banner', { name: 'Project' })).toHaveText('No repositories detected');
+
+  await component.update(<Following />);
+  await expect(component.getByRole('combobox', { name: 'Repository' })).toHaveText('Select a repository');
 });
