@@ -32,16 +32,9 @@ is cached for `pane_refresh_seconds` and forgotten after an install.
 
 ## What you get
 
-A Desktop pane, **Creature Workshop**, docked on the right, with three tabs:
-
-- **Toolchain**: every declared tool with a green or red dot, its version and
-  its channel, re-read on the interval the `pane_refresh_seconds` setting
-  gives.
-- **Declaration**: the files under `.ops/config/` as they are.
-- **Release**: the latest and stable versions the lock records.
-
-A status-bar chip reads `toolchain 2/2` and turns red when a declared tool is
-missing. Both follow the session's directory.
+A Desktop pane, **Workshop**, docked on the right. It is empty: the pane is
+being rebuilt around the project's plan, one part at a time, and the parts
+arrive in later releases.
 
 ## Install
 
@@ -174,10 +167,8 @@ UPDATE_GOLDENS=1 python3 -m unittest tests.test_goldens
 ```
 
 The pane is tested in a browser. `desktop/src/pane/pane.ct.jsx` mounts the
-components through Playwright's component runner and drives them by role
-and by text, the way a user would: the toolchain rows and the chip's count,
-the tabs, the message outside a project, and the error boundary around
-the pane. `pnpm install` fetches the runner
+pane through Playwright's component runner and reads it by role and by
+text, the way a user would. `pnpm install` fetches the runner
 and React (pnpm is declared on the npm channel, and `package.json` names it
 for corepack), `pnpm exec playwright install chromium` the browser, and
 then:
