@@ -12,9 +12,12 @@ line, relative to the project root.
 The files come from the git index, the way shellops' own lint gates find
 theirs: what is tracked or staged is a source, and nothing else is, so the
 submodule, the tool cache, node_modules and a stray file are never linted.
-The lint fixtures under shell/lint/fixtures/ and shell/lint/eslint/fixtures/
-are left out, since they are the lints' own samples of what to reject. Stage a new file before trusting a
-clean run over it.
+Fixtures are left out, since they are samples, not sources: the lints' own
+samples of what to reject under shell/lint/fixtures/ and
+shell/lint/eslint/fixtures/, and every <module>.fixture.<ext> file, a test's
+sample input beside the module it tests, which may need to break a house
+rule (a YAML fixture with a comment shows that an edit keeps comments).
+Stage a new file before trusting a clean run over it.
 
   shell/lint/sources '*.py'           ->  __init__.py workshop/ops.py ...
   shell/lint/sources '*.yml' '*.yaml'  ->  .gitlab-ci.yml .ops/config/manifest.yaml ...
@@ -39,7 +42,7 @@ main() {
 
 : <<'FUN'
 Keeps the lines of stdin whose file name matches one of the patterns given
-and that do not lie under a lint fixtures folder.
+and that are not fixtures.
 FUN
 select_sources() {
   while IFS= read -r __select_sources__path; do
@@ -50,14 +53,14 @@ select_sources() {
 }
 
 : <<'FUN'
-Prints true when the path $1 is outside the lint fixtures folders and its file name
-matches one of the patterns that follow it, false otherwise.
+Prints true when the path $1 is not a fixture and its file name matches one
+of the patterns that follow it, false otherwise.
 FUN
 is_source() {
   __is_source__path="$1"
   shift
   case "$__is_source__path" in
-    shell/lint/fixtures/* | shell/lint/eslint/fixtures/*)
+    shell/lint/fixtures/* | shell/lint/eslint/fixtures/* | *.fixture.*)
       printf 'false\n'
       return 0
       ;;
