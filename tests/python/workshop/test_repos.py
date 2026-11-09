@@ -10,11 +10,22 @@ from workshop.repo_status import status_of
 from workshop.repos import repos_of
 
 
+def git_command(root, *args):
+  """The git command line that runs args at root with the tests' own identity and default branch, so no user or CI config is needed."""
+
+  return ["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t", "-c", "init.defaultBranch=main", *args]
+
+
 def git(root, *args):
   """Runs git at root for the tests, quietly, and returns what it printed."""
 
-  command = ["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t", "-c", "init.defaultBranch=main", *args]
-  return subprocess.run(command, capture_output=True, text=True, check=True).stdout.strip()
+  return subprocess.run(git_command(root, *args), capture_output=True, text=True, check=True).stdout.strip()
+
+
+def merge_with_conflict(root, branch):
+  """Merges branch into the branch checked out at root, where the merge stops on a conflict, so its failing exit status is expected."""
+
+  subprocess.run(git_command(root, "merge", "-q", branch), capture_output=True)
 
 
 def repo(path):
@@ -123,7 +134,7 @@ class StatusOf(Scratch):
     git(demo, "checkout", "-q", "main")
     (demo / "f.txt").write_text("main\n")
     git(demo, "commit", "-q", "-am", "main")
-    subprocess.run(["git", "-C", str(demo), "merge", "-q", "other"], capture_output=True)
+    merge_with_conflict(demo, "other")
     self.assertEqual(status_of(demo)["conflicted"], 1)
 
   def test_none_outside_a_repository(self):
