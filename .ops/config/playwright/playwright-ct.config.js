@@ -3,9 +3,12 @@
  * desktop/src mounts a component in Chromium and drives it the way a user
  * would, by role and by text. No screenshots and no DOM snapshots. The page
  * each test mounts into is template/, beside this file, and what Playwright
- * builds from it goes under .ops/cache/playwright.
+ * builds from it goes under .ops/cache/playwright. The SDK Desktop provides
+ * does not exist outside Desktop, so its name resolves to plugin-sdk.js
+ * beside this file, a stand-in built on the same radix-ui primitives.
  */
 
+import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/experimental-ct-react';
 
 /** The runner's configuration: the tests under desktop/src, one worker, Chromium. */
@@ -22,6 +25,7 @@ export default defineConfig({
     ctPort: 3100,
     ctTemplateDir: 'template',
     ctCacheDir: '../../cache/playwright/ct',
+    ctViteConfig: { resolve: { alias: { '@hermes/plugin-sdk': fileURLToPath(new URL('./plugin-sdk.js', import.meta.url)) } } },
     trace: 'on-first-retry',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],

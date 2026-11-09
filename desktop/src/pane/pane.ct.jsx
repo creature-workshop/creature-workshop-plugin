@@ -21,12 +21,11 @@ function shown(component) {
   });
 }
 
-test('the header runs along the top of the pane, empty, above the footer', async ({ mount }) => {
+test('the header runs along the top of the pane, above the footer', async ({ mount }) => {
   const component = await mount(<OnMain />);
 
   const header = component.getByRole('banner', { name: 'Project' });
-  await expect(header).toBeVisible();
-  await expect(header).toBeEmpty();
+  await expect(header).toHaveText('No repositories detected');
   const top = await header.boundingBox();
   const bottom = await component.getByRole('contentinfo').boundingBox();
   expect(top.y + top.height).toBeLessThanOrEqual(bottom.y);

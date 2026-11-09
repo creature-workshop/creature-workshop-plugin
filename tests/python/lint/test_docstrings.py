@@ -5,8 +5,9 @@ import unittest
 from pathlib import Path
 
 HERE = Path(__file__).parent
-FIXTURES = HERE / "fixtures" / "docstrings"
-LINTER = HERE.parent / "shell" / "lint" / "docstrings.py"
+ROOT = HERE.parents[2]
+FIXTURES = ROOT / "shell" / "lint" / "fixtures" / "docstrings"
+LINTER = ROOT / "shell" / "lint" / "docstrings.py"
 
 
 def load_linter():

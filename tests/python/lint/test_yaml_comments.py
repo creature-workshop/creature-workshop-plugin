@@ -5,8 +5,9 @@ import unittest
 from pathlib import Path
 
 HERE = Path(__file__).parent
-FIXTURES = HERE / "fixtures" / "yaml_comments"
-LINTER = HERE.parent / "shell" / "lint" / "yaml_comments.py"
+ROOT = HERE.parents[2]
+FIXTURES = ROOT / "shell" / "lint" / "fixtures" / "yaml_comments"
+LINTER = ROOT / "shell" / "lint" / "yaml_comments.py"
 
 
 def load_linter():

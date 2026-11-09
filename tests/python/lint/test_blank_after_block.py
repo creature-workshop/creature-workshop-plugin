@@ -7,8 +7,9 @@ import unittest
 from pathlib import Path
 
 HERE = Path(__file__).parent
-FIXTURES = HERE / "fixtures" / "blank_after_block"
-LINTER = HERE.parent / "shell" / "lint" / "blank_after_block.py"
+ROOT = HERE.parents[2]
+FIXTURES = ROOT / "shell" / "lint" / "fixtures" / "blank_after_block"
+LINTER = ROOT / "shell" / "lint" / "blank_after_block.py"
 
 
 def load_linter():

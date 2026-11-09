@@ -1,6 +1,6 @@
 /**
  * @file house/declarations-first over the fixtures under
- * tests/fixtures/declarations_first/: constants above the functions pass,
+ * shell/lint/eslint/fixtures/declarations_first/: constants above the functions pass,
  * and each variable declared after the first function fails.
  */
 

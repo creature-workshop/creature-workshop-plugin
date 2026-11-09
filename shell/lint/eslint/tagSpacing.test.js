@@ -1,5 +1,5 @@
 /**
- * @file house/tag-spacing over the fixtures under tests/fixtures/tag_spacing/:
+ * @file house/tag-spacing over the fixtures under shell/lint/eslint/fixtures/tag_spacing/:
  * tags together with one blank line before `@returns` pass; a blank line
  * between two parameters, none before `@returns`, and two before it each fail
  * on the tag's line.

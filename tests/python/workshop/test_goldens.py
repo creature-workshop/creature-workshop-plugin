@@ -7,7 +7,7 @@ read the diff before committing one.
 import os
 import unittest
 
-from tests.goldens import runner
+from tests.python.workshop.goldens import runner
 
 
 class Goldens(unittest.TestCase):

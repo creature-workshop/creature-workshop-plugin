@@ -1,5 +1,5 @@
 /**
- * @file house/named-effect over the fixtures under tests/fixtures/named_effect/:
+ * @file house/named-effect over the fixtures under shell/lint/eslint/fixtures/named_effect/:
  * an effect passed by name or made by a factory call, defined in the file and
  * tagged for its hook, passes; an inline function, a function without its
  * hook's tag, and a name the file does not define each fail on the argument.

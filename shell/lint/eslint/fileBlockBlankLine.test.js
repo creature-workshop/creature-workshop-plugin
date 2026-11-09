@@ -1,6 +1,6 @@
 /**
  * @file house/file-block-blank-line over the fixtures under
- * tests/fixtures/file_block_blank_line/: one blank line after the file block
+ * shell/lint/eslint/fixtures/file_block_blank_line/: one blank line after the file block
  * passes, and none or two fails on the block.
  */
 

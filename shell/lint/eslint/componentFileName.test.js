@@ -1,6 +1,6 @@
 /**
  * @file house/component-file-name over the fixtures under
- * tests/fixtures/component_file_name/: a file named after its component
+ * shell/lint/eslint/fixtures/component_file_name/: a file named after its component
  * passes, whichever form the component takes, and a file named otherwise
  * fails on the component.
  */

@@ -7,7 +7,7 @@ from pathlib import Path
 from workshop.project import load_yaml
 from workshop.settings import DEFAULTS, from_config, value
 
-TEMPLATE = Path(__file__).resolve().parent.parent / "shell" / "actions" / "hermes" / "plugin.yaml.template"
+TEMPLATE = Path(__file__).resolve().parents[3] / "shell" / "actions" / "hermes" / "plugin.yaml.template"
 
 
 class FromConfig(unittest.TestCase):

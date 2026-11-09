@@ -4,7 +4,9 @@
  * narrow for both, the branch wins, since the version is in the lock.
  */
 
+import { cn } from '@hermes/plugin-sdk';
 import { useLayoutEffect, useRef, useState } from 'react';
+import { useWorkshop } from '../workshop/WorkshopProvider.jsx';
 
 /** The footer is one line that clips, and the box the measuring span is placed against. */
 const FOOTER_STYLE = { position: 'relative', overflow: 'hidden', whiteSpace: 'nowrap' };
@@ -45,19 +47,31 @@ export function fittedText(about, width, needed) {
  * hand because a footer inside a section has none of its own. The
  * geometry is inline style, not utility classes, so the fitting works in
  * any host, including the test page, which has no stylesheet.
- *
- * @param props The component's props.
- * @param props.about The backend's answer to GET /about.
  */
-export function Footer({ about }) {
+export function Footer() {
+  const { about } = useWorkshop();
   const footer = useRef(null);
   const measure = useRef(null);
   const [fit, setFit] = useState({ width: Infinity, needed: 0 });
   useLayoutEffect(fitToRoom(footer, measure, setFit), [about]);
 
   return (
-    <footer ref={footer} role="contentinfo" className="workshop-footer mt-auto border-t border-(--ui-stroke-tertiary) px-3 py-1.5 text-[0.6875rem] text-(--ui-text-tertiary)" style={FOOTER_STYLE}>
-      <span ref={measure} aria-hidden="true" className="workshop-footer-measure" style={MEASURE_STYLE}>{footerText(about)}</span>
+    <footer
+      ref={footer}
+      role="contentinfo"
+      className={cn(
+        'workshop-footer',
+        'mt-auto',
+        'border-t',
+        'border-(--ui-stroke-tertiary)',
+        'px-3',
+        'py-1.5',
+        'text-[0.6875rem]',
+        'text-(--ui-text-tertiary)',
+      )}
+      style={FOOTER_STYLE}
+    >
+      <span ref={measure} aria-hidden="true" className={cn('workshop-footer-measure')} style={MEASURE_STYLE}>{footerText(about)}</span>
       {fittedText(about, fit.width, fit.needed)}
     </footer>
   );

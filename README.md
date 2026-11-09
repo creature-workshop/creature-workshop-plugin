@@ -156,7 +156,7 @@ pin; the plugin/catalog job runs it after each deploy. Run it by hand with
 `--sha` and `--version` to pin another commit, or `--no-push` to look first.
 
 The tools are golden-tested. A case is a directory under
-`tests/goldens/cases/` in the shape of a shell-goldens fileset: `name.txt`
+`tests/python/workshop/goldens/cases/` in the shape of a shell-goldens fileset: `name.txt`
 and `about.txt` say what the case shows, `calls.txt` and `input/` are the
 input (the tool calls, and the project they run in, whose `shell/ops` is a
 stub that prints what the case needs), and `expected.txt` is the output, one
@@ -165,7 +165,7 @@ written as `<root>` and durations as `<ms>`. To add a case, write the first
 four and generate the fifth, then read it before you commit it:
 
 ```bash
-UPDATE_GOLDENS=1 python3 -m unittest tests.test_goldens
+UPDATE_GOLDENS=1 python3 -m unittest tests.python.workshop.test_goldens
 ```
 
 The pane is tested in a browser. `desktop/src/pane/pane.ct.jsx` mounts the
@@ -214,7 +214,7 @@ browser tests get Playwright's own rules on top, with its locator rules on,
 and no test ids anywhere: a test finds the page by role and by text, the
 way a user does. The last eight are the plugin under
 `shell/lint/eslint/`, tested with
-ESLint's RuleTester over the fixtures under `tests/fixtures/`. The one way
+ESLint's RuleTester over the fixtures beside them, under `shell/lint/eslint/fixtures/`. The one way
 to make an exception is ESLint's own `eslint-disable-next-line` comment,
 with the reason after `--`.
 
