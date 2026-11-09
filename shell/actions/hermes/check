@@ -11,7 +11,8 @@ cases under coverage, with the report at the end. Run it as
 environment with the dev dependencies pyproject.toml lists; the
 plugin/python job runs exactly that after `uv sync --frozen`. The
 JavaScript has its own checks, through ESLint and the browser tests:
-`pnpm run lint`, `pnpm run test:lint` and `pnpm run test:pane`.
+`pnpm run lint`, `pnpm run test:lint`, `pnpm run test:unit` and
+`pnpm run test:pane`.
 
 Usage: shell/actions/hermes/check [-h,--help]
 HELP
