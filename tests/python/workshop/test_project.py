@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from workshop.project import declared_tools, find_project, release, summary_line
+from workshop.project.declaration import declared_tools, find_project, release, summary_line
 
 
 def make_project(root):

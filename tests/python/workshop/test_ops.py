@@ -1,11 +1,13 @@
-"""Covers workshop.ops: the check table's rows and the shape a run reports."""
+"""Covers workshop.run.ops and workshop.project.check_table: the check table's rows and the shape a run reports."""
 
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
-from workshop import check_table, ops, tools
+from workshop.agent import tools
+from workshop.project import check_table
+from workshop.run import ops
 
 CHECK_TABLE = """Status     Tool                   Version        Channel
 ------------------------------------------------------------

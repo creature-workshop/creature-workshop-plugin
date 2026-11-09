@@ -5,7 +5,7 @@ loads it from, for the pane's footer, as a workshop.models.about.About.
 from pathlib import Path
 
 from workshop import api
-from workshop.about import about as read_about
+from workshop.about.plugin import about as read_about
 from workshop.models.about import About
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]

@@ -88,7 +88,9 @@ Both are set under Settings → Plugins in Hermes Desktop, or under
 
 The layout is the one Hermes expects. The root is the Python side:
 `__init__.py` is the entry point Hermes imports, and `workshop/` is its
-package. `dashboard/plugin_api.py` is the backend, at the path the dashboard
+package, with one folder for each topic (`about/`, `project/`, `repos/`),
+`run/` for the programs it starts, `agent/` for the tools Hermes's agent
+calls, and `routes/` and `models/` for the backend. `dashboard/plugin_api.py` is the backend, at the path the dashboard
 manifest names. Everything JavaScript is under `desktop/`, which Hermes
 Desktop loads, with the source under `desktop/src/`.
 

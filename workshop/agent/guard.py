@@ -20,8 +20,11 @@ import re
 import shlex
 import time
 
-from . import check_table, ops, session, settings
-from .project import declared_tools, find_project
+from .. import settings
+from ..project import check_table
+from ..project.declaration import declared_tools, find_project
+from ..run import ops
+from . import session
 
 TERMINAL_TOOL = "terminal"
 CHECK_TIMEOUT_SECONDS = 20

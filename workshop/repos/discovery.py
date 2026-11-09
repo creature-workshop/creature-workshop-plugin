@@ -12,7 +12,7 @@ links are not followed.
 import os
 from pathlib import Path
 
-from workshop.git import git
+from workshop.run.git import git
 
 DEPTH = 3
 

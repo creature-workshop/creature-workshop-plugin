@@ -8,9 +8,12 @@ from the session's directory when there is none.
 
 import json
 
-from . import check_table, guard, ops, session, settings
+from .. import settings
+from ..project import check_table
+from ..project.declaration import declaration, declared_tools, find_project, release, summary_line
+from ..run import ops
+from . import guard, session
 from .schemas import INSTALL_SCHEMA, LINT_SCHEMA, PROJECT_SCHEMA, TEST_SCHEMA
-from .project import declaration, declared_tools, find_project, release, summary_line
 
 
 def project_for(args):

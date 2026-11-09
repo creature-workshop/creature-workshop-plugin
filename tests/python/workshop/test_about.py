@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from workshop.about import about, branch_of
+from workshop.about.plugin import about, branch_of
 
 
 def git(root, *args):

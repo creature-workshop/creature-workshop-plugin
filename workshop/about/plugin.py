@@ -7,8 +7,8 @@ short commit when HEAD is detached, as a catalog install is, and empty
 where the root is not in a git checkout at all.
 """
 
-from workshop.git import git
-from workshop.project import release
+from workshop.project.declaration import release
+from workshop.run.git import git
 
 
 def about(root):

@@ -4,13 +4,13 @@ shellops declaration, toolchain, tests and lint in Hermes.
 Hermes imports this file as the plugin and calls register(ctx) once at startup. It registers one tool per lifecycle
 verb and a system prompt section that tells the agent, when the session's
 directory is a shellops project, what the project declares and which tools are
-missing, and the hook in workshop/guard.py, which blocks a terminal command
+missing, and the hook in workshop/agent/guard.py, which blocks a terminal command
 naming a declared tool that is not installed. The Desktop pane in desktop/ reads the same facts through the backend
 in dashboard/plugin_api.py.
 """
 
-from .workshop import guard, session, tools
-from .workshop.project import find_project, summary_line
+from .workshop.agent import guard, session, tools
+from .workshop.project.declaration import find_project, summary_line
 
 
 def register(ctx):
