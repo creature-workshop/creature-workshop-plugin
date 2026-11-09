@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 /**
  * The RuleTester case for the fixture `tests/fixtures/<group>/<name>`.
+ *
  * @param group The fixture directory under tests/fixtures/.
  * @param name The fixture's file name.
  */

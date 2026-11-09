@@ -10,6 +10,7 @@ import { basename, extname } from 'node:path';
 
 /**
  * Whether the name is a component's: it starts with a capital letter.
+ *
  * @param name The declared name.
  */
 function isComponentName(name) {
@@ -18,6 +19,7 @@ function isComponentName(name) {
 
 /**
  * The statement itself, or the declaration an export statement wraps.
+ *
  * @param statement A top-level statement of the program.
  */
 function unwrapExport(statement) {
@@ -26,6 +28,7 @@ function unwrapExport(statement) {
 
 /**
  * Whether the declarator assigns a function to a name.
+ *
  * @param declarator One declarator of a variable declaration.
  */
 function declaresFunction(declarator) {
@@ -35,6 +38,7 @@ function declaresFunction(declarator) {
 
 /**
  * The [{name, node}] of the components one top-level statement declares.
+ *
  * @param statement A top-level statement of the program.
  */
 function componentsOf(statement) {
@@ -55,6 +59,7 @@ function componentsOf(statement) {
 
 /**
  * The [{name, node}] of every component the program declares at its top level.
+ *
  * @param program The Program node.
  */
 function declaredComponents(program) {

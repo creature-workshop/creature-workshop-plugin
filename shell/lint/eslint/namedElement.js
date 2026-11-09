@@ -11,6 +11,7 @@ const PREFIX = 'workshop-';
 
 /**
  * Whether the JSX element is a div or a span.
+ *
  * @param opening A JSXOpeningElement.
  */
 function isGenericBox(opening) {
@@ -19,6 +20,7 @@ function isGenericBox(opening) {
 
 /**
  * The attribute of the opening element with the name, or undefined.
+ *
  * @param opening A JSXOpeningElement.
  * @param name The attribute's name.
  */
@@ -29,6 +31,7 @@ function attribute(opening, name) {
 /**
  * Whether the className attribute names the element: a literal with a
  * `workshop-` token, or an expression whose source mentions the prefix.
+ *
  * @param className The className JSXAttribute.
  * @param sourceCode The file's SourceCode.
  */
@@ -42,6 +45,7 @@ function names(className, sourceCode) {
 
 /**
  * An example name for the message, from the file's own name: Tabs.jsx -> tabs.
+ *
  * @param context The rule context.
  */
 function exampleFor(context) {

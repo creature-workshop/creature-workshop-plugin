@@ -1,12 +1,11 @@
-"""What the pane's backend answers with, as models the pane and the tests can hold it to.
+"""The answers of GET /project: a Project inside a shellops project, a NoProject outside one.
 
-GET /project answers with a Project when the directory is in a shellops
-project and with a NoProject otherwise; `found` tells the two apart. The
-field names are the ones the pane reads, so a change here is a change to
-the pane.
+`found` tells the two apart.
 """
 
 from pydantic import BaseModel
+
+from workshop.models.toolchain import Toolchain
 
 
 class NoProject(BaseModel):
@@ -23,24 +22,6 @@ class DeclaredTool(BaseModel):
   channel: str
   tool: str
   version: str
-
-
-class ToolchainRow(BaseModel):
-  """One row of `ops install --check`: the tool and whether it is installed right now."""
-
-  tool: str
-  version: str
-  channel: str
-  installed: bool
-
-
-class Toolchain(BaseModel):
-  """What `ops install --check` reported: its rows, whether it succeeded, its stderr and its duration."""
-
-  ok: bool
-  rows: list[ToolchainRow]
-  stderr: str
-  duration_ms: int
 
 
 class Release(BaseModel):

@@ -6,6 +6,7 @@
 
 /**
  * Whether the JSX attribute is a data-testid.
+ *
  * @param attribute A JSXAttribute.
  */
 function isTestIdAttribute(attribute) {
@@ -14,6 +15,7 @@ function isTestIdAttribute(attribute) {
 
 /**
  * Whether the call is a getByTestId.
+ *
  * @param call A CallExpression.
  */
 function isTestIdQuery(call) {
