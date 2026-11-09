@@ -96,3 +96,45 @@ export function TabsList(props) {
 export function TabsTrigger(props) {
   return createElement(TabsPrimitive.Trigger, props);
 }
+
+/**
+ * Desktop's Button: a button, its variant and size dropped.
+ *
+ * @param props The button's props.
+ * @param props.variant Desktop's look for it; unused here.
+ * @param props.size Desktop's size for it; unused here.
+ */
+export function Button({ variant, size, ...props }) {
+  return createElement('button', { type: 'button', 'data-variant': variant, 'data-size': size, ...props });
+}
+
+/**
+ * Desktop's Input: a text input, its size dropped.
+ *
+ * @param props The input's props.
+ * @param props.size Desktop's size for it; unused here.
+ */
+export function Input({ size, ...props }) {
+  return createElement('input', { 'data-size': size, ...props });
+}
+
+/**
+ * Desktop's Textarea: a text area, its size dropped.
+ *
+ * @param props The text area's props.
+ * @param props.size Desktop's size for it; unused here.
+ */
+export function Textarea({ size, ...props }) {
+  return createElement('textarea', { 'data-size': size, ...props });
+}
+
+/**
+ * Desktop's Codicon: an icon from VS Code's icon font, hidden from assistive technology.
+ *
+ * @param props The icon's props.
+ * @param props.name The icon's name.
+ */
+export function Codicon({ name, ...props }) {
+  return createElement('i', { 'aria-hidden': 'true', className: `codicon codicon-${name}`, ...props });
+}
+

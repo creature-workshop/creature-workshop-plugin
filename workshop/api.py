@@ -8,6 +8,10 @@ dashboard/plugin_api.py mounts one router without knowing which routes exist.
     @api.register("/about", About)
     async def about():
       ...
+
+    @api.register("/project/manifest", Project, method="POST")
+    async def change_manifest(change: ManifestChange):
+      ...
 """
 
 from fastapi import APIRouter
@@ -15,8 +19,8 @@ from fastapi import APIRouter
 router = APIRouter()
 
 
-def register(path, model):
-  """A decorator that registers a function as the handler of GET path, answering with model.
+def register(path, model, method="GET"):
+  """A decorator that registers a function as the handler of method on path, answering with model.
 
   It hands the function back unchanged, so a test calls the handler directly.
   """
@@ -24,7 +28,7 @@ def register(path, model):
   def add(handler):
     """Adds handler to the router under path, and hands it back."""
 
-    router.add_api_route(path, handler, methods=["GET"], response_model=model)
+    router.add_api_route(path, handler, methods=[method], response_model=model)
     return handler
 
   return add

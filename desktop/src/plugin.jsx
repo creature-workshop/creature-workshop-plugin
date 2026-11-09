@@ -26,7 +26,7 @@ export default {
    * @param ctx The plugin context the SDK hands over.
    */
   register(ctx) {
-    const rest = (path) => ctx.rest(path);
+    const rest = (path, options) => ctx.rest(path, options);
     ctx.register({
       id: 'pane',
       area: 'panes',

@@ -89,8 +89,8 @@ export function NotAdopted() {
  * @param release The release record of its lock.
  */
 function projectAt(root, release) {
-  const identity = { description: 'Notes, kept in git.', command_name: 'notes', org: 'someone', repo: 'notes' };
-  return { found: true, root, name: 'Notes', summary: '', declaration: {}, identity, release, declared: [], refresh_seconds: 20 };
+  const manifest = { name: 'Notes', description: 'Notes, kept in git.', command_name: 'notes', org: 'someone', repo: 'notes' };
+  return { found: true, root, name: 'Notes', summary: '', declaration: {}, manifest, release, declared: [], refresh_seconds: 20 };
 }
 
 /**
