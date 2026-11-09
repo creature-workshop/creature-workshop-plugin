@@ -1,18 +1,20 @@
 /**
  * @file The Workshop pane: the one surface the plugin puts in Desktop. It is
- * a column with a footer along the bottom; every part of the pane is added
- * above the footer, one ticket at a time.
+ * a column with a header along the top and a footer along the bottom; every
+ * other part of the pane is added between them, one ticket at a time.
  */
 
 import { useEffect, useState } from 'react';
 import { loadAbout } from '../about/load.js';
 import { Footer } from './Footer.jsx';
+import { Header } from './Header.jsx';
 
 /** What the footer shows before the backend has answered. */
 const UNKNOWN = { version: '', branch: '' };
 
 /**
- * The pane's body: a region named Workshop with the footer at its bottom.
+ * The pane's body: a region named Workshop, with the header at its top and
+ * the footer at its bottom.
  *
  * @param props The component's props.
  * @param props.rest The backend call, taking a path under the plugin's API.
@@ -23,6 +25,7 @@ export function WorkshopPane({ rest }) {
 
   return (
     <section aria-label="Workshop" className="workshop-pane flex h-full flex-col">
+      <Header />
       <Footer about={about} />
     </section>
   );

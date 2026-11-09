@@ -84,6 +84,10 @@ export default [
     rules: { 'house/component-file-name': 'error', 'house/named-element': 'error' },
   },
   {
+    files: ['**/*.story.jsx'],
+    rules: { 'react/no-multi-comp': 'off', 'house/component-file-name': 'off' },
+  },
+  {
     ...playwright.configs['flat/recommended'],
     files: ['**/*.ct.jsx'],
   },
