@@ -50,6 +50,7 @@ plugin/javascript:
     - pnpm install --frozen-lockfile
     - pnpm run lint
     - pnpm run test:lint
+    - pnpm run test:unit
     - pnpm run test:pane
 
 plugin/deploy:

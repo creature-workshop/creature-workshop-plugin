@@ -181,6 +181,13 @@ then:
 pnpm run test:pane
 ```
 
+Logic with no screen, such as how a wizard moves from step to step, is
+tested with Node's own runner, from a `*.test.js` beside the module:
+
+```bash
+pnpm run test:unit
+```
+
 The runner's configuration is `.ops/config/playwright/`, with the page each
 test mounts into under `template/` beside it, and what Playwright builds
 goes under `.ops/cache/playwright/`.
