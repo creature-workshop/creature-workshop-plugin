@@ -4,7 +4,8 @@
  * registers the pane with the SDK. The tree under desktop/src is pane/, the
  * pane, its parts and its tests; workshop/, the state the pane shares;
  * client/, the backend's routes; hooks/, the hooks the parts share, such as
- * polling the backend; repos/, how a repository's state reads; wizard/,
+ * polling the backend; repos/, how a repository's state reads; tabs/, the
+ * Workshop tabs, one folder each; wizard/,
  * the contract every wizard implementation fills and the one Wizard the
  * pane renders; and events.js, the names Hermes and the plugin agree on.
  * This is the source; shell/actions/hermes/build writes desktop/plugin.js

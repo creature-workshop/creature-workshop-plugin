@@ -10,7 +10,7 @@
 
 import { clsx } from 'clsx';
 import { createElement } from 'react';
-import { Select as Primitive } from 'radix-ui';
+import { Select as Primitive, Tabs as TabsPrimitive } from 'radix-ui';
 import { twMerge } from 'tailwind-merge';
 
 /**
@@ -68,4 +68,31 @@ export function SelectContent({ children, ...props }) {
  */
 export function SelectItem({ children, ...props }) {
   return createElement(Primitive.Item, props, createElement(Primitive.ItemText, null, children));
+}
+
+/**
+ * Desktop's Tabs: the root of radix tabs.
+ *
+ * @param props The tabs' props.
+ */
+export function Tabs(props) {
+  return createElement(TabsPrimitive.Root, props);
+}
+
+/**
+ * Desktop's TabsList: the strip that holds the triggers.
+ *
+ * @param props The list's props.
+ */
+export function TabsList(props) {
+  return createElement(TabsPrimitive.List, props);
+}
+
+/**
+ * Desktop's TabsTrigger: one tab in the strip.
+ *
+ * @param props The trigger's props.
+ */
+export function TabsTrigger(props) {
+  return createElement(TabsPrimitive.Trigger, props);
 }

@@ -14,6 +14,7 @@ from pathlib import Path
 DECLARATION_FILES = ("manifest.yaml", "tools.yaml", "ecosystems.yaml", "imports.yaml", "lint.yaml")
 SEARCH_DEPTH = 3
 SKIPPED_DIRECTORY_NAMES = ("node_modules", "target", "dist", "build")
+IDENTITY_FIELDS = (("description", "description"), ("command_name", "command-name"), ("org", "org"), ("repo", "repo"))
 
 
 def find_project(start):
@@ -112,6 +113,22 @@ def lock(root):
     return json.loads(path.read_text())
   except ValueError:
     return {}
+
+
+def identity(root):
+  """The manifest's description, command-name, org and repo as text, keyed for the Identity model."""
+
+  fields = manifest(root)
+  return {key: text_of(fields.get(name)) for key, name in IDENTITY_FIELDS}
+
+
+def text_of(value):
+  """A manifest value as text: empty when it is missing or not a scalar."""
+
+  if value is None or isinstance(value, (dict, list)):
+    return ""
+
+  return str(value)
 
 
 def release(root):
