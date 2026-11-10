@@ -12,6 +12,7 @@ PLUGIN_ID = "creature-workshop"
 DEFAULTS = {
   "ops_timeout_seconds": 120,
   "pane_refresh_seconds": 20,
+  "ops_env_passthrough": [],
 }
 
 

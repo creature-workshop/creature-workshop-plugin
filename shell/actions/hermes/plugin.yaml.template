@@ -26,3 +26,7 @@ config_schema:
     type: int
     default: 20
     description: How often the Desktop pane re-runs install --check to refresh the toolchain.
+  ops_env_passthrough:
+    type: list
+    default: []
+    description: Names of more environment variables for every command the plugin runs, such as HTTPS_PROXY. A command gets PATH, HOME, the locale and the terminal without them.
