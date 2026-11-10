@@ -5,9 +5,9 @@
  */
 
 import { FailureNotice } from '../../failures/FailureNotice.jsx';
-import { MultiRepoHeader } from './MultiRepoHeader.jsx';
-import { NoRepoHeader } from './NoRepoHeader.jsx';
-import { SingleRepoHeader } from './SingleRepoHeader.jsx';
+import { NoRepositories } from './modes/NoRepositories.jsx';
+import { OneRepository } from './modes/OneRepository.jsx';
+import { SeveralRepositories } from './modes/SeveralRepositories.jsx';
 
 /**
  * Nothing while the repositories load; "I couldn't read the repositories
@@ -35,5 +35,5 @@ export function HeaderContent({ repos, onRetry }) {
  * @param count How many repositories the session holds.
  */
 function modeFor(count) {
-  return [NoRepoHeader, SingleRepoHeader][count] ?? MultiRepoHeader;
+  return [NoRepositories, OneRepository][count] ?? SeveralRepositories;
 }

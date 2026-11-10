@@ -1,20 +1,33 @@
-"""The answers of GET /repos and GET /repos/status: the repositories a session holds, and the state of one."""
+"""The answers of GET /repos and GET /repos/status: the repositories a session holds, with their worktrees, and the state of one."""
 
 from pydantic import BaseModel
 
 
-class Repo(BaseModel):
-  """One repository: its root, and the name the header shows, the root's folder name."""
+class Worktree(BaseModel):
+  """One worktree of a repository: its root, its folder's name, its branch ("" when detached), its commit, whether it is the main one and whether it is locked."""
 
   root: str
   name: str
+  branch: str
+  head: str
+  main: bool
+  locked: bool
+
+
+class Repo(BaseModel):
+  """One repository: its root, the main worktree's; the name the header shows; and its worktrees, main first."""
+
+  root: str
+  name: str
+  worktrees: list[Worktree] = []
 
 
 class Repos(BaseModel):
-  """The repositories a session's directory holds; `inside` is true when the directory is inside the one listed."""
+  """The repositories a session's directory holds; `inside` is true when the directory is inside the one listed, and `checkout` is then the root of the worktree it is in."""
 
   start: str
   inside: bool
+  checkout: str = ""
   repos: list[Repo]
   refresh_seconds: int
 

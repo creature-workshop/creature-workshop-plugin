@@ -28,7 +28,7 @@ export function WorkshopTabs({ tabs = TABS }) {
   const [open, setOpen] = useState(tabs[0].id);
   if (selected && project.state === 'failure') {
     return (
-      <div className={cn('workshop-project-failure', 'px-3', 'py-2')}>
+      <div className={cn('workshop-project-failure', 'px-2', 'py-2')}>
         <FailureNotice what={`I couldn't read the project in ${folderName(selected)}.`} error={project.error} onRetry={() => retry('project')} />
       </div>
     );
@@ -49,7 +49,7 @@ export function WorkshopTabs({ tabs = TABS }) {
         'flex-1',
         'flex-col',
         'gap-2',
-        'px-3',
+        'px-2',
         'py-2',
       )}
     >

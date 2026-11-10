@@ -4,21 +4,24 @@
  *
  * - `about`: the plugin's version and branch;
  * - `subject`: what the pane is about;
- * - `repos`: the git repositories in the subject's folder;
- * - `selected`: the root of the selected repository;
- * - `project`: the shellops project of the selected repository.
+ * - `repos`: the git repositories in the subject's folder, each with its
+ *   worktrees;
+ * - `repo`: the root of the selected repository;
+ * - `selected`: the root of the checkout the pane reads, the worktree
+ *   picked for the selected repository or else its main worktree;
+ * - `project`: the shellops project of that checkout.
  *
  * `about`, `repos` and `project` are remote data, as remote.js
  * describes: loading, failure or success. `retry` asks for one of them
  * again.
  */
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { client, connect } from '../client/index.js';
-import { dataOr, LOADING, remoteOf } from '../remote.js';
-
-/** How many times each piece has been asked for again, before anyone has. */
-const NOT_RETRIED = Object.freeze({ about: 0, repos: 0, project: 0 });
+import { createContext, useContext, useMemo } from 'react';
+import { connect } from '../client/index.js';
+import { useAbout } from './useAbout.js';
+import { useCheckout } from './useCheckout.js';
+import { useProject } from './useProject.js';
+import { useRetry } from './useRetry.js';
 
 /** The shared state; null outside a WorkshopProvider. */
 const WorkshopContext = createContext(null);
@@ -26,14 +29,10 @@ const WorkshopContext = createContext(null);
 /**
  * Provides the pane's shared state to its children.
  *
- * It connects the client to `rest` before anything renders, then loads:
- *
- * - `about`, once;
- * - `repos`, each time the subject's folder changes;
- * - `project`, each time the selected repository changes.
- *
- * Each loads again when `retry` names it. When the folder has exactly one
- * repository, it is selected automatically.
+ * It connects the client to `rest` before anything renders, then holds one
+ * piece per concern, each in its own hook: `about`; the repositories and
+ * the selected checkout; that checkout's `project`; and `retry`, which asks
+ * for one of the three remote pieces again.
  *
  * @param props The component's props.
  * @param props.rest The backend call, taking a path under the plugin's API.
@@ -42,90 +41,28 @@ const WorkshopContext = createContext(null);
  */
 export function WorkshopProvider({ rest, subject, children }) {
   useMemo(() => connect(rest), [rest]);
-  const [retried, setRetried] = useState(NOT_RETRIED);
-  const [about, setAbout] = useState(LOADING);
-  const [repos, setRepos] = useState(LOADING);
-  const [picked, setPicked] = useState('');
-  const [project, setProject] = useState(LOADING);
-  const found = dataOr(repos, { repos: [] }).repos;
-  const selected = found.length === 1 ? found[0].root : picked;
-  useEffect(askAbout(setAbout), [rest, retried.about]);
-  useEffect(askRepos(subject.folder, setRepos, setPicked), [rest, subject.folder, retried.repos]);
-  useEffect(askProject(selected, setProject), [rest, selected, retried.project]);
-  const retry = useCallback((name) => setRetried((before) => ({ ...before, [name]: before[name] + 1 })), []);
-  const value = useMemo(
-    () => ({ about, subject, repos, selected, select: setPicked, project, retry }),
-    [about, subject, repos, selected, project, retry],
-  );
+  const [retried, retry] = useRetry();
+  const about = useAbout(rest, retried.about);
+  const checkout = useCheckout(rest, subject.folder, retried.repos);
+  const project = useProject(rest, checkout.selected, retried.project);
+  const value = useMemo(() => ({ about, subject, ...checkout, project, retry }), [about, subject, checkout, project, retry]);
 
   return <WorkshopContext.Provider value={value}>{children}</WorkshopContext.Provider>;
 }
 
 /**
- * Returns the pane's shared state: `{about, subject, repos, selected, select, project, retry}`.
+ * Returns the pane's shared state: `{about, subject, repos, repo, selected, select, selectWorktree, project, retry}`.
  *
  * - `about` is GET /about's answer, as remote data.
  * - `repos` is GET /repos's answer, as remote data.
- * - `selected` is the selected repository's root, or an empty string.
+ * - `repo` is the selected repository's root, or an empty string.
+ * - `selected` is the root of the checkout the pane reads, or an empty string.
  * - `select(root)` selects a repository.
- * - `project` is GET /project's answer for the selected repository, as
+ * - `selectWorktree(root)` picks one of the selected repository's worktrees.
+ * - `project` is GET /project's answer for the selected checkout, as
  *   remote data; loading while no repository is selected.
  * - `retry(name)` asks for `about`, `repos` or `project` again.
  */
 export function useWorkshop() {
   return useContext(WorkshopContext);
-}
-
-/**
- * Loads `about` from GET /about.
- *
- * @effect
- * @param setAbout Stores the answer.
- */
-function askAbout(setAbout) {
-  return () => {
-    let open = true;
-    setAbout(LOADING);
-    client.about().then((result) => open && setAbout(remoteOf(result)));
-    return () => { open = false; };
-  };
-}
-
-/**
- * Loads `repos` from GET /repos for the folder, and clears the selection.
- * An answer that arrives after the folder changes is dropped.
- *
- * @effect
- * @param folder The subject's folder.
- * @param setRepos Stores the answer.
- * @param setPicked Sets the selection.
- */
-function askRepos(folder, setRepos, setPicked) {
-  return () => {
-    let open = true;
-    setPicked('');
-    setRepos(LOADING);
-    client.repos(folder).then((result) => open && setRepos(remoteOf(result)));
-    return () => { open = false; };
-  };
-}
-
-/**
- * Loads `project` from GET /project for the selected repository, without
- * the toolchain check. It stays loading while no repository is selected.
- * An answer that arrives after the selection changes is dropped.
- *
- * @effect
- * @param selected The selected repository's root, or an empty string.
- * @param setProject Stores the answer.
- */
-function askProject(selected, setProject) {
-  return () => {
-    let open = true;
-    setProject(LOADING);
-    if (selected) {
-      client.project(selected, false).then((result) => open && setProject(remoteOf(result)));
-    }
-    return () => { open = false; };
-  };
 }

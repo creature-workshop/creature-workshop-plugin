@@ -1,9 +1,10 @@
 """The routes about the git repositories a folder holds, for the pane's header.
 
 GET /repos?path=<dir> answers with a workshop.models.repos.Repos, the
-repositories a session's folder holds, with `refresh_seconds`, the
-pane_refresh_seconds setting, so the pane reads their state again on that
-interval. GET /repos/status?root=<dir> answers with a RepoStatus, the state
+repositories a session's folder holds, sorted by root, each with its
+worktrees, so several worktrees of one repository are one entry. It carries
+`refresh_seconds`, the pane_refresh_seconds setting, so the pane reads their
+state again on that interval. GET /repos/status?root=<dir> answers with a RepoStatus, the state
 of one repository the way a shell prompt shows it, with `ok` false when git
 cannot read it.
 """
@@ -16,6 +17,7 @@ from fastapi import Query
 from workshop import api, settings
 from workshop.models.repos import Repo, Repos, RepoStatus
 from workshop.repos.discovery import repos_of
+from workshop.repos.grouping import repositories
 from workshop.repos.status import status_of
 
 
@@ -25,10 +27,12 @@ async def repos(path: str = Query(default="")):
 
   start = path or os.getcwd()
   inside, roots = await asyncio.to_thread(repos_of, start)
+  found = await asyncio.to_thread(repositories, roots)
   return Repos(
     start=start,
     inside=inside,
-    repos=[Repo(root=str(root), name=root.name) for root in roots],
+    checkout=str(roots[0]) if inside else "",
+    repos=[Repo(**each) for each in sorted(found, key=lambda each: each["root"])],
     refresh_seconds=settings.value("pane_refresh_seconds"),
   )
 

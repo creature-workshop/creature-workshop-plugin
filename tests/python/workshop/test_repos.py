@@ -1,6 +1,7 @@
-"""Covers workshop.repos.discovery and workshop.repos.status over real repositories made in a scratch folder:
-which repositories a directory holds, and the prompt-style state of one."""
+"""Covers workshop.repos.discovery, worktrees, grouping and status over real repositories made in a scratch folder:
+which repositories a directory holds, their worktrees, and the prompt-style state of one."""
 
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -8,6 +9,8 @@ from pathlib import Path
 
 from workshop.repos.status import status_of
 from workshop.repos.discovery import repos_of
+from workshop.repos.grouping import repositories
+from workshop.repos.worktrees import worktrees_of
 
 
 def git_command(root, *args):
@@ -81,6 +84,73 @@ class ReposOf(Scratch):
     main = repo(self.root / "main")
     git(main, "worktree", "add", "-q", str(self.root / "linked"))
     self.assertEqual(repos_of(self.root), (False, [self.root / "linked", main]))
+
+
+class WorktreesOf(Scratch):
+  def test_a_repository_alone_has_its_main_worktree(self):
+    demo = repo(self.root / "demo")
+    [main] = worktrees_of(demo)
+    self.assertEqual(
+      {key: main[key] for key in ("root", "name", "branch", "main", "locked")},
+      {"root": str(demo), "name": "demo", "branch": "main", "main": True, "locked": False},
+    )
+
+  def test_linked_worktrees_follow_the_main_one_from_any_of_them(self):
+    demo = repo(self.root / "demo")
+    git(demo, "worktree", "add", "-q", "-b", "fix/x", str(self.root / "demo-fix"))
+    names = [(each["name"], each["branch"], each["main"]) for each in worktrees_of(self.root / "demo-fix")]
+    self.assertEqual(names, [("demo", "main", True), ("demo-fix", "fix/x", False)])
+
+  def test_a_detached_worktree_has_no_branch_and_its_commit(self):
+    demo = repo(self.root / "demo")
+    git(demo, "worktree", "add", "-q", "--detach", str(self.root / "old"))
+    old = worktrees_of(demo)[1]
+    self.assertEqual((old["branch"], old["head"]), ("", git(demo, "rev-parse", "HEAD")))
+
+  def test_a_locked_worktree_says_so(self):
+    demo = repo(self.root / "demo")
+    git(demo, "worktree", "add", "-q", "-b", "kept", str(self.root / "kept"))
+    git(demo, "worktree", "lock", str(self.root / "kept"))
+    self.assertTrue(worktrees_of(demo)[1]["locked"])
+
+  def test_a_worktree_whose_folder_is_gone_is_left_out(self):
+    demo = repo(self.root / "demo")
+    git(demo, "worktree", "add", "-q", "-b", "gone", str(self.root / "gone"))
+    shutil.rmtree(self.root / "gone")
+    self.assertEqual([each["name"] for each in worktrees_of(demo)], ["demo"])
+
+  def test_a_bare_main_repository_is_left_out(self):
+    git(self.root, "init", "-q", "--bare", "demo.git")
+    git(self.root, "clone", "-q", str(self.root / "demo.git"), "seed")
+    git(self.root / "seed", "commit", "-q", "--allow-empty", "-m", "first")
+    git(self.root / "seed", "push", "-q", "origin", "HEAD:main")
+    git(self.root / "demo.git", "worktree", "add", "-q", str(self.root / "work"), "main")
+    self.assertEqual([(each["name"], each["main"]) for each in worktrees_of(self.root / "work")], [("work", False)])
+
+  def test_a_folder_git_cannot_read_has_none(self):
+    self.assertEqual(worktrees_of(self.root), [])
+
+
+class Repositories(Scratch):
+  def test_worktrees_of_one_repository_are_one_repository_rooted_at_the_main_one(self):
+    main = repo(self.root / "main")
+    git(main, "worktree", "add", "-q", "-b", "side", str(self.root / "linked"))
+    [found] = repositories([self.root / "linked", main])
+    self.assertEqual((found["root"], found["name"], len(found["worktrees"])), (str(main), "main", 2))
+
+  def test_separate_repositories_stay_separate(self):
+    a = repo(self.root / "a")
+    b = repo(self.root / "b")
+    self.assertEqual([each["name"] for each in repositories([a, b])], ["a", "b"])
+
+  def test_a_bare_repository_is_named_without_its_git_suffix_and_rooted_at_a_linked_worktree(self):
+    git(self.root, "init", "-q", "--bare", "demo.git")
+    git(self.root, "clone", "-q", str(self.root / "demo.git"), "seed")
+    git(self.root / "seed", "commit", "-q", "--allow-empty", "-m", "first")
+    git(self.root / "seed", "push", "-q", "origin", "HEAD:main")
+    git(self.root / "demo.git", "worktree", "add", "-q", str(self.root / "work"), "main")
+    [found] = repositories([self.root / "work"])
+    self.assertEqual((found["root"], found["name"]), (str(self.root / "work"), "demo"))
 
 
 class StatusOf(Scratch):
