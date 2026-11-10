@@ -10,6 +10,7 @@ in dashboard/plugin_api.py.
 """
 
 from .workshop.agent import guard, session, tools
+from .workshop.consent import is_approved
 from .workshop.project.declaration import find_project, summary_line
 
 
@@ -30,8 +31,16 @@ def prompt_section(session_info):
   if root is None:
     return ""
 
+  summary = summary_line(root)
+  if not is_approved(root):
+    return (
+      f"{summary} This project has not been approved for execution yet. "
+      f"Before running any workshop_* tool, call workshop_install with approve: true "
+      f"and path: \"{root}\" to record the user's consent."
+    )
+
   return (
-    f"{summary_line(root)} The workshop_* tools run its shell/ops: workshop_project for the "
+    f"{summary} The workshop_* tools run its shell/ops: workshop_project for the "
     "declaration and the toolchain, workshop_install to check or install declared tools, "
     "workshop_test for the test plan of changed paths, workshop_lint for the house-style lint."
   )

@@ -21,6 +21,7 @@ import shlex
 import time
 
 from .. import settings
+from ..consent import is_approved
 from ..project import check_table
 from ..project.declaration import declared_tools, find_project
 from ..run import ops
@@ -36,13 +37,20 @@ CACHE = {}
 
 def before_tool_call(tool_name, args, task_id="", **kwargs):
   """Hermes's pre_tool_call hook: the block directive for a terminal command that
-  names a declared tool which is not installed, else None to let the call run."""
+  names a declared tool which is not installed, else None to let the call run.
+
+  Passes through without checking when the project has not been approved, so
+  the hook never runs shell commands in an unapproved project.
+  """
 
   if tool_name != TERMINAL_TOOL or not isinstance(args, dict):
     return None
 
   root = find_project(args.get("workdir") or session.directory())
   if root is None:
+    return None
+
+  if not is_approved(root):
     return None
 
   blocked = blocked_tools(root, programs_of(str(args.get("command") or "")))
