@@ -1,7 +1,9 @@
 /**
  * @file The stories of the Project Info tab: an adopted repository over a
- * backend that keeps the manifest fields it is sent, as the real one writes
- * them to the manifest, and one whose saves always fail. The tests are in
+ * backend whose file store keeps each change it is sent, as the real one
+ * writes it to the manifest; one whose store refuses every change with a
+ * reason; and one where the manifest changed outside the pane before the
+ * first save. The tests are in
  * project-info.ct.jsx beside this file.
  */
 
@@ -26,14 +28,19 @@ const PROJECT = Object.freeze({
   name: 'Notes',
   summary: '',
   declaration: {},
-  manifest: { name: 'Notes', description: 'Notes, kept in git.', command_name: '', org: 'someone', repo: 'notes' },
   release: { latest: '0.1.0', stable: '0.1.0' },
   declared: [],
   refresh_seconds: 20,
 });
 
-/** The fields of GET /project's manifest by manifest key. */
-const MANIFEST_KEYS = { name: 'name', description: 'description', 'command-name': 'command_name', org: 'org', repo: 'repo' };
+/** The manifest as the file store first answers it; it sets no command name. */
+const MANIFEST = Object.freeze({ id: 'document', revision: 'r1', values: { name: 'Notes', description: 'Notes, kept in git.', org: 'someone', repo: 'notes' } });
+
+/** The manifest after someone changed its description outside the pane. */
+const EDITED_OUTSIDE = Object.freeze({ ...MANIFEST, revision: 'r2', values: { ...MANIFEST.values, description: 'Edited by an agent.' } });
+
+/** What the refusing store says to every change. */
+const REFUSAL = 'description cannot be cleared: its schema has no empty value for it.';
 
 /** The tabs over a backend that keeps every change it is sent. */
 export function Editable() {
@@ -44,6 +51,12 @@ export function Editable() {
 /** The tabs over a backend that refuses every change. */
 export function Refusing() {
   const [rest] = useState(() => refusingBackend());
+  return framed(rest);
+}
+
+/** The tabs over a backend whose manifest changed outside the pane after the pane read it. */
+export function ChangedOutside() {
+  const [rest] = useState(() => keepingBackend(EDITED_OUTSIDE));
   return framed(rest);
 }
 
@@ -60,25 +73,35 @@ function framed(rest) {
   );
 }
 
-/** A backend call that answers the reads and applies each POST /project/manifest to its own copy of the project. */
-function keepingBackend() {
-  let project = PROJECT;
+/**
+ * A backend call that answers the reads and applies each write at the
+ * current revision to its own copy of the manifest, answering a write at
+ * any other revision as stale. `stored` is the manifest as it is on disk,
+ * which differs from what the pane first reads when it changed outside the
+ * pane.
+ *
+ * @param stored The manifest on disk.
+ */
+function keepingBackend(stored = MANIFEST) {
+  let manifest = stored;
+  let reads = 0;
   return async (path, options) => {
     if (options?.method === 'POST') {
-      project = changed(project, options.body);
-      return project;
+      manifest = written(manifest, options.body);
+      return { data: { record: manifest } };
     }
-    return read(path, project);
+    reads += path.startsWith('/store/query') ? 1 : 0;
+    return read(path, reads === 1 ? MANIFEST : manifest);
   };
 }
 
-/** A backend call that answers the reads and rejects every POST. */
+/** A backend call that answers the reads and refuses every mutation with REFUSAL, as Desktop rejects a 400. */
 function refusingBackend() {
   return async (path, options) => {
     if (options?.method === 'POST') {
-      throw new Error('HTTP 400');
+      throw new Error(`400: ${JSON.stringify(failure(REFUSAL, { code: 'REFUSED', status: 400 }))}`);
     }
-    return read(path, PROJECT);
+    return read(path, MANIFEST);
   };
 }
 
@@ -86,19 +109,37 @@ function refusingBackend() {
  * The answer to a read.
  *
  * @param path The path asked for.
- * @param project The answer to GET /project.
+ * @param manifest The manifest record the file store answers.
  */
-function read(path, project) {
-  const answers = [['/about', { version: '0.1.0', branch: 'main' }], ['/repos/status', STATUS], ['/repos', REPOS], ['/project', project]];
+function read(path, manifest) {
+  const record = { data: { record: manifest } };
+  const answers = [['/about', { version: '0.1.0', branch: 'main' }], ['/repos/status', STATUS], ['/repos', REPOS], ['/project', PROJECT], ['/store/query', record]];
   return answers.find(([prefix]) => path.startsWith(prefix))[1];
 }
 
 /**
- * The project with one change applied, the way the backend reads it back.
+ * The manifest with one write applied, the way the file store reads it
+ * back; a write at another revision throws the STALE error as Desktop
+ * rejects a 409.
  *
- * @param project The project before.
- * @param change The body of POST /project/manifest: `{root, key, value}`.
+ * @param manifest The manifest before.
+ * @param body The body of POST /store/mutate.
  */
-function changed(project, change) {
-  return { ...project, manifest: { ...project.manifest, [MANIFEST_KEYS[change.key]]: change.value } };
+function written(manifest, body) {
+  if (body.revision !== manifest.revision) {
+    const stale = failure('The document changed since it was read.', { code: 'STALE', status: 409, record: manifest });
+    throw new Error(`409: ${JSON.stringify(stale)}`);
+  }
+  return { ...manifest, revision: `${manifest.revision}+`, values: { ...manifest.values, [body.key]: body.value } };
 }
+
+/**
+ * A failed answer as the store routes shape it.
+ *
+ * @param {string} message The reason.
+ * @param extensions The code, the status and anything else the error carries.
+ */
+function failure(message, extensions) {
+  return { data: null, errors: [{ message, extensions }] };
+}
+

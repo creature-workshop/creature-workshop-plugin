@@ -19,14 +19,15 @@ export const repos = api.register(
 export const repoStatus = api.register(
   'repoStatus',
   (rest, root) => rest(`/repos/status?root=${encodeURIComponent(root)}`),
-  (root) => ({ root, ok: false }),
+  (_failure, root) => ({ root, ok: false }),
 );
 
 /**
  * The answer to GET /repos when the call failed: no repositories.
  *
+ * @param _failure Why the call failed.
  * @param folder The folder that was asked about.
  */
-function noRepos(folder) {
+function noRepos(_failure, folder) {
   return { start: folder || '', inside: false, repos: [], refresh_seconds: DEFAULT_REFRESH_SECONDS };
 }

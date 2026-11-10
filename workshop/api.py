@@ -9,8 +9,8 @@ dashboard/plugin_api.py mounts one router without knowing which routes exist.
     async def about():
       ...
 
-    @api.register("/project/manifest", Project, method="POST")
-    async def change_manifest(change: ManifestChange):
+    @api.register("/store/mutate", Answer, method="POST")
+    async def mutate(body: MutateBody):
       ...
 """
 

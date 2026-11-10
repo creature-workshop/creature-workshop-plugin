@@ -5,7 +5,7 @@ set -eu
 
 USAGE="$(cat <<'HELP'
 Runs every check of the Python sources: the byte-compile of the plugin,
-the five house lints under shell/lint/, and the unit tests with the golden
+the six house lints under shell/lint/, and the unit tests with the golden
 cases under coverage, with the report at the end. Run it as
 `uv run shell/actions/hermes/check`, so that python3 is the project's own
 environment with the dev dependencies pyproject.toml lists; the
@@ -40,7 +40,7 @@ compile() {
 }
 
 : <<'FUN'
-Runs the five house lints over the source files shell/lint/sources lists.
+Runs the six house lints over the source files shell/lint/sources lists.
 FUN
 lint() {
   # shellcheck disable=SC2046  # one argument per file is what the lints take
@@ -53,6 +53,8 @@ lint() {
   python3 shell/lint/yaml_comments.py $(shell/lint/sources '*.yml' '*.yaml')
   # shellcheck disable=SC2046
   python3 shell/lint/declarations_first.py $(shell/lint/sources '*.py')
+  # shellcheck disable=SC2046
+  python3 shell/lint/max_params.py $(shell/lint/sources '*.py')
 }
 
 : <<'FUN'

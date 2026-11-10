@@ -1,6 +1,6 @@
 """Holds the convention that the backend's routes and the pane's client mirror
 each other: one module under workshop/routes/ for each module under
-desktop/src/client/ (api.js and index.js aside), with the same name, and the
+desktop/src/client/ (api.js, index.js and the unit tests aside), with the same name, and the
 paths each client module requests are exactly the paths the backend module
 of the same name registers. A route with no call, a call with no route, or a
 path one side spells differently fails here.
@@ -30,7 +30,7 @@ def route_topics():
 def client_topics():
   """The names of the modules under desktop/src/client/ that register calls."""
 
-  return {path.stem for path in CLIENT.glob("*.js") if path.stem not in CLIENT_PLUMBING}
+  return {path.stem for path in CLIENT.glob("*.js") if path.stem not in CLIENT_PLUMBING and not path.name.endswith(".test.js")}
 
 
 def registered_paths():

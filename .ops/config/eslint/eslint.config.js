@@ -68,6 +68,7 @@ export default [
       'react/prop-types': 'off',
       'house/declarations-first': 'error',
       'house/file-block-blank-line': 'error',
+      'house/max-params': 'error',
       'house/no-banner-comment': 'error',
       'house/no-comment-in-body': 'error',
       'house/no-test-id': 'error',

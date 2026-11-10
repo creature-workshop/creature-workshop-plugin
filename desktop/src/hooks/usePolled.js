@@ -36,7 +36,8 @@ export function usePolled(read, seconds, subject) {
 function poll(read, seconds, setAnswer) {
   return () => {
     let open = true;
-    const once = () => read().then((answer) => open && setAnswer(answer));
+    const keep = (answer) => open && setAnswer(answer);
+    const once = () => read().then(keep);
     once();
     const timer = setInterval(once, seconds * 1000);
     return () => {

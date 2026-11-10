@@ -59,7 +59,8 @@ export function promptWords(status) {
  * @param status The backend's answer to GET /repos/status.
  */
 function marksOf(status) {
-  return MARKS.filter(({ key }) => status[key] > 0).map((entry) => ({ ...entry, count: status[entry.key] }));
+  const present = MARKS.filter(({ key }) => status[key] > 0);
+  return present.map((entry) => ({ ...entry, count: status[entry.key] }));
 }
 
 /**

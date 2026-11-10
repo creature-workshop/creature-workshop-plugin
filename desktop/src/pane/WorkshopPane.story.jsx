@@ -37,6 +37,11 @@ const CLEAN = { root: CWD, ok: true, branch: 'main', detached: false, upstream: 
 /** GET /project outside any shellops project. */
 const NO_PROJECT = { found: false, start: CWD, refresh_seconds: 20 };
 
+/** GET /store/query for the manifest of the project, as the file store answers it. */
+const MANIFEST_RECORD = Object.freeze({
+  data: { record: { id: 'document', revision: 'r1', values: { name: 'Notes', description: 'Notes, kept in git.', 'command-name': 'notes', org: 'someone', repo: 'notes' } } },
+});
+
 /** What GET /about answers in the stories of a repository. */
 const ABOUT = { version: '0.1.0-dev.9', branch: 'main' };
 
@@ -89,17 +94,17 @@ export function NotAdopted() {
  * @param release The release record of its lock.
  */
 function projectAt(root, release) {
-  const manifest = { name: 'Notes', description: 'Notes, kept in git.', command_name: 'notes', org: 'someone', repo: 'notes' };
-  return { found: true, root, name: 'Notes', summary: '', declaration: {}, manifest, release, declared: [], refresh_seconds: 20 };
+  return { found: true, root, name: 'Notes', summary: '', declaration: {}, release, declared: [], refresh_seconds: 20 };
 }
 
 /**
- * A backend call over a directory that is one repository, answering GET /project with project.
+ * A backend call over a directory that is one repository, answering GET /project with project
+ * and GET /store/query with its manifest.
  *
  * @param project The answer to GET /project.
  */
 function repositoryBackend(project) {
-  const answers = [['/about', ABOUT], ['/repos/status', CLEAN], ['/repos', ONE_REPO], ['/project', project]];
+  const answers = [['/about', ABOUT], ['/repos/status', CLEAN], ['/repos', ONE_REPO], ['/project', project], ['/store/query', MANIFEST_RECORD]];
   return async (path) => answers.find(([prefix]) => path.startsWith(prefix))[1];
 }
 
