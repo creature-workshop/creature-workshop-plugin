@@ -15,20 +15,24 @@ import { Button, cn, Codicon } from '@hermes/plugin-sdk';
 const INSET_HOVER = Object.freeze({ backgroundClip: 'content-box', padding: '2px' });
 
 /**
- * A 24px ghost button holding a 0.75rem codicon, the size of Desktop's own
- * disclosure carets, labelled `label` for assistive technology, with its
- * hover background inset 2px and Desktop's focus ring. Any other props,
- * such as those a tooltip's trigger adds, go to the button.
+ * A 24px ghost button holding a codicon, 0.75rem unless `size` says
+ * otherwise (0.75rem is the size of Desktop's own disclosure carets),
+ * labelled `label` for assistive technology, with its hover background inset
+ * 2px and Desktop's focus ring. The button stays 24px whatever the icon's
+ * size, so a small icon keeps a comfortable target. Any other props, such as
+ * a class or those a tooltip's trigger adds, go to the button.
  *
  * @param props The component's props.
  * @param {string} props.label What the button does, for assistive technology.
  * @param {string} props.icon The codicon's name, such as `edit` or `info`.
+ * @param {string} [props.size] The codicon's size, as a CSS length.
  * @param {boolean} [props.error] Whether the icon reports an error, which draws it in the destructive color.
  */
-export function IconButton({ label, icon, error = false, ...rest }) {
+export function IconButton(props) {
+  const { label, icon, size = '0.75rem', error = false, ...rest } = props;
   return (
     <Button variant="ghost" size="icon-xs" aria-label={label} style={INSET_HOVER} {...rest}>
-      <Codicon name={icon} size="0.75rem" className={cn(error && 'text-destructive')} />
+      <Codicon name={icon} size={size} className={cn(error && 'text-destructive')} />
     </Button>
   );
 }

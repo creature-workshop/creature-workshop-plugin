@@ -27,7 +27,7 @@ export function FooterBar({ ref, children }) {
         'mt-auto',
         'border-t',
         'border-(--ui-stroke-tertiary)',
-        'px-3',
+        'px-2',
         'py-1.5',
         'text-[0.6875rem]',
         'text-(--ui-text-tertiary)',

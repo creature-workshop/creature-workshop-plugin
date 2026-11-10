@@ -29,7 +29,7 @@ export function PartFailed({ part, error, onRetry }) {
   const details = error?.stack || `${error?.name}: ${error?.message}`;
 
   return (
-    <div role="alert" className={cn('workshop-part-failed', 'flex', 'min-w-0', 'flex-col', 'gap-1', 'px-3', 'py-2')}>
+    <div role="alert" className={cn('workshop-part-failed', 'flex', 'min-w-0', 'flex-col', 'gap-1', 'px-2', 'py-2')}>
       <p className={cn('workshop-failure-what', 'font-semibold', 'text-destructive')}>{`${part} stopped working.`}</p>
       <p className={cn('workshop-failure-why')}>{WHY}</p>
       <p className={cn('workshop-failure-hint', 'text-(--ui-text-tertiary)')}>{HINT}</p>

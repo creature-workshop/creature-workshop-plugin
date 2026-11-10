@@ -5,7 +5,7 @@
 import { cn } from '@hermes/plugin-sdk';
 
 /** Says that no git repository was found where the session is. */
-export function NoRepoHeader() {
+export function NoRepositories() {
   return (
     <span
       className={cn(
