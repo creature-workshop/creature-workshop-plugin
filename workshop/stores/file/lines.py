@@ -8,7 +8,7 @@ that the schema lists before it, so a file keeps the schema's order.
 
 import json
 
-from workshop.project.declaration import load_yaml
+from workshop.project.yaml_loader import load_yaml
 
 
 def changed_lines(lines, change, order):

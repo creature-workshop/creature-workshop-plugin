@@ -4,7 +4,7 @@ and the defaults the code falls back to are the ones the manifest template decla
 import unittest
 from pathlib import Path
 
-from workshop.project.declaration import load_yaml
+from workshop.project.yaml_loader import load_yaml
 from workshop.settings import DEFAULTS, from_config, value
 
 TEMPLATE = Path(__file__).resolve().parents[3] / "shell" / "actions" / "hermes" / "plugin.yaml.template"

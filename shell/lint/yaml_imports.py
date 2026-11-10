@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Every YAML read goes through load_yaml in workshop/project/declaration.py.
+"""Only workshop/project/yaml_loader.py imports a YAML library.
 
   yaml_imports.py FILE...
 
 Prints one line per finding, `file:line: message`, and exits 1 when there is
-any. A Python file outside declaration.py must not import ruamel.yaml, yaml
-or hermes_yaml directly: it calls load_yaml, which picks the right library
-at runtime and keeps the fallback chain in one place.
+any. A finding is an import of yaml, ruamel.yaml or hermes_yaml in any other
+file. The plugin declares PyYAML and no other YAML library, so a second
+import would either use a library the plugin does not declare or read YAML
+with a different parser from the rest of the plugin. Every other file calls
+load_yaml.
 """
 
 import ast

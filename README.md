@@ -114,8 +114,9 @@ uv run shell/actions/hermes/check
 ```
 
 `.ops/config/uv/pyproject.toml` lists, as its dev group, what the checks
-need and the plugin does not: PyYAML to read the declaration outside Hermes,
-FastAPI for the backend, and coverage; `uv.lock` beside it pins them, and
+need: PyYAML, which `plugin.yaml` declares so that Hermes installs it with
+the plugin, FastAPI for the backend, which Hermes has already, and coverage;
+`uv.lock` beside it pins them, and
 `uv sync` installs them into `.ops/cache/venv/`. The project's `.envrc`
 names both paths to uv, so load it first, which direnv does. `check` runs
 the tests under coverage and ends with the report, file by file with the
@@ -215,9 +216,11 @@ The house rules for Python and YAML are the scripts under `shell/lint/`:
 two-space indentation in Python; one blank line, exactly one, after every
 multi-line statement that a statement follows; a doc block at the top of
 every Python file, with exactly one blank line after it; a module's constants before its first function, and no
-banner comment, since either is the sign that a file should split; and no
+banner comment, since either is the sign that a file should split; at most
+five parameters to a function; a YAML library imported in
+`workshop/project/yaml_loader.py` and nowhere else; and no
 comments in YAML, where what a comment would say belongs with the thing it
-describes. `shell/actions/hermes/check` runs the byte-compile, all five and
+describes. `shell/actions/hermes/check` runs the byte-compile, every lint and
 the tests, and the plugin/python job runs exactly that.
 
 The house rules for JavaScript are ESLint, configured in

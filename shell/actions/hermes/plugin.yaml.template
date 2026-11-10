@@ -8,6 +8,8 @@ license: MIT
 homepage: __HOMEPAGE__
 tags: [devops, tools, desktop]
 requires_hermes: ">=0.23.0"
+python_dependencies:
+  - "PyYAML>=6.0,<7"
 provides_tools:
   - workshop_project
   - workshop_install
