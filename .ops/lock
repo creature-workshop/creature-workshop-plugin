@@ -244,7 +244,7 @@
     "imports": {}
   },
   "release": {
-    "latest": "0.1.0-dev.15",
+    "latest": "0.1.0-dev.16",
     "stable": "0.0.0"
   }
 }
