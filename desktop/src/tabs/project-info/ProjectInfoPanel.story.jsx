@@ -33,7 +33,7 @@ const PROJECT = Object.freeze({
   refresh_seconds: 20,
 });
 
-/** The part of shellops' manifest schema the stories need: the five fields, and which are required. */
+/** The part of shellops' manifest schema the stories need: the fields Manifest shows, and which are required. */
 const SCHEMA = Object.freeze({
   required: ['name', 'description', 'org', 'repo'],
   properties: {

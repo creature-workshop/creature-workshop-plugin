@@ -16,15 +16,15 @@ const bindings = new Map();
  * @param {object} binding The binding.
  * @param {string} binding.id The binding's name, unique across the pane.
  * @param {string} binding.title The heading of its group of fields.
- * @param {{kind: string, source: string}} binding.collection The collection the record is in, less the project's root, which the inspector adds.
+ * @param {{kind: string, source: string}} binding.store The store the record is in, less the project's root, which the inspector adds.
  * @param {string} binding.record The record's id.
  * @param {object[]} binding.fields The keys to show, in order, each as boundField takes it.
  */
-export function register({ id, title, collection, record, fields }) {
+export function register({ id, title, store, record, fields }) {
   const frozen = Object.freeze({
     id,
     title,
-    collection: Object.freeze({ kind: collection.kind, source: collection.source }),
+    store: Object.freeze({ kind: store.kind, source: store.source }),
     record,
     fields: Object.freeze(fields.map(boundField)),
   });
@@ -40,13 +40,14 @@ export function register({ id, title, collection, record, fields }) {
  * @param {string} field.key The record's top-level key.
  * @param {string} field.component The name of the field component that draws it.
  * @param {string} [field.label] The field's name; the schema's title, or the key, when left out.
+ * @param {string} [field.hint] The field's help text; the schema's description when left out.
  * @param {boolean} [field.readOnly] Whether the field only shows its value; false when left out.
  */
-export function boundField({ key, component, label, readOnly = false }) {
+export function boundField({ key, component, label, hint, readOnly = false }) {
   if (typeof key !== 'string' || typeof component !== 'string') {
     throw new TypeError('A bound field needs a key and the name of its component.');
   }
-  return Object.freeze({ key, component, label, readOnly });
+  return Object.freeze({ key, component, label, hint, readOnly });
 }
 
 /**

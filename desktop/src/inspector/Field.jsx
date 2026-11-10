@@ -5,24 +5,28 @@
  */
 
 import { cn } from '@hermes/plugin-sdk';
+import { FieldError } from './FieldError.jsx';
+import { InfoTip } from './InfoTip.jsx';
 
 /**
  * Lays out one field as a group named `label`: a `<dt>` row holding the
- * label in semibold and `action` at the far right, underlined by the
- * theme's tertiary stroke, and a `<dd>` below holding `children`. Must sit
- * inside a `<dl>`.
+ * label in semibold, followed by an (i) icon that shows `hint` when there
+ * is one, and `action` at the far right, underlined by the theme's
+ * tertiary stroke; and a `<dd>` below holding `children`, with the message
+ * from the field's last save under them when there is one. Must sit inside
+ * a `<dl>`.
  *
  * @param props The component's props.
  * @param {string} props.label The field's name.
- * @param {string} [props.hint] Help text for the field, shown as the name row's tooltip.
+ * @param {string} [props.hint] Help text for the field, which the (i) icon shows.
  * @param [props.action] What goes at the far right of the name row, such as an edit button.
+ * @param {string} [props.error] The message from the field's last save, or empty.
  * @param props.children The field's value.
  */
-export function Field({ label, hint = '', action = null, children }) {
+export function Field({ label, hint = '', action = null, error = '', children }) {
   return (
     <div role="group" aria-label={label} className={cn('workshop-field', 'flex', 'flex-col', 'gap-1')}>
       <dt
-        title={hint || undefined}
         className={cn(
           'workshop-field-name',
           'flex',
@@ -36,10 +40,16 @@ export function Field({ label, hint = '', action = null, children }) {
           'text-(--ui-text-tertiary)',
         )}
       >
-        {label}
+        <span className={cn('workshop-field-label', 'flex', 'items-center', 'gap-1')}>
+          {label}
+          {hint && <InfoTip label={label} hint={hint} />}
+        </span>
         {action}
       </dt>
-      <dd className={cn('workshop-field-value', 'min-w-0')}>{children}</dd>
+      <dd className={cn('workshop-field-value', 'flex', 'min-w-0', 'flex-col', 'gap-1')}>
+        {children}
+        <FieldError message={error} />
+      </dd>
     </div>
   );
 }

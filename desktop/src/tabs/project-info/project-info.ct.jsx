@@ -80,6 +80,24 @@ test('an unset field reads Not set and can be filled in', async ({ mount }) => {
   await expect(valueOf(component, 'Command')).toHaveText('notes');
 });
 
+test('the (i) after a field name shows its description', async ({ mount, page }) => {
+  const component = await mount(<Editable />);
+
+  await component.getByRole('button', { name: 'About Name' }).hover();
+
+  await expect(page.getByRole('tooltip')).toHaveText('Human-readable project name.');
+  await expect(component.getByRole('button', { name: 'About Organization' })).toHaveCount(0);
+});
+
+test('the read-only releases have an (i) too', async ({ mount, page }) => {
+  const component = await mount(<Editable />);
+
+  await component.getByRole('button', { name: 'About Stable' }).hover();
+
+  await expect(page.getByRole('tooltip')).toContainText('not a prerelease');
+  await expect(component.getByRole('button', { name: 'About Latest' })).toBeVisible();
+});
+
 test('a save the store refuses keeps the editor open and says why', async ({ mount }) => {
   const component = await mount(<Refusing />);
 
@@ -107,7 +125,13 @@ test('the editable manifest fields sit under Manifest, and the read-only release
 
   const manifest = component.getByRole('region', { name: 'Manifest' });
   await expect(manifest.getByRole('heading', { name: 'Manifest' })).toBeVisible();
-  await expect(manifest.getByRole('term')).toHaveText(['Name', 'Description', 'Command', 'Organization', 'Repository']);
+  await expect(manifest.getByRole('term')).toHaveText([
+    'Name',
+    'Description',
+    'Command',
+    'Organization',
+    'Repository',
+  ]);
   const versions = component.getByRole('region', { name: 'Versions' });
   await expect(versions.getByRole('term')).toHaveText(['Latest', 'Stable']);
   await expect(versions.getByRole('button', { name: /^Edit/ })).toHaveCount(0);

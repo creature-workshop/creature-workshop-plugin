@@ -16,15 +16,47 @@ export function definitionOf(schema, key) {
 }
 
 /**
- * The types a definition allows; empty when it names none, which allows any.
+ * The types a definition allows, including those of each alternative in
+ * its `anyOf` or `oneOf`; empty when it, or any alternative, names none,
+ * which allows any.
  *
  * @param definition The key's definition.
  *
  * @returns {string[]} The types.
  */
 export function typesOf(definition) {
+  const alternatives = definition?.anyOf ?? definition?.oneOf;
+  if (alternatives) {
+    return alternativeTypes(alternatives);
+  }
   const declared = definition?.type ?? [];
   return Array.isArray(declared) ? declared : [declared];
+}
+
+/**
+ * The types a list of alternatives allows together; empty when any of them
+ * allows any.
+ *
+ * @param {object[]} alternatives The alternatives.
+ *
+ * @returns {string[]} The types.
+ */
+function alternativeTypes(alternatives) {
+  const each = alternatives.map(typesOf);
+  return each.some((types) => types.length === 0) ? [] : [...new Set(each.flat())];
+}
+
+/**
+ * The string options a definition lists in its `enum`, or in the `enum` of
+ * the first of its alternatives that has one; empty when there are none.
+ *
+ * @param definition The key's definition.
+ *
+ * @returns {string[]} The options, in order.
+ */
+export function optionsOf(definition) {
+  const listed = definition?.enum ?? (definition?.anyOf ?? definition?.oneOf ?? []).find((branch) => branch.enum)?.enum ?? [];
+  return listed.filter((option) => typeof option === 'string');
 }
 
 /**

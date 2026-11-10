@@ -16,14 +16,14 @@ const components = new Map();
  *
  * @param {object} component The component.
  * @param {string} component.id The name a binding uses for it.
- * @param {object} component.stores The type of value it saves, as JSON Schema, such as `{type: 'string'}`.
+ * @param {object} component.stores The type of value it saves, as JSON Schema, such as `{type: 'string'}`; a list of types when it saves several.
  * @param {(props: object) => unknown} component.Component The React component that draws it; it receives the props that fieldProps builds.
  *
  * @returns {Readonly<{id: string, stores: object, Component: (props: object) => unknown}>} The registered component.
  */
 export function register({ id, stores, Component }) {
   check(typeof id === 'string' && id !== '', 'A field component needs a name.');
-  check(typeof stores?.type === 'string', `The field component ${id} needs the type of value it saves.`);
+  check([stores?.type].flat().every((type) => typeof type === 'string') && stores?.type !== undefined, `The field component ${id} needs the type of value it saves.`);
   check(typeof Component === 'function', `The field component ${id} needs a React component.`);
   const frozen = Object.freeze({ id, stores: Object.freeze({ ...stores }), Component });
   components.set(id, frozen);

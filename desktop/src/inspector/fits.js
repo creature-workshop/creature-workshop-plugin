@@ -10,7 +10,8 @@ import { typesOf } from './schema.js';
 
 /**
  * Null when the component can save to the key, or the reason it cannot:
- * the component saves a type the key does not accept.
+ * the component saves a type the key does not accept. A component may save
+ * several types, and the key must accept each of them.
  *
  * @param {object} component The component, as register in components.js returns it.
  * @param {string} key The key.
@@ -20,10 +21,23 @@ import { typesOf } from './schema.js';
  */
 export function misfit(component, key, definition) {
   const allowed = typesOf(definition).filter((type) => type !== 'null');
-  if (allowed.length === 0 || allowed.includes(component.stores.type)) {
+  const saved = [component.stores.type].flat();
+  if (allowed.length === 0 || saved.every((type) => accepts(allowed, type))) {
     return null;
   }
-  return `${component.id} stores ${article(component.stores.type)}, but ${key} is ${allowed.map(article).join(' or ')}.`;
+  return `${component.id} stores ${saved.map(article).join(' or ')}, but ${key} is ${allowed.map(article).join(' or ')}.`;
+}
+
+/**
+ * Whether a key that allows `allowed` accepts a value of `type`. A key that
+ * allows only integers accepts a component that saves numbers, since that
+ * component reads the key's definition and saves whole numbers to it.
+ *
+ * @param {string[]} allowed The types the key allows.
+ * @param {string} type The type the component saves.
+ */
+function accepts(allowed, type) {
+  return allowed.includes(type) || (type === 'number' && allowed.includes('integer'));
 }
 
 /**
