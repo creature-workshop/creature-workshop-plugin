@@ -2,12 +2,13 @@
  * @file Editing the Project Info fields: the pencil opens a field with its
  * value, Enter or Save keeps the change, Escape or Cancel drops it, a
  * required field cannot be emptied, an unset field reads Not set and can be
- * filled in, and a save the backend refuses keeps the editor open with the
- * reason. The tests mount the stories in ProjectInfoPanel.story.jsx.
+ * filled in, a save the store refuses keeps the editor open with the store's
+ * reason, and a save over a change made outside the pane says so and shows
+ * the current value. The tests mount the stories in ProjectInfoPanel.story.jsx.
  */
 
 import { test, expect } from '@playwright/experimental-ct-react';
-import { Editable, Refusing } from './ProjectInfoPanel.story.jsx';
+import { ChangedOutside, Editable, Refusing } from './ProjectInfoPanel.story.jsx';
 
 /**
  * The value shown under a field's name.
@@ -79,14 +80,14 @@ test('an unset field reads Not set and can be filled in', async ({ mount }) => {
   await expect(valueOf(component, 'Command')).toHaveText('notes');
 });
 
-test('a save the backend refuses keeps the editor open and says so', async ({ mount }) => {
+test('a save the store refuses keeps the editor open and says why', async ({ mount }) => {
   const component = await mount(<Refusing />);
 
   await component.getByRole('button', { name: 'Edit Name' }).click();
   await component.getByRole('textbox', { name: 'Name' }).fill('Field notes');
   await component.getByRole('button', { name: 'Save' }).click();
 
-  await expect(component.getByRole('alert')).toHaveText('The change could not be saved.');
+  await expect(component.getByRole('alert')).toHaveText('description cannot be cleared: its schema has no empty value for it.');
   await expect(component.getByRole('textbox', { name: 'Name' })).toHaveValue('Field notes');
 });
 
@@ -125,5 +126,22 @@ test('a group heading folds its fields away and unfolds them again', async ({ mo
 
   await heading.click();
   await expect(manifest.getByRole('term')).toHaveCount(5);
+});
+
+test('a save over a change made outside the pane says so, and saving again replaces it', async ({ mount }) => {
+  const component = await mount(<ChangedOutside />);
+
+  await component.getByRole('button', { name: 'Edit Description' }).click();
+  await component.getByRole('textbox', { name: 'Description' }).fill('Mine.');
+  await component.getByRole('button', { name: 'Save' }).click();
+  await expect(component.getByRole('alert')).toHaveText('This changed outside the pane. Cancel to see the current value, or save again to replace it.');
+
+  await component.getByRole('button', { name: 'Cancel' }).click();
+  await expect(valueOf(component, 'Description')).toHaveText('Edited by an agent.');
+
+  await component.getByRole('button', { name: 'Edit Description' }).click();
+  await component.getByRole('textbox', { name: 'Description' }).fill('Mine.');
+  await component.getByRole('button', { name: 'Save' }).click();
+  await expect(valueOf(component, 'Description')).toHaveText('Mine.');
 });
 

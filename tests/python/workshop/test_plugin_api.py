@@ -15,9 +15,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fastapi import HTTPException
-
-from workshop.models.project import ManifestChange, NoProject, Project
+from workshop.models.project import NoProject, Project
 
 HERE = Path(__file__).parent
 BACKEND = HERE.parents[2] / "dashboard" / "plugin_api.py"
@@ -44,7 +42,7 @@ def answer_for(path, check="1"):
 class Mounting(unittest.TestCase):
   def test_the_router_carries_every_route_the_pane_reads(self):
     paths = {route.path for route in load_backend().router.routes}
-    self.assertEqual(paths, {"/about", "/project", "/project/manifest", "/repos", "/repos/status"})
+    self.assertEqual(paths, {"/about", "/project", "/repos", "/repos/status", "/store/introspect", "/store/mutate", "/store/query"})
 
 
 class InsideAProject(unittest.TestCase):
@@ -72,47 +70,7 @@ class InsideAProject(unittest.TestCase):
 
   def test_the_answer_carries_every_field_the_pane_reads(self):
     fields = set(answer_for(self.root).model_dump())
-    self.assertEqual(fields, {"found", "root", "name", "summary", "declaration", "manifest", "release", "declared", "refresh_seconds", "toolchain"})
-
-  def test_the_manifest_fields_are_what_the_manifest_says_with_empty_fields_for_what_it_leaves_out(self):
-    fields = answer_for(self.root, check="0").manifest
-    self.assertEqual(fields.model_dump(), {"name": "Demo", "description": "", "command_name": "", "org": "creature-workshop", "repo": "demo"})
-
-
-class ChangingTheManifest(unittest.TestCase):
-  def setUp(self):
-    self.scratch = tempfile.mkdtemp()
-    self.root = Path(self.scratch) / "demo"
-    shutil.copytree(INSTALLED, self.root)
-
-  def tearDown(self):
-    shutil.rmtree(self.scratch)
-
-  def change(self, root, key, value):
-    """POST /project/manifest's answer for one change, once the backend is loaded."""
-
-    load_backend()
-    route = importlib.import_module("workshop.routes.project")
-    return asyncio.run(route.change_manifest(ManifestChange(root=str(root), key=key, value=value)))
-
-  def test_answers_the_project_as_it_reads_after_the_change(self):
-    answer = self.change(self.root, "description", "A demo project.")
-    self.assertEqual(answer.manifest.description, "A demo project.")
-    self.assertIsNone(answer.toolchain)
-
-  def test_a_change_the_manifest_cannot_take_answers_400_with_the_reason(self):
-    with self.assertRaises(HTTPException) as raised:
-      self.change(self.root, "org", "")
-
-    self.assertEqual(raised.exception.status_code, 400)
-    self.assertIn("requires", raised.exception.detail)
-
-  def test_a_folder_inside_a_project_is_not_its_root(self):
-    with self.assertRaises(HTTPException) as raised:
-      self.change(self.root / "shell", "name", "x")
-
-    self.assertEqual(raised.exception.status_code, 400)
-
+    self.assertEqual(fields, {"found", "root", "name", "summary", "declaration", "release", "declared", "refresh_seconds", "toolchain"})
 
 class OutsideAProject(unittest.TestCase):
   def test_answers_not_found_with_where_the_search_started(self):

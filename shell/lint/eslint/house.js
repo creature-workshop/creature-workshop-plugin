@@ -1,5 +1,5 @@
 /**
- * @file The ESLint plugin `house`: the ten rules of the house style that
+ * @file The ESLint plugin `house`: the eleven rules of the house style that
  * no published rule covers. eslint.config.js loads it and turns them on.
  */
 
@@ -7,6 +7,7 @@ import className from './className.js';
 import componentFileName from './componentFileName.js';
 import declarationsFirst from './declarationsFirst.js';
 import fileBlockBlankLine from './fileBlockBlankLine.js';
+import maxParams from './maxParams.js';
 import namedEffect from './namedEffect.js';
 import namedElement from './namedElement.js';
 import noBannerComment from './noBannerComment.js';
@@ -22,6 +23,7 @@ export default {
     'component-file-name': componentFileName,
     'declarations-first': declarationsFirst,
     'file-block-blank-line': fileBlockBlankLine,
+    'max-params': maxParams,
     'named-effect': namedEffect,
     'named-element': namedElement,
     'no-banner-comment': noBannerComment,

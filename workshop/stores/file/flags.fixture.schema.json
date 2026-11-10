@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Flags",
+  "description": "A config document the file store's tests write: a boolean with a default, a boolean that can be cleared, and a number.",
+  "type": "object",
+  "properties": {
+    "ship": { "type": "boolean", "default": true },
+    "override": { "type": ["boolean", "null"] },
+    "retries": { "type": "integer" }
+  }
+}

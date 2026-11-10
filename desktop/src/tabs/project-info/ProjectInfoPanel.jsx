@@ -1,11 +1,11 @@
 /**
  * @file The Project Info tab's panel: what the selected project's manifest
- * says it is, each field editable in place, and the releases its .ops/lock
- * records, which only the release job changes.
+ * says it is, each field editable in place through the file store, and the
+ * releases its .ops/lock records, which only the release job changes.
  */
 
 import { cn } from '@hermes/plugin-sdk';
-import { client } from '../../client/index.js';
+import { useRecord } from '../../hooks/useRecord.js';
 import { useWorkshop } from '../../workshop/WorkshopProvider.jsx';
 import { EditableField } from './EditableField.jsx';
 import { Field } from './Field.jsx';
@@ -14,38 +14,43 @@ import { FieldGroup } from './FieldGroup.jsx';
 /** What the panel shows for a release the lock does not record. */
 const NONE = 'None yet';
 
+/** The manifest as a record of the file store, less the project's root. */
+const MANIFEST = Object.freeze({ kind: 'file', source: 'config/manifest.yaml', id: 'document' });
+
 /**
- * The manifest fields the panel shows and edits, in order: the manifest
- * key, the label, how to read the value from GET /project's answer, and
- * whether the manifest requires it.
+ * The manifest keys the panel shows and edits, in order, with their labels
+ * and whether the manifest requires them.
  */
 const FIELDS = Object.freeze([
-  { key: 'name', label: 'Name', read: (project) => project.manifest?.name ?? project.name, required: true },
-  { key: 'description', label: 'Description', read: (project) => project.manifest?.description ?? '', required: true, multiline: true },
-  { key: 'command-name', label: 'Command', read: (project) => project.manifest?.command_name ?? '', required: false },
-  { key: 'org', label: 'Organization', read: (project) => project.manifest?.org ?? '', required: true },
-  { key: 'repo', label: 'Repository', read: (project) => project.manifest?.repo ?? '', required: true },
+  { key: 'name', label: 'Name', required: true },
+  { key: 'description', label: 'Description', required: true, multiline: true },
+  { key: 'command-name', label: 'Command', required: false },
+  { key: 'org', label: 'Organization', required: true },
+  { key: 'repo', label: 'Repository', required: true },
 ]);
 
 /**
  * Shows two groups: Manifest, the fields of .ops/config/manifest.yaml, each
- * with a pencil button to edit it; and Versions, the latest and stable
- * releases from .ops/lock, which are read-only. A release the lock does not record
- * shows None yet.
+ * with a pencil button to edit it, once the manifest is read (or why it
+ * could not be); and Versions, the latest and stable releases from
+ * .ops/lock, which are read-only. A release the lock does not record shows
+ * None yet.
  */
 export function ProjectInfoPanel() {
-  const { project, updateProject } = useWorkshop();
+  const { project } = useWorkshop();
+  const { record, failure, write } = useRecord({ ...MANIFEST, root: project.root });
 
   return (
     <div className={cn('workshop-project-info', 'flex', 'flex-col', 'gap-5')}>
       <FieldGroup title="Manifest">
-        {FIELDS.map((field) => (
+        {failure && <div role="alert" className={cn('text-destructive')}>{failure.message}</div>}
+        {record && FIELDS.map((field) => (
           <EditableField
             key={field.key}
             label={field.label}
-            value={field.read(project)}
+            value={textOf(record.values[field.key])}
             multiline={field.multiline}
-            onSave={(value) => save(project, field, value, updateProject)}
+            onSave={(value) => save(field, value, write)}
           />
         ))}
       </FieldGroup>
@@ -58,24 +63,28 @@ export function ProjectInfoPanel() {
 }
 
 /**
- * Saves one field through POST /project/manifest, and puts the answer in
- * the pane's shared state. Resolves to an error message, or null on success.
- * A required field left empty is refused here, without a call.
+ * A manifest value as the text a field shows: empty when it is untouched,
+ * cleared, or not a single value.
  *
- * @param project The answer to GET /project.
- * @param field The field, from FIELDS.
- * @param {string} value Its new value.
- * @param updateProject Replaces the project in the pane's shared state.
+ * @param value The value.
  */
-async function save(project, field, value, updateProject) {
+function textOf(value) {
+  return value === undefined || value === null || typeof value === 'object' ? '' : String(value);
+}
+
+/**
+ * Saves one field's new text as a set. A required field left empty is
+ * refused here, without a call. Resolves to what the field should say, or
+ * null on success.
+ *
+ * @param field The field, from FIELDS.
+ * @param {string} value Its new text.
+ * @param write Applies one change to the manifest.
+ */
+async function save(field, value, write) {
   const text = value.trim();
   if (field.required && !text) {
     return `${field.label} cannot be empty.`;
   }
-  const answer = await client.changeManifest(project.root, field.key, text);
-  if (answer.error) {
-    return answer.error;
-  }
-  updateProject(answer);
-  return null;
+  return write({ op: 'set', key: field.key, value: text });
 }

@@ -45,7 +45,7 @@ export function WorkshopProvider({ rest, subject, children }) {
   const selected = repos?.repos.length === 1 ? repos.repos[0].root : picked;
   useEffect(askProject(selected, setProject), [rest, selected]);
   const value = useMemo(
-    () => ({ about, subject, repos, selected, select: setPicked, project, updateProject: setProject }),
+    () => ({ about, subject, repos, selected, select: setPicked, project }),
     [about, subject, repos, selected, project],
   );
 
@@ -53,15 +53,13 @@ export function WorkshopProvider({ rest, subject, children }) {
 }
 
 /**
- * Returns the pane's shared state: `{about, subject, repos, selected, select, project, updateProject}`.
+ * Returns the pane's shared state: `{about, subject, repos, selected, select, project}`.
  *
  * - `repos` is the answer to GET /repos, or null while loading.
  * - `selected` is the selected repository's root, or an empty string.
  * - `select(root)` selects a repository.
  * - `project` is the answer to GET /project for the selected repository, or
  *   null while loading or when no repository is selected.
- * - `updateProject(answer)` replaces `project`, for a part of the pane that
- *   changed the project and got the new answer back.
  */
 export function useWorkshop() {
   return useContext(WorkshopContext);
