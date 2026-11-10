@@ -8,7 +8,7 @@
  * Workshop tabs, one folder each; wizard/,
  * the contract every wizard implementation fills and the one Wizard the
  * pane renders; and events.js, the names Hermes and the plugin agree on.
- * This is the source; shell/actions/hermes/build writes desktop/plugin.js
+ * This is the source; shell/actions/hermes/bundle writes desktop/plugin.js
  * from it, which is what Desktop loads.
  */
 

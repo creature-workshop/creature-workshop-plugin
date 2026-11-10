@@ -4,6 +4,16 @@ include:
   - component: $CI_SERVER_FQDN/ksoft/creatures/agents@0.20.0-dev.17
   - component: $CI_SERVER_FQDN/ksoft/creatures/shellops-base@0.20.0-dev.17
 
+stages:
+  - linting
+  - governance
+  - build
+  - validation
+  - auditing
+  - deploy
+  - publishing
+  - cleanup
+
 variables:
   GIT_DEPTH: "0"
   GIT_SUBMODULE_DEPTH: "1"
@@ -14,6 +24,19 @@ workflow:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
+plugin/build:
+  extends: [.shellops, .rules--check]
+  stage: build
+  needs: []
+  script:
+    - $SHELLOPS_DIR/cli/install esbuild
+    - . ./.envrc
+    - shell/actions/hermes/build
+  artifacts:
+    paths:
+      - build/
+    expire_in: 1 week
+
 plugin/python:
   extends: [.shellops, .rules--check]
   stage: validation
@@ -23,22 +46,6 @@ plugin/python:
     - . ./.envrc
     - uv sync --frozen
     - uv run shell/actions/hermes/check
-
-plugin/manifests:
-  extends: [.shellops, .rules--check]
-  stage: validation
-  needs: []
-  script:
-    - shell/actions/hermes/manifests
-
-plugin/desktop:
-  extends: [.shellops, .rules--check]
-  stage: validation
-  needs: []
-  script:
-    - $SHELLOPS_DIR/cli/install esbuild
-    - . ./.envrc
-    - shell/actions/hermes/build
 
 plugin/javascript:
   extends: [.rules--check]
@@ -53,9 +60,19 @@ plugin/javascript:
     - pnpm run test:unit
     - pnpm run test:pane
 
+plugin/catalog:
+  extends: [.shellops, .rules--check]
+  stage: validation
+  needs: [plugin/build]
+  script:
+    - $SHELLOPS_DIR/cli/install hermes
+    - . ./.envrc
+    - hermes plugins validate build
+
 plugin/deploy:
   extends: [.shellops]
-  stage: publishing
+  stage: deploy
+  needs: [plugin/build, plugin/catalog]
   rules:
     - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -63,13 +80,12 @@ plugin/deploy:
     GIT_DEPTH: "0"
     GIT_STRATEGY: clone
   script:
-    - $SHELLOPS_DIR/cli/install esbuild
     - . ./.envrc
     - $SHELLOPS_DIR/action git config Blizz blizz@kernelle-soft.com
     - $SHELLOPS_DIR/action git auth Blizz "$FORGE_ADMIN_TOKEN"
     - shell/actions/hermes/deploy
 
-plugin/catalog:
+plugin/catalog-pin:
   extends: [.shellops]
   stage: publishing
   needs: [plugin/deploy]

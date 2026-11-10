@@ -1,0 +1,6 @@
+/tests export-ignore
+**/fixtures export-ignore
+*.test.js export-ignore
+*.ct.jsx export-ignore
+*.story.jsx export-ignore
+*.fixture.* export-ignore

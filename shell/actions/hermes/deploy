@@ -5,53 +5,48 @@ set -eu
 
 import \
   "$SHELLOPS_DIR/lib/git/api.sh" \
-  "$SHELLOPS_DIR/lib/git/branches.sh"
+  "$SHELLOPS_DIR/lib/git/branches.sh" \
+  "$PROJ/shell/lib/built/api.sh"
 
 USAGE="$(cat <<'HELP'
-Builds the generated files in a scratch branch cut from the current commit and
-deploys them as one commit on top of it, on the built branch.
+Deploys a tree that shell/actions/hermes/build wrote, as one commit on top of
+the current commit, on the built branch.
 
-The tracked tree carries source only. This action runs the two generators,
-shell/actions/hermes/manifests and shell/actions/hermes/build, commits what
-they wrote (plugin.yaml, dashboard/manifest.json, desktop/plugin.js) on a
-scratch branch, and moves the built branch to that commit under a lease on
-the tip it had, which is what the Hermes catalog pins and what Hermes
-installs. The scratch branch is deleted once the push is through, and the
-checkout is left where it was. The plugin/deploy job runs this after each
-merge on main, pushing as the Blizz bot the way the release tag goes. The
-built branch names no rung of shellops' ladder and the release job never
-moves it; when promotion carries the build (OPS-1701), the job goes away.
+The Hermes catalog pins a plugin by the full hash of a commit, and Hermes
+installs that commit, so the built tree has to be a commit on the forge. This
+action records the directory as a commit whose parent is the source commit it
+was built from, and moves the built branch to it under a lease on the tip it
+had. It does not touch the checkout or the index.
 
-Usage: shell/actions/hermes/deploy [--branch <name>] [--no-push] [-h,--help]
+The plugin/deploy job runs this after each merge on main, once plugin/catalog
+has validated the same directory, pushing as the Blizz bot the way the release
+tag goes. The built branch names no rung of shellops' ladder and the release
+job never moves it; when promotion carries the build (OPS-1701), the job goes
+away.
 
+Usage: shell/actions/hermes/deploy [--from <dir>] [--branch <name>] [--no-push] [-h,--help]
+
+  --from <dir>     the built tree; build/ at the project root when left out
   --branch <name>  the branch to deploy to; built when left out
-  --no-push        build and commit, print the commit, and leave the scratch
-                   branch in place for a look
+  --no-push        make the commit and print it, without moving any branch
 HELP
 )"
 
+ARG_FROM=""
 ARG_BRANCH=built
 ARG_PUSH=true
 
 main() {
   parse_args "$@"
-  restore_lock
-  require_clean_tree
-  __main__start="$(git rev-parse HEAD)"
-  __main__scratch="scratch/build-$(git rev-parse --short HEAD)"
-
-  git checkout -q -b "$__main__scratch" "$__main__start"
-  generate
-  commit_generated "$__main__start"
-  __main__built="$(git rev-parse HEAD)"
-  printf 'built %s on top of %s\n' "$__main__built" "$__main__start"
+  __main__from="${ARG_FROM:-$PROJ/build}"
+  require_built_tree "$__main__from"
+  __main__source="$(git -C "$PROJ" rev-parse HEAD)"
+  __main__tree="$(write_tree "$__main__from")"
+  __main__built="$(commit_built "$__main__tree" "$__main__source")"
+  printf 'built %s on top of %s\n' "$__main__built" "$__main__source"
 
   if [ "$ARG_PUSH" = true ]; then
     deploy "$__main__built"
-    git checkout -q --detach "$__main__start"
-    git__branch_delete "$__main__scratch" >/dev/null
-  else
-    printf 'left on %s; no push\n' "$__main__scratch"
   fi
 }
 
@@ -59,6 +54,7 @@ parse_args() {
   while [ "$#" -gt 0 ]; do
     case "$1" in
       -h|--help) printf '%s\n' "$USAGE"; exit 0 ;;
+      --from) ARG_FROM="$2"; shift ;;
       --branch) ARG_BRANCH="$2"; shift ;;
       --no-push) ARG_PUSH=false ;;
       *) printf 'deploy: unknown argument %s\n' "$1" >&2; exit 2 ;;
@@ -68,45 +64,55 @@ parse_args() {
 }
 
 : <<'FUN'
-Puts .ops/lock back to the committed one. Every `ops install` run that is
-not a check records what it resolved in the lock, and the CI base runs one
-before this action, so the lock differs from the commit whenever a change
-to tools.yaml landed without the lock that goes with it. The lock is the
-release job's to commit, not the build's, so the build reads past it.
+Exits, saying what to run, when the directory $1 does not hold a built tree.
 FUN
-restore_lock() {
-  git -C "$PROJ" checkout -q -- .ops/lock
-}
-
-: <<'FUN'
-Exits when the tracked tree has uncommitted changes, since the build commit
-must carry the generated files alone. Names the changes, so a job log says
-which file was in the way.
-FUN
-require_clean_tree() {
-  if [ "$(git__worktree_clean "$PROJ")" != true ]; then
-    printf 'deploy: the tree has uncommitted or untracked changes; commit or discard them first:\n' >&2
-    git -C "$PROJ" status --porcelain --ignore-submodules=all >&2
-    exit 1
+require_built_tree() {
+  if [ -f "$1/plugin.yaml" ]; then
+    return 0
   fi
+  printf 'deploy: %s holds no built tree; run shell/actions/hermes/build first\n' "$1" >&2
+  exit 1
 }
 
 : <<'FUN'
-Writes every generated file from the source tree.
+Writes the directory $1 into the object store as a tree and prints the tree's
+hash. A throwaway index keeps the checkout's own index untouched. The source's
+.gitignore still applies inside the directory, so a cache that something wrote
+there after the build stays out; the generated files match it too, so they are
+added by force.
 FUN
-generate() {
-  "$PROJ/shell/actions/hermes/manifests"
-  "$PROJ/shell/actions/hermes/build"
+write_tree() {
+  __write_tree__index="$(mktemp -u)"
+  tree_git "$1" "$__write_tree__index" add -A -- "$1"
+  for __write_tree__file in $(built__generated); do
+    tree_git "$1" "$__write_tree__index" add -f -- "$1/$__write_tree__file"
+  done
+  tree_git "$1" "$__write_tree__index" write-tree
+  rm -f "$__write_tree__index"
 }
 
 : <<'FUN'
-Commits the generated files on top of $1, the source commit they come from.
-They are ignored in the tracked tree, so they are added by force.
+Runs git with the directory $1 as the work tree and the file $2 as the index,
+against this repository's object store, passing the rest of the arguments on.
 FUN
-commit_generated() {
-  git add -f plugin.yaml dashboard/manifest.json desktop/plugin.js
-  git commit -q -m "build: the generated files for $1" \
-    -m "plugin.yaml, dashboard/manifest.json and desktop/plugin.js, written by shell/actions/hermes/manifests and shell/actions/hermes/build from the source at $1. This commit is what the catalog pins."
+tree_git() {
+  __tree_git__dir="$1"
+  __tree_git__index="$2"
+  shift 2
+  GIT_INDEX_FILE="$__tree_git__index" git \
+    --git-dir="$(git -C "$PROJ" rev-parse --absolute-git-dir)" \
+    --work-tree="$__tree_git__dir" \
+    "$@"
+}
+
+: <<'FUN'
+Records the tree $1 as a commit whose parent is the source commit $2, and
+prints the commit's hash.
+FUN
+commit_built() {
+  git -C "$PROJ" commit-tree "$1" -p "$2" \
+    -m "build: the installed tree for $2" \
+    -m "Written by shell/actions/hermes/build from the source at $2: the generated plugin.yaml, dashboard/manifest.json and desktop/plugin.js, without the tests and their fixtures. This commit is what the catalog pins."
 }
 
 : <<'FUN'

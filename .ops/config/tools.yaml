@@ -3,6 +3,14 @@ system:
     version: 3.12.3
   uv:
     version: 0.11.19
+script:
+  hermes:
+    version: 2026.9.24
+    commit: f97608f178d1ffeca59860195ab7da295f7c8e5f
+    needs:
+      - curl
+      - ca-certificates
+      - git
 npm:
   esbuild:
     version: 0.28.2
