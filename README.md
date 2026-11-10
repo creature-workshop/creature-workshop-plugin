@@ -71,11 +71,15 @@ git submodule add https://gitlab.creature-workshop.com/ksoft/shellops.git shell/
   which Hermes writes to `~/.hermes/logs/`: successes at INFO in agent.log,
   failures at WARNING with their stderr in errors.log too, so `hermes logs`
   shows what the plugin ran. The pane writes a render error to the console.
+- A program the plugin starts, `shell/ops` or git, inherits PATH, HOME, the
+  user's name and shell, the locale, the terminal, the time zone and the XDG
+  directories from Hermes, and no other variable. A provider key or a token
+  in Hermes's environment does not reach it.
 - No network calls of the plugin's own, no telemetry, no credentials.
 
 ## Settings
 
-Both are set under Settings → Plugins in Hermes Desktop, or under
+They are set under Settings → Plugins in Hermes Desktop, or under
 `plugins.entries.creature-workshop.settings` in Hermes's configuration.
 
 - `ops_timeout_seconds` (default 120): how long one command may run before a
@@ -83,6 +87,9 @@ Both are set under Settings → Plugins in Hermes Desktop, or under
   `timeout_seconds` overrides it for that call.
 - `pane_refresh_seconds` (default 20): how often the pane re-runs
   `install --check`. A save takes effect at once; the pane reloads on it.
+- `ops_env_passthrough` (default empty): the names of more environment
+  variables for every program the plugin starts, for example `HTTPS_PROXY`
+  behind a proxy. The plugin passes the value Hermes has for each name.
 
 ## Development
 

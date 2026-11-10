@@ -11,6 +11,8 @@ import json
 import subprocess
 from pathlib import Path
 
+from ..run.environment import child_env
+
 ACTION = Path(__file__).resolve().parents[2] / "shell" / "actions" / "git" / "status"
 
 TIMEOUT_SECONDS = 10
@@ -25,7 +27,7 @@ def status_of(root):
   """
 
   try:
-    done = subprocess.run([str(ACTION), str(root)], capture_output=True, text=True, timeout=TIMEOUT_SECONDS)
+    done = subprocess.run([str(ACTION), str(root)], capture_output=True, text=True, timeout=TIMEOUT_SECONDS, env=child_env())
   except (OSError, subprocess.TimeoutExpired):
     return None
 

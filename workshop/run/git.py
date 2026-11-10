@@ -2,6 +2,8 @@
 
 import subprocess
 
+from .environment import child_env
+
 TIMEOUT_SECONDS = 10
 
 
@@ -12,7 +14,7 @@ def git(root, *args):
   """
 
   try:
-    done = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, timeout=TIMEOUT_SECONDS)
+    done = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, timeout=TIMEOUT_SECONDS, env=child_env())
   except (OSError, subprocess.TimeoutExpired):
     return ""
 
