@@ -11,6 +11,7 @@ plugin ran and what went wrong.
 """
 
 import logging
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -18,6 +19,8 @@ from pathlib import Path
 from .. import settings
 
 log = logging.getLogger("creature-workshop")
+
+_subprocess_env_builder = None
 
 
 def run(root, args, timeout_seconds=None):
@@ -68,7 +71,47 @@ def dispatch(root, command, timeout_seconds):
     capture_output=True,
     text=True,
     timeout=timeout_seconds,
+    env=child_env(),
   )
+
+
+def child_env():
+  """A subprocess environment with secrets and Hermes internals removed.
+
+  Uses Hermes's own build_subprocess_env() (the canonical factory from
+  tools.environments.local, established in PR #78033). Falls back to the
+  unmodified environment when running outside Hermes, where there are no
+  provider keys to scrub.
+  """
+
+  builder = _resolve_env_builder()
+  return builder()
+
+
+def _resolve_env_builder():
+  """The environment builder to use, resolved once and cached."""
+
+  global _subprocess_env_builder
+  if _subprocess_env_builder is not None:
+    return _subprocess_env_builder
+
+  try:
+    from tools.environments.local import build_subprocess_env
+
+    _subprocess_env_builder = build_subprocess_env
+    log.debug("Using Hermes build_subprocess_env for child environment")
+  except ImportError:
+    _subprocess_env_builder = _passthrough_env
+    log.debug("Hermes build_subprocess_env not available, passing environment through")
+
+  return _subprocess_env_builder
+
+
+def _passthrough_env():
+  """A copy of the current environment, for use outside Hermes where there
+  are no provider keys or Hermes internals to scrub."""
+
+  return dict(os.environ)
 
 
 class Failure:
