@@ -3,82 +3,105 @@ set -eu
 # shellcheck disable=SC1091  # the project's own .envrc, which sets PROJ and SHELLOPS_DIR
 . "$(dirname "$0")/../../../.envrc"
 
-import "$SHELLOPS_DIR/lib/node/api.sh"
+import \
+  "$SHELLOPS_DIR/lib/git/api.sh" \
+  "$PROJ/shell/lib/built/api.sh"
 
 USAGE="$(cat <<'HELP'
-Writes desktop/plugin.js, the file Hermes Desktop loads, from the JSX under
-desktop/src/.
+Builds the tree that Hermes installs, in a directory, from the current commit.
 
-esbuild bundles desktop/src/plugin.jsx into one readable ES module, with the
-JSX turned into React's runtime calls and the three modules Desktop provides
-left as imports: @hermes/plugin-sdk, react and react/jsx-runtime. The output
-is not tracked: the plugin/desktop job runs this to prove the source still
-builds, and shell/actions/hermes/deploy commits what it wrote on the built
-branch, which the catalog pins. esbuild comes from .ops/config/tools.yaml
-through ops install, and runs from its package home, because its bin is a
-native binary the npm channel's node shim cannot start.
+The tracked tree carries source only. This action runs the two generators,
+shell/actions/hermes/manifests and shell/actions/hermes/bundle, writes the
+current commit's tracked files into the output directory with git archive,
+and copies the generated files in beside them. git archive leaves out every
+path that .gitattributes marks export-ignore, which is the tests and their
+fixtures, so consumers get only what runs. The commit is read from git, not
+from the working tree, so the tree must be clean.
 
-With --watch, esbuild stays up and rewrites the output on every change under
-desktop/src/; Desktop reloads a user plugin's file when it changes, so that
-is the whole development loop.
+The plugin/build job runs this and keeps the directory as an artifact;
+plugin/catalog runs hermes plugins validate on it, and
+shell/actions/hermes/deploy commits it on the built branch.
 
-Usage: shell/actions/hermes/build [--watch] [-h,--help]
+Usage: shell/actions/hermes/build [--out <dir>] [-h,--help]
+
+  --out <dir>  the directory to write; build/ at the project root when left
+               out. It is emptied first.
 HELP
 )"
 
-ARG_WATCH=""
+ARG_OUT=""
 
 main() {
-  case "${1:-}" in
-    -h|--help)
-      printf '%s\n' "$USAGE"
-      return 0
-      ;;
-    --watch)
-      ARG_WATCH="--watch"
-      ;;
-  esac
-  __main__esbuild="$(esbuild_binary)"
-  require_esbuild "$__main__esbuild"
-  # shellcheck disable=SC2086  # ARG_WATCH is one flag or nothing
-  "$__main__esbuild" "$PROJ/desktop/src/plugin.jsx" $ARG_WATCH \
-    --bundle \
-    --format=esm \
-    --platform=browser \
-    --jsx=automatic \
-    --jsx-import-source=react \
-    --external:@hermes/plugin-sdk \
-    --external:react \
-    --external:react/jsx-runtime \
-    --banner:js="$(banner)" \
-    --outfile="$PROJ/desktop/plugin.js"
+  parse_args "$@"
+  __main__out="${ARG_OUT:-$PROJ/build}"
+  restore_lock
+  require_clean_tree
+  generate
+  archive_source "$__main__out"
+  copy_generated "$__main__out"
+  printf 'built %s into %s\n' "$(git -C "$PROJ" rev-parse HEAD)" "$__main__out"
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) printf '%s\n' "$USAGE"; exit 0 ;;
+      --out) ARG_OUT="$2"; shift ;;
+      *) printf 'build: unknown argument %s\n' "$1" >&2; exit 2 ;;
+    esac
+    shift
+  done
 }
 
 : <<'FUN'
-Prints the path of the esbuild binary inside the package home ops install
-keeps for it.
+Puts .ops/lock back to the committed one. Every `ops install` run that is
+not a check records what it resolved in the lock, and the CI base runs one
+before this action, so the lock differs from the commit whenever a change
+to tools.yaml landed without the lock that goes with it. The lock is the
+release job's to commit, not the build's, so the build reads past it.
 FUN
-esbuild_binary() {
-  printf '%s/esbuild/bin/esbuild\n' "$(node__package_modules esbuild)"
+restore_lock() {
+  git -C "$PROJ" checkout -q -- .ops/lock
 }
 
 : <<'FUN'
-Exits, saying what to run, when the esbuild binary $1 is not there.
+Exits when the tracked tree has uncommitted changes, since the source comes
+from the commit and the generated files from the working tree, and the two
+must agree. Names the changes, so a job log says which file was in the way.
 FUN
-require_esbuild() {
-  if [ -x "$1" ]; then
-    return 0
+require_clean_tree() {
+  if [ "$(git__worktree_clean "$PROJ")" != true ]; then
+    printf 'build: the tree has uncommitted or untracked changes; commit or discard them first:\n' >&2
+    git -C "$PROJ" status --porcelain --ignore-submodules=all >&2
+    exit 1
   fi
-  printf 'build: esbuild is not installed at %s; run shell/ops install esbuild\n' "$1" >&2
-  return 1
 }
 
 : <<'FUN'
-Prints the JSDoc file block the output opens with, which says where it comes
-from, since esbuild keeps none of the source's comments.
+Writes every generated file from the source tree.
 FUN
-banner() {
-  printf '/**\n * @file Creature Workshop in Hermes Desktop. Generated by shell/actions/hermes/build from desktop/src/; edit the source, not this file.\n */'
+generate() {
+  "$PROJ/shell/actions/hermes/manifests"
+  "$PROJ/shell/actions/hermes/bundle"
+}
+
+: <<'FUN'
+Empties the directory $1 and writes the current commit's tracked files into
+it, without the paths .gitattributes marks export-ignore.
+FUN
+archive_source() {
+  rm -rf "$1"
+  mkdir -p "$1"
+  git -C "$PROJ" archive --format=tar HEAD | tar -x -C "$1"
+}
+
+: <<'FUN'
+Copies each generated file into the directory $1, at the same path.
+FUN
+copy_generated() {
+  for __copy_generated__file in $(built__generated); do
+    cp "$PROJ/$__copy_generated__file" "$1/$__copy_generated__file"
+  done
 }
 
 main "$@"

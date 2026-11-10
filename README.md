@@ -125,28 +125,36 @@ The tracked tree carries source only. Three files are generated and ignored:
 `plugin.yaml` and `dashboard/manifest.json`, which
 `shell/actions/hermes/manifests` writes from the `.ops/` declaration and the
 lock, and `desktop/plugin.js`, the file Desktop loads, which
-`shell/actions/hermes/build` bundles with esbuild from the JSX under
+`shell/actions/hermes/bundle` bundles with esbuild from the JSX under
 `desktop/src/`; esbuild is declared on the npm channel in
 `.ops/config/tools.yaml`, and `shell/ops install esbuild` fetches it. Write
 them after a checkout and after an edit:
 
 ```bash
-shell/actions/hermes/manifests && shell/actions/hermes/build
+shell/actions/hermes/manifests && shell/actions/hermes/bundle
 ```
 
-While working on the pane, `shell/actions/hermes/build --watch` rewrites
+While working on the pane, `shell/actions/hermes/bundle --watch` rewrites
 the output on every change, and Desktop reloads it.
+
+`shell/actions/hermes/build` writes the tree Hermes installs into `build/`:
+the commit's tracked files, without the paths `.gitattributes` marks
+`export-ignore` (the tests and their fixtures), plus the three generated
+files. `hermes plugins validate build` runs the catalog's admission check on
+it; `shell/ops install hermes` fetches the Hermes that
+`.ops/config/tools.yaml` pins.
 
 The pipeline in `.ops/config/gitlab/ci.yml`, which the `.gitlab-ci.yml` at
 the root includes, is the creatures catalog's `forge`,
 `linear` and `agents` components, which keep the merge request, its issues
 and its hat label in step, plus one job per action under
-`shell/actions/hermes/`: `plugin/python` runs `check`, `plugin/manifests`
-and `plugin/desktop` prove the two generators still run, `plugin/javascript`
+`shell/actions/hermes/`: `plugin/build` runs `build` and keeps `build/`,
+`plugin/catalog` validates that tree with `hermes plugins validate`,
+`plugin/python` runs `check`, `plugin/javascript`
 runs ESLint, the tests of its two house rules and the browser tests,
-`plugin/deploy`, after each merge, builds the
-generated files in a scratch branch and deploys one commit on top of main's
-to the `built` branch, and `plugin/catalog` then moves the catalog's pin to
+`plugin/deploy`, after each merge and only once `plugin/catalog` has passed,
+deploys the built tree as one commit on top of main's
+to the `built` branch, and `plugin/catalog-pin` then moves the catalog's pin to
 that commit. That commit is what the Hermes catalog pins and what
 Hermes installs; main never holds the generated files.
 
@@ -154,7 +162,7 @@ The catalog entry follows: `shell/actions/hermes/catalog-pin` rewrites the
 `sha` and `version` of `plugin-catalog/creature-workshop.yaml` on the
 `catalog/creature-workshop` branch of the org's fork of hermes-agent and
 pushes it as the bot, so the pull request to NousResearch carries the new
-pin; the plugin/catalog job runs it after each deploy. Run it by hand with
+pin; the plugin/catalog-pin job runs it after each deploy. Run it by hand with
 `--sha` and `--version` to pin another commit, or `--no-push` to look first.
 
 The tools are golden-tested. A case is a directory under
