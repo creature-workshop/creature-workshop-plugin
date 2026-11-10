@@ -1,5 +1,5 @@
 /**
- * @file The layout of one Project Info field: its name on a row of its own,
+ * @file The layout of one inspector field: its name on a row of its own,
  * with an optional action at the far right, a thin line under that row, and
  * the value below.
  */
@@ -14,13 +14,15 @@ import { cn } from '@hermes/plugin-sdk';
  *
  * @param props The component's props.
  * @param {string} props.label The field's name.
+ * @param {string} [props.hint] Help text for the field, shown as the name row's tooltip.
  * @param [props.action] What goes at the far right of the name row, such as an edit button.
  * @param props.children The field's value.
  */
-export function Field({ label, action = null, children }) {
+export function Field({ label, hint = '', action = null, children }) {
   return (
     <div role="group" aria-label={label} className={cn('workshop-field', 'flex', 'flex-col', 'gap-1')}>
       <dt
+        title={hint || undefined}
         className={cn(
           'workshop-field-name',
           'flex',

@@ -1,0 +1,36 @@
+/**
+ * @file Checks that a component can save to a key of a file someone else
+ * owns, such as the manifest: the type the component saves must be one the
+ * file's schema accepts for that key. When it is not, the field explains
+ * the problem instead of offering an editor; the inspector never swaps in
+ * another component.
+ */
+
+import { typesOf } from './schema.js';
+
+/**
+ * Null when the component can save to the key, or the reason it cannot:
+ * the component saves a type the key does not accept.
+ *
+ * @param {object} component The component, as register in components.js returns it.
+ * @param {string} key The key.
+ * @param {object} definition The key's definition in the file's schema.
+ *
+ * @returns {string | null} The reason, or null.
+ */
+export function misfit(component, key, definition) {
+  const allowed = typesOf(definition).filter((type) => type !== 'null');
+  if (allowed.length === 0 || allowed.includes(component.stores.type)) {
+    return null;
+  }
+  return `${component.id} stores ${article(component.stores.type)}, but ${key} is ${allowed.map(article).join(' or ')}.`;
+}
+
+/**
+ * A type's name with its article, for a message: "a string", "an integer".
+ *
+ * @param {string} type The JSON Schema type.
+ */
+function article(type) {
+  return /^[aeiou]/.test(type) ? `an ${type}` : `a ${type}`;
+}

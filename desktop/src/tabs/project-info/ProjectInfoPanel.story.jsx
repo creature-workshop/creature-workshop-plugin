@@ -33,6 +33,18 @@ const PROJECT = Object.freeze({
   refresh_seconds: 20,
 });
 
+/** The part of shellops' manifest schema the stories need: the five fields, and which are required. */
+const SCHEMA = Object.freeze({
+  required: ['name', 'description', 'org', 'repo'],
+  properties: {
+    name: { type: 'string', description: 'Human-readable project name.' },
+    description: { type: 'string', description: "One-line summary of the project's purpose." },
+    'command-name': { type: 'string', description: 'CLI binary name for projects that ship an executable.' },
+    org: { type: 'string' },
+    repo: { type: 'string' },
+  },
+});
+
 /** The manifest as the file store first answers it; it sets no command name. */
 const MANIFEST = Object.freeze({ id: 'document', revision: 'r1', values: { name: 'Notes', description: 'Notes, kept in git.', org: 'someone', repo: 'notes' } });
 
@@ -113,7 +125,14 @@ function refusingBackend() {
  */
 function read(path, manifest) {
   const record = { data: { record: manifest } };
-  const answers = [['/about', { version: '0.1.0', branch: 'main' }], ['/repos/status', STATUS], ['/repos', REPOS], ['/project', PROJECT], ['/store/query', record]];
+  const answers = [
+    ['/about', { version: '0.1.0', branch: 'main' }],
+    ['/repos/status', STATUS],
+    ['/repos', REPOS],
+    ['/project', PROJECT],
+    ['/store/query', record],
+    ['/store/introspect', { data: { schema: SCHEMA } }],
+  ];
   return answers.find(([prefix]) => path.startsWith(prefix))[1];
 }
 

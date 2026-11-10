@@ -1,5 +1,5 @@
 /**
- * @file The pencil button that opens a Project Info field's editor.
+ * @file The pencil button that opens a inspector field's editor.
  */
 
 import { Button, Codicon } from '@hermes/plugin-sdk';
