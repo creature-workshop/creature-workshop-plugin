@@ -11,6 +11,8 @@ release was.
 import json
 from pathlib import Path
 
+from .yaml_loader import load_yaml
+
 DECLARATION_FILES = ("manifest.yaml", "tools.yaml", "ecosystems.yaml", "imports.yaml", "lint.yaml")
 SEARCH_DEPTH = 3
 SKIPPED_DIRECTORY_NAMES = ("node_modules", "target", "dist", "build")
@@ -161,24 +163,6 @@ def version_of(entry):
     return str(entry.get("version", ""))
 
   return ""
-
-
-def load_yaml(text):
-  """The document in text, parsed by ruamel.yaml inside Hermes, which ships it, and by PyYAML elsewhere.
-
-  Raises ImportError when neither is installed, so a missing parser is an error the
-  tools report and never an empty declaration. Both are public packages: the
-  catalog asks plugins to keep off Hermes's own modules.
-  """
-
-  try:
-    from ruamel.yaml import YAML
-  except ImportError:
-    import yaml
-
-    return yaml.safe_load(text)
-
-  return YAML(typ="safe").load(text)
 
 
 def summary_line(root):
