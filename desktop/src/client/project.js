@@ -1,6 +1,7 @@
 /**
- * @file The client's call for the shellops project a folder belongs to:
- * GET /project.
+ * @file The client's calls for shellops projects: GET /project, the project
+ * a folder belongs to, and GET /project/setup, how far one checkout is set
+ * up.
  */
 
 import * as api from './api.js';
@@ -13,3 +14,6 @@ export const project = api.register(
   'project',
   (rest, folder, check = true) => rest(`/project?path=${encodeURIComponent(folder || '')}&check=${check ? '1' : '0'}`),
 );
+
+/** How far the checkout at a root is set up for shellops, as GET /project/setup answers. */
+export const setup = api.register('setup', (rest, root) => rest(`/project/setup?root=${encodeURIComponent(root)}`));

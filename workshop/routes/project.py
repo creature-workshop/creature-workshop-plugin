@@ -9,6 +9,10 @@ answer carries `refresh_seconds`, the pane_refresh_seconds setting, so the
 pane schedules that timer from the setting without reading configuration
 itself.
 
+GET /project/setup?root=<dir> answers with a workshop.models.setup.Setup:
+how far the checkout at root itself is set up, read from its files without
+searching above or below it, so the pane can say what is missing there.
+
 The pane reads and changes the project's files, such as its manifest,
 through the /store routes.
 """
@@ -22,9 +26,11 @@ from pydantic import BaseModel
 from workshop import api, settings
 from workshop.consent import approve as approve_project, is_approved
 from workshop.models.project import DeclaredTool, NoProject, Project, Release
+from workshop.models.setup import Setup
 from workshop.models.toolchain import Toolchain
 from workshop.project import check_table
 from workshop.project.declaration import declaration, declared_tools, find_project, manifest, release, summary_line
+from workshop.project.setup import setup_state
 from workshop.run import ops
 
 
@@ -44,6 +50,13 @@ async def project(path: str = Query(default=""), check: str = Query(default="1")
     answer.toolchain = await asyncio.to_thread(toolchain, root)
 
   return answer
+
+
+@api.register("/project/setup", Setup)
+async def setup(root: str = Query()):
+  """How far the checkout at root is set up for shellops."""
+
+  return Setup(root=root, state=setup_state(root))
 
 
 def described(root, refresh_seconds):

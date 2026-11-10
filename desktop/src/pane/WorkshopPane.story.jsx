@@ -2,8 +2,9 @@
  * @file The stories of the Workshop pane: each named export is the pane in
  * one scenario, with the backend's answers it runs against built in, so a
  * test mounts a story and passes nothing but plain data. In OnMain and
- * OutsideGit the session's directory holds no repository; in Adopted and
- * NotAdopted it is one, with and without shellops. The header's own
+ * OutsideGit the session's directory holds no repository; in Adopted,
+ * NotAdopted and NotSetUp it is one: with shellops, without a workshop on
+ * its branch, and with a workshop this checkout has not set up. The header's own
  * scenarios are in header/Header.story.jsx. The pane's tests are in
  * pane.ct.jsx beside this file.
  */
@@ -109,9 +110,14 @@ export function FailingOnce({ path, kind }) {
   return framed(rest, DOCKED_WIDTH);
 }
 
-/** The pane over a repository with no shellops. */
+/** The pane over a repository whose branch has no workshop. */
 export function NotAdopted() {
-  return framed(repositoryBackend(NO_PROJECT), DOCKED_WIDTH);
+  return framed(repositoryBackend(NO_PROJECT, 'no-workshop'), DOCKED_WIDTH);
+}
+
+/** The pane over a checkout whose branch has a workshop that the checkout has not set up. */
+export function NotSetUp() {
+  return framed(repositoryBackend(NO_PROJECT, 'not-set-up'), DOCKED_WIDTH);
 }
 
 /**
@@ -125,13 +131,23 @@ function projectAt(root, release) {
 }
 
 /**
- * A backend call over a directory that is one repository, answering GET /project with project
- * and GET /store/query and GET /store/introspect with its manifest.
+ * A backend call over a directory that is one repository, answering GET
+ * /project with project, GET /project/setup with setup, and GET
+ * /store/query and GET /store/introspect with its manifest.
  *
  * @param project The answer to GET /project.
+ * @param {'no-workshop' | 'not-set-up' | 'ready'} [setup] How far the checkout is set up.
  */
-function repositoryBackend(project) {
-  const answers = [['/about', ABOUT], ['/repos/status', CLEAN], ['/repos', ONE_REPO], ['/project', project], ['/store/query', MANIFEST_RECORD], ['/store/introspect', MANIFEST_SCHEMA]];
+function repositoryBackend(project, setup = 'ready') {
+  const answers = [
+    ['/about', ABOUT],
+    ['/repos/status', CLEAN],
+    ['/repos', ONE_REPO],
+    ['/project/setup', { root: CWD, state: setup }],
+    ['/project', project],
+    ['/store/query', MANIFEST_RECORD],
+    ['/store/introspect', MANIFEST_SCHEMA],
+  ];
   return async (path) => answers.find(([prefix]) => path.startsWith(prefix))[1];
 }
 

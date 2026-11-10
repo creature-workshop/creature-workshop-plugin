@@ -10,6 +10,7 @@ import { cn, Tabs } from '@hermes/plugin-sdk';
 import { useState } from 'react';
 import { TABS } from '../../tabs/index.js';
 import { FailureNotice } from '../../failures/FailureNotice.jsx';
+import { folderName } from '../../repos/folderName.js';
 import { useWorkshop } from '../../workshop/WorkshopProvider.jsx';
 import { TabPanel } from './TabPanel.jsx';
 import { TabStrip } from './TabStrip.jsx';
@@ -67,13 +68,4 @@ export function WorkshopTabs({ tabs = TABS }) {
  */
 function adopted(project, selected) {
   return Boolean(selected && project.state === 'success' && project.data.found && project.data.root === selected);
-}
-
-/**
- * The last part of a path, the name a repository goes by.
- *
- * @param {string} path The repository's root.
- */
-function folderName(path) {
-  return path.split('/').filter(Boolean).pop() ?? path;
 }

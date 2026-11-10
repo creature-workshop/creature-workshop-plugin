@@ -11,6 +11,7 @@ release was.
 import json
 from pathlib import Path
 
+from .setup import READY, setup_state
 from .yaml_loader import load_yaml
 
 DECLARATION_FILES = ("manifest.yaml", "tools.yaml", "ecosystems.yaml", "imports.yaml", "lint.yaml")
@@ -36,9 +37,9 @@ def find_project(start):
 
 
 def is_project(candidate):
-  """Whether a folder is the root of a shellops project: it has shell/ops and a .ops/config folder."""
+  """Whether a folder is the root of a shellops project: a checkout that is set up, with .ops/config and shell/ops."""
 
-  return (candidate / "shell" / "ops").is_file() and (candidate / ".ops" / "config").is_dir()
+  return setup_state(candidate) == READY
 
 
 def project_above(path):

@@ -9,9 +9,10 @@
  * - `repo`: the root of the selected repository;
  * - `selected`: the root of the checkout the pane reads, the worktree
  *   picked for the selected repository or else its main worktree;
- * - `project`: the shellops project of that checkout.
+ * - `project`: the shellops project of that checkout;
+ * - `setup`: how far that checkout is set up for shellops.
  *
- * `about`, `repos` and `project` are remote data, as remote.js
+ * `about`, `repos`, `project` and `setup` are remote data, as remote.js
  * describes: loading, failure or success. `retry` asks for one of them
  * again.
  */
@@ -22,6 +23,7 @@ import { useAbout } from './useAbout.js';
 import { useCheckout } from './useCheckout.js';
 import { useProject } from './useProject.js';
 import { useRetry } from './useRetry.js';
+import { useSetup } from './useSetup.js';
 
 /** The shared state; null outside a WorkshopProvider. */
 const WorkshopContext = createContext(null);
@@ -31,8 +33,8 @@ const WorkshopContext = createContext(null);
  *
  * It connects the client to `rest` before anything renders, then holds one
  * piece per concern, each in its own hook: `about`; the repositories and
- * the selected checkout; that checkout's `project`; and `retry`, which asks
- * for one of the three remote pieces again.
+ * the selected checkout; that checkout's `project` and `setup`; and
+ * `retry`, which asks for one of the four remote pieces again.
  *
  * @param props The component's props.
  * @param props.rest The backend call, taking a path under the plugin's API.
@@ -45,13 +47,14 @@ export function WorkshopProvider({ rest, subject, children }) {
   const about = useAbout(rest, retried.about);
   const checkout = useCheckout(rest, subject.folder, retried.repos);
   const project = useProject(rest, checkout.selected, retried.project);
-  const value = useMemo(() => ({ about, subject, ...checkout, project, retry }), [about, subject, checkout, project, retry]);
+  const setup = useSetup(rest, checkout.selected, retried.setup);
+  const value = useMemo(() => ({ about, subject, ...checkout, project, setup, retry }), [about, subject, checkout, project, setup, retry]);
 
   return <WorkshopContext.Provider value={value}>{children}</WorkshopContext.Provider>;
 }
 
 /**
- * Returns the pane's shared state: `{about, subject, repos, repo, selected, select, selectWorktree, project, retry}`.
+ * Returns the pane's shared state: `{about, subject, repos, repo, selected, select, selectWorktree, project, setup, retry}`.
  *
  * - `about` is GET /about's answer, as remote data.
  * - `repos` is GET /repos's answer, as remote data.
@@ -61,7 +64,9 @@ export function WorkshopProvider({ rest, subject, children }) {
  * - `selectWorktree(root)` picks one of the selected repository's worktrees.
  * - `project` is GET /project's answer for the selected checkout, as
  *   remote data; loading while no repository is selected.
- * - `retry(name)` asks for `about`, `repos` or `project` again.
+ * - `setup` is GET /project/setup's answer for the selected checkout, as
+ *   remote data; loading while no repository is selected.
+ * - `retry(name)` asks for `about`, `repos`, `project` or `setup` again.
  */
 export function useWorkshop() {
   return useContext(WorkshopContext);
