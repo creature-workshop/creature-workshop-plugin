@@ -141,15 +141,21 @@ the output on every change, and Desktop reloads it.
 the commit's tracked files, without the paths `.gitattributes` marks
 `export-ignore` (the tests and their fixtures), plus the three generated
 files. `hermes plugins validate build` runs the catalog's admission check on
-it; `shell/ops install hermes` fetches the Hermes that
-`.ops/config/tools.yaml` pins.
+it; `shell/ops install hermes` fetches the Hermes Agent that
+`.ops/config/tools.yaml` pins. On a workstation that runs the vendor
+installer. In CI it unpacks the copy that `shell/actions/hermes/mirror` keeps
+in the project's generic package registry, one tarball for each pin, so CI
+does not reach GitHub or the vendor's download hosts. To move the pin, change
+`version` and `commit` in `tools.yaml`; the first pipeline after that makes
+and uploads the new copy.
 
 The pipeline in `.ops/config/gitlab/ci.yml`, which the `.gitlab-ci.yml` at
 the root includes, is the creatures catalog's `forge`,
 `linear` and `agents` components, which keep the merge request, its issues
 and its hat label in step, plus one job per action under
 `shell/actions/hermes/`: `plugin/build` runs `build` and keeps `build/`,
-`plugin/catalog` validates that tree with `hermes plugins validate`,
+`plugin/hermes-mirror` uploads a copy of the pinned Hermes Agent when the registry
+has none, `plugin/catalog` validates that tree with `hermes plugins validate`,
 `plugin/python` runs `check`, `plugin/javascript`
 runs ESLint, the tests of its two house rules and the browser tests,
 `plugin/deploy`, after each merge and only once `plugin/catalog` has passed,

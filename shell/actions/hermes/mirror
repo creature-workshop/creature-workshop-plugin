@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+set -eu
+# shellcheck disable=SC1091  # the project's own .envrc, which sets PROJ and SHELLOPS_DIR
+. "$(dirname "$0")/../../../.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/self/config.sh" \
+  "$SHELLOPS_DIR/lib/structs/api.sh" \
+  "$PROJ/shell/lib/hermes/api.sh"
+
+USAGE="$(cat <<'HELP'
+Puts a copy of the Hermes Agent that .ops/config/tools.yaml pins in the GitLab
+generic package registry, unless the registry already holds one.
+
+The copy is made with the vendor installer in the Hermes tools home, packed
+without what running `hermes` does not need, checked by validating the tree
+that shell/actions/hermes/build wrote into build/ with it, and uploaded as one
+tarball. A copy is never replaced, so one that fails the check is never
+uploaded. The installed tree
+holds absolute paths, so this runs where the copy is used: the
+plugin/hermes-mirror job, with the same HERMES_TOOL_HOME as plugin/catalog.
+HERMES_MIRROR_URL names the registry and MIRROR_AUTH the header that
+authorises the upload; shell/lib/hermes/mirror.sh describes both.
+
+Usage: shell/actions/hermes/mirror [--check <dir>] [-h,--help]
+
+  --check <dir>  the built tree to validate with the copy; build/ at the
+                 project root when left out
+HELP
+)"
+
+ARG_CHECK=""
+
+main() {
+  parse_args "$@"
+  __main__check="${ARG_CHECK:-$PROJ/build}"
+  require_mirror
+  require_built_tree "$__main__check"
+  __main__version="$(pin version)"
+  __main__commit="$(pin commit)"
+
+  if @is_true "$(hermes__mirror__has "$__main__version")"; then
+    log "the mirror already holds hermes $__main__version"
+    return 0
+  fi
+
+  hermes__prepare "$__main__version" "$__main__commit"
+  __main__tarball="$(mktemp -d)/hermes-$__main__version.tar.gz"
+  hermes__mirror__pack "$__main__version" "$(hermes__home)" "$__main__tarball"
+  check_copy "$__main__version" "$__main__check"
+  hermes__mirror__upload "$__main__version" "$__main__tarball"
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) printf '%s\n' "$USAGE"; exit 0 ;;
+      --check) ARG_CHECK="$2"; shift ;;
+      *) printf 'mirror: unknown argument %s\n' "$1" >&2; exit 2 ;;
+    esac
+    shift
+  done
+}
+
+: <<'FUN'
+Exits, saying what to run, when the directory $1 does not hold a built tree.
+FUN
+require_built_tree() {
+  if [ -f "$1/plugin.yaml" ]; then
+    return 0
+  fi
+  printf 'mirror: %s holds no built tree; run shell/actions/hermes/build first\n' "$1" >&2
+  exit 1
+}
+
+: <<'FUN'
+Exits, saying what to set, when no mirror is configured.
+FUN
+require_mirror() {
+  if @is_true "$(hermes__mirror__configured)"; then
+    return 0
+  fi
+  printf 'mirror: HERMES_MIRROR_URL is not set; it names the registry to upload to\n' >&2
+  exit 1
+}
+
+: <<'FUN'
+Prints the field $1 of the hermes entry in .ops/config/tools.yaml.
+FUN
+pin() {
+  @get "$(self__config__load tools)" ".script.hermes.$1"
+}
+
+: <<'FUN'
+Exits when Hermes Agent version $1, as packed, cannot validate the built tree $2, so
+that a copy broken by the paths it leaves out is never uploaded.
+FUN
+check_copy() {
+  "$(hermes__bin_dir "$1")/hermes" plugins validate "$2"
+}
+
+main "$@"

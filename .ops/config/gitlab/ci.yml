@@ -60,10 +60,24 @@ plugin/javascript:
     - pnpm run test:unit
     - pnpm run test:pane
 
-plugin/catalog:
-  extends: [.shellops, .rules--check]
+.hermes:
+  variables:
+    HERMES_TOOL_HOME: /opt/hermes-agent
+    HERMES_MIRROR_URL: $CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/hermes
+    MIRROR_AUTH: "JOB-TOKEN: $CI_JOB_TOKEN"
+
+plugin/hermes-mirror:
+  extends: [.shellops, .rules--check, .hermes]
   stage: validation
   needs: [plugin/build]
+  script:
+    - . ./.envrc
+    - shell/actions/hermes/mirror
+
+plugin/catalog:
+  extends: [.shellops, .rules--check, .hermes]
+  stage: validation
+  needs: [plugin/build, plugin/hermes-mirror]
   script:
     - $SHELLOPS_DIR/cli/install hermes
     - . ./.envrc
