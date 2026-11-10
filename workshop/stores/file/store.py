@@ -6,7 +6,7 @@ the new text, and writes nothing unless the key reads back as the change
 says. The revision is the sha256 of the file's bytes.
 """
 
-from workshop.project.declaration import load_yaml
+from workshop.project.yaml_loader import load_yaml
 from workshop.stores.contract import Store
 from workshop.stores.file.checks import check_change
 from workshop.stores.file.lines import changed_lines

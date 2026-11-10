@@ -13,7 +13,7 @@ import unittest
 from pathlib import Path
 
 from tests.python.workshop.store_contract import StoreContract
-from workshop.project.declaration import load_yaml
+from workshop.project.yaml_loader import load_yaml
 from workshop.stores.contract import Change
 from workshop.stores.file.schema import schema_for
 from workshop.stores.file.store import FileStore

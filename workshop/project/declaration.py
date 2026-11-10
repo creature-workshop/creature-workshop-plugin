@@ -95,8 +95,6 @@ def manifest(root):
 
   try:
     loaded = load_yaml(text)
-  except ImportError:
-    raise
   except Exception:
     return {}
 
@@ -140,8 +138,6 @@ def declared_tools(root):
 
   try:
     loaded = load_yaml(text) or {}
-  except ImportError:
-    raise
   except Exception:
     return []
 
