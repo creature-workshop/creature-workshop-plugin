@@ -4,12 +4,12 @@
  * plugin this is and which checkout it came from, keeping the branch alone
  * when the pane is too narrow for both. Between them, when the selected
  * repository is a shellops project, sit the Workshop tabs with the Project
- * Info tab open. The tests mount the pane's stories
+ * Info tab open; when it is not set up, what it is missing. The tests mount the pane's stories
  * and read the pane by role and by text, never by a test id.
  */
 
 import { test, expect } from '@playwright/experimental-ct-react';
-import { Adopted, FailingOnce, NotAdopted, OnMain, OutsideGit } from './WorkshopPane.story.jsx';
+import { Adopted, FailingOnce, NotAdopted, NotSetUp, OnMain, OutsideGit } from './WorkshopPane.story.jsx';
 
 /**
  * What the footer shows: its text with the hidden measuring copy left out.
@@ -82,11 +82,37 @@ test('a release the lock does not record reads None yet', async ({ mount }) => {
   await expect(panel.getByRole('definition').filter({ hasText: 'None yet' })).toHaveCount(2);
 });
 
-test('a repository with no shellops has no tabs', async ({ mount }) => {
+test('a branch without a workshop says so in place of the tabs', async ({ mount }) => {
   const component = await mount(<NotAdopted />);
 
   await expect(component.getByRole('banner', { name: 'Project' })).toContainText('notes');
+  await expect(component.getByRole('status')).toContainText("notes doesn't have a workshop yet.");
+  await expect(component.getByRole('status')).toContainText('Its branch has no .ops/config');
   await expect(component.getByRole('tablist')).toHaveCount(0);
+});
+
+test('a checkout that has not set up its workshop says so, and names .ops/boot', async ({ mount }) => {
+  const component = await mount(<NotSetUp />);
+
+  await expect(component.getByRole('status')).toContainText("notes isn't set up yet.");
+  await expect(component.getByRole('status').getByText('.ops/boot', { exact: true })).toBeVisible();
+  await expect(component.getByRole('tablist')).toHaveCount(0);
+});
+
+test('a set-up checkout shows the tabs and no setup notice', async ({ mount }) => {
+  const component = await mount(<Adopted />);
+
+  await expect(component.getByRole('tablist')).toBeVisible();
+  await expect(component.getByText("isn't set up yet")).toHaveCount(0);
+});
+
+test('a failed read of the setup says so, and Try again reads it again', async ({ mount }) => {
+  const component = await mount(<FailingOnce path="/project/setup" kind="unreachable" />);
+
+  await expect(component.getByRole('alert')).toContainText("I couldn't tell whether notes is set up.");
+  await component.getByRole('button', { name: 'Try again' }).click();
+
+  await expect(component.getByRole('tablist')).toBeVisible();
 });
 
 test('a failed read of the repositories says what happened, why and what to try, and Try again reads them again', async ({ mount }) => {
