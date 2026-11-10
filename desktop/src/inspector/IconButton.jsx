@@ -3,7 +3,7 @@
  * the same size, padding and keyboard behaviour.
  */
 
-import { Button, Codicon } from '@hermes/plugin-sdk';
+import { Button, cn, Codicon } from '@hermes/plugin-sdk';
 
 /**
  * Paints the button's hover background on its content box only: 2px inside
@@ -23,11 +23,12 @@ const INSET_HOVER = Object.freeze({ backgroundClip: 'content-box', padding: '2px
  * @param props The component's props.
  * @param {string} props.label What the button does, for assistive technology.
  * @param {string} props.icon The codicon's name, such as `edit` or `info`.
+ * @param {boolean} [props.error] Whether the icon reports an error, which draws it in the destructive color.
  */
-export function IconButton({ label, icon, ...rest }) {
+export function IconButton({ label, icon, error = false, ...rest }) {
   return (
     <Button variant="ghost" size="icon-xs" aria-label={label} style={INSET_HOVER} {...rest}>
-      <Codicon name={icon} size="0.75rem" />
+      <Codicon name={icon} size="0.75rem" className={cn(error && 'text-destructive')} />
     </Button>
   );
 }

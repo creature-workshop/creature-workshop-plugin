@@ -7,13 +7,18 @@
  * - `repos`: the git repositories in the subject's folder;
  * - `selected`: the root of the selected repository;
  * - `project`: the shellops project of the selected repository.
+ *
+ * `about`, `repos` and `project` are remote data, as remote.js
+ * describes: loading, failure or success. `retry` asks for one of them
+ * again.
  */
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { client, connect } from '../client/index.js';
+import { dataOr, LOADING, remoteOf } from '../remote.js';
 
-/** What the footer shows before the backend has answered. */
-const UNKNOWN_ABOUT = { version: '', branch: '' };
+/** How many times each piece has been asked for again, before anyone has. */
+const NOT_RETRIED = Object.freeze({ about: 0, repos: 0, project: 0 });
 
 /** The shared state; null outside a WorkshopProvider. */
 const WorkshopContext = createContext(null);
@@ -27,7 +32,8 @@ const WorkshopContext = createContext(null);
  * - `repos`, each time the subject's folder changes;
  * - `project`, each time the selected repository changes.
  *
- * When the folder has exactly one repository, it is selected automatically.
+ * Each loads again when `retry` names it. When the folder has exactly one
+ * repository, it is selected automatically.
  *
  * @param props The component's props.
  * @param props.rest The backend call, taking a path under the plugin's API.
@@ -36,30 +42,35 @@ const WorkshopContext = createContext(null);
  */
 export function WorkshopProvider({ rest, subject, children }) {
   useMemo(() => connect(rest), [rest]);
-  const [about, setAbout] = useState(UNKNOWN_ABOUT);
-  const [repos, setRepos] = useState(null);
+  const [retried, setRetried] = useState(NOT_RETRIED);
+  const [about, setAbout] = useState(LOADING);
+  const [repos, setRepos] = useState(LOADING);
   const [picked, setPicked] = useState('');
-  useEffect(askAbout(setAbout), [rest]);
-  useEffect(askRepos(subject.folder, setRepos, setPicked), [rest, subject.folder]);
-  const [project, setProject] = useState(null);
-  const selected = repos?.repos.length === 1 ? repos.repos[0].root : picked;
-  useEffect(askProject(selected, setProject), [rest, selected]);
+  const [project, setProject] = useState(LOADING);
+  const found = dataOr(repos, { repos: [] }).repos;
+  const selected = found.length === 1 ? found[0].root : picked;
+  useEffect(askAbout(setAbout), [rest, retried.about]);
+  useEffect(askRepos(subject.folder, setRepos, setPicked), [rest, subject.folder, retried.repos]);
+  useEffect(askProject(selected, setProject), [rest, selected, retried.project]);
+  const retry = useCallback((name) => setRetried((before) => ({ ...before, [name]: before[name] + 1 })), []);
   const value = useMemo(
-    () => ({ about, subject, repos, selected, select: setPicked, project }),
-    [about, subject, repos, selected, project],
+    () => ({ about, subject, repos, selected, select: setPicked, project, retry }),
+    [about, subject, repos, selected, project, retry],
   );
 
   return <WorkshopContext.Provider value={value}>{children}</WorkshopContext.Provider>;
 }
 
 /**
- * Returns the pane's shared state: `{about, subject, repos, selected, select, project}`.
+ * Returns the pane's shared state: `{about, subject, repos, selected, select, project, retry}`.
  *
- * - `repos` is the answer to GET /repos, or null while loading.
+ * - `about` is GET /about's answer, as remote data.
+ * - `repos` is GET /repos's answer, as remote data.
  * - `selected` is the selected repository's root, or an empty string.
  * - `select(root)` selects a repository.
- * - `project` is the answer to GET /project for the selected repository, or
- *   null while loading or when no repository is selected.
+ * - `project` is GET /project's answer for the selected repository, as
+ *   remote data; loading while no repository is selected.
+ * - `retry(name)` asks for `about`, `repos` or `project` again.
  */
 export function useWorkshop() {
   return useContext(WorkshopContext);
@@ -74,7 +85,8 @@ export function useWorkshop() {
 function askAbout(setAbout) {
   return () => {
     let open = true;
-    client.about().then((answer) => open && setAbout(answer));
+    setAbout(LOADING);
+    client.about().then((result) => open && setAbout(remoteOf(result)));
     return () => { open = false; };
   };
 }
@@ -92,15 +104,16 @@ function askRepos(folder, setRepos, setPicked) {
   return () => {
     let open = true;
     setPicked('');
-    client.repos(folder).then((answer) => open && setRepos(answer));
+    setRepos(LOADING);
+    client.repos(folder).then((result) => open && setRepos(remoteOf(result)));
     return () => { open = false; };
   };
 }
 
 /**
  * Loads `project` from GET /project for the selected repository, without
- * the toolchain check. Sets it to null when no repository is selected. An
- * answer that arrives after the selection changes is dropped.
+ * the toolchain check. It stays loading while no repository is selected.
+ * An answer that arrives after the selection changes is dropped.
  *
  * @effect
  * @param selected The selected repository's root, or an empty string.
@@ -109,9 +122,9 @@ function askRepos(folder, setRepos, setPicked) {
 function askProject(selected, setProject) {
   return () => {
     let open = true;
-    setProject(null);
+    setProject(LOADING);
     if (selected) {
-      client.project(selected, false).then((answer) => open && setProject(answer));
+      client.project(selected, false).then((result) => open && setProject(remoteOf(result)));
     }
     return () => { open = false; };
   };

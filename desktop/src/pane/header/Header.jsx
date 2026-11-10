@@ -7,9 +7,7 @@
 
 import { cn } from '@hermes/plugin-sdk';
 import { useWorkshop } from '../../workshop/WorkshopProvider.jsx';
-import { MultiRepoHeader } from './MultiRepoHeader.jsx';
-import { NoRepoHeader } from './NoRepoHeader.jsx';
-import { SingleRepoHeader } from './SingleRepoHeader.jsx';
+import { HeaderContent } from './HeaderContent.jsx';
 
 /** The header's height, so the line under it sits where a line of text would end while it is still loading. */
 const HEADER_STYLE = { minHeight: '1.75rem' };
@@ -18,11 +16,11 @@ const HEADER_STYLE = { minHeight: '1.75rem' };
  * The header: a banner region along the top of the pane, with the line under
  * it in the app's tertiary stroke, the footer's mirror. The role is set by
  * hand because a header inside a section has none of its own. It is empty
- * until the backend has said which repositories the session holds.
+ * until the backend has said which repositories the session holds, and
+ * says what went wrong, with Try again, when it could not say.
  */
 export function Header() {
-  const { repos } = useWorkshop();
-  const Mode = repos && modeFor(repos.repos.length);
+  const { repos, retry } = useWorkshop();
 
   return (
     <header
@@ -42,16 +40,7 @@ export function Header() {
       )}
       style={HEADER_STYLE}
     >
-      {Mode && <Mode />}
+      <HeaderContent repos={repos} onRetry={() => retry('repos')} />
     </header>
   );
-}
-
-/**
- * The header's mode for a number of repositories.
- *
- * @param count How many repositories the session holds.
- */
-function modeFor(count) {
-  return [NoRepoHeader, SingleRepoHeader][count] ?? MultiRepoHeader;
 }

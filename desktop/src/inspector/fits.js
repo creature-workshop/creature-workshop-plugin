@@ -8,6 +8,16 @@
 
 import { typesOf } from './schema.js';
 
+/** What each JSON Schema type is called in a message to the user. */
+const PLAIN = Object.freeze({
+  string: 'text',
+  number: 'a number',
+  integer: 'a whole number',
+  boolean: 'on or off',
+  array: 'a list',
+  object: 'a group of settings',
+});
+
 /**
  * Null when the component can save to the key, or the reason it cannot:
  * the component saves a type the key does not accept. A component may save
@@ -25,7 +35,7 @@ export function misfit(component, key, definition) {
   if (allowed.length === 0 || saved.every((type) => accepts(allowed, type))) {
     return null;
   }
-  return `${component.id} stores ${saved.map(article).join(' or ')}, but ${key} is ${allowed.map(article).join(' or ')}.`;
+  return `the pane would save ${saved.map(plain).join(' or ')} here, but ${key} takes ${allowed.map(plain).join(' or ')}.`;
 }
 
 /**
@@ -41,10 +51,10 @@ function accepts(allowed, type) {
 }
 
 /**
- * A type's name with its article, for a message: "a string", "an integer".
+ * A type as a message to the user calls it: "text", "a whole number".
  *
  * @param {string} type The JSON Schema type.
  */
-function article(type) {
-  return /^[aeiou]/.test(type) ? `an ${type}` : `a ${type}`;
+function plain(type) {
+  return PLAIN[type] ?? type;
 }

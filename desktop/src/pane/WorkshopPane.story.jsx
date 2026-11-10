@@ -9,6 +9,7 @@
  */
 
 import { cn } from '@hermes/plugin-sdk';
+import { useState } from 'react';
 import { sessionSubject } from '../subject.js';
 import { WorkshopProvider } from '../workshop/WorkshopProvider.jsx';
 import { WorkshopPane } from './WorkshopPane.jsx';
@@ -45,6 +46,13 @@ const MANIFEST_SCHEMA = Object.freeze({
 /** GET /store/query for the manifest of the project, as the file store answers it. */
 const MANIFEST_RECORD = Object.freeze({
   data: { record: { id: 'document', revision: 'r1', values: { name: 'Notes', description: 'Notes, kept in git.', 'command-name': 'notes', org: 'someone', repo: 'notes' } } },
+});
+
+/** What the backend's call rejects with, by the kind of failure: as Desktop rejects an answer of 400 or more, or as a call that never reached the backend. */
+const REJECTIONS = Object.freeze({
+  'no-route': '404: {"detail":"Not Found"}',
+  internal: `500: ${JSON.stringify({ data: null, errors: [{ message: "KeyError: 'root'", extensions: { code: 'INTERNAL', status: 500 } }] })}`,
+  unreachable: 'bridge unavailable',
 });
 
 /** What GET /about answers in the stories of a repository. */
@@ -87,6 +95,20 @@ export function Adopted({ latest = '0.1.0-dev.12', stable = '0.0.0' }) {
   return framed(repositoryBackend(projectAt(CWD, { latest, stable })), DOCKED_WIDTH);
 }
 
+/**
+ * The pane over an adopted repository whose backend fails the first call
+ * to `path` the way `kind` names, and answers every call after it, so Try
+ * again succeeds.
+ *
+ * @param props The story's props.
+ * @param {string} props.path The path whose first call fails, such as `/repos?` or `/store/query`.
+ * @param {'no-route' | 'internal' | 'unreachable'} props.kind How it fails.
+ */
+export function FailingOnce({ path, kind }) {
+  const [rest] = useState(() => failingOnce(repositoryBackend(projectAt(CWD, { latest: '0.1.0', stable: '0.1.0' })), path, REJECTIONS[kind]));
+  return framed(rest, DOCKED_WIDTH);
+}
+
 /** The pane over a repository with no shellops. */
 export function NotAdopted() {
   return framed(repositoryBackend(NO_PROJECT), DOCKED_WIDTH);
@@ -111,6 +133,25 @@ function projectAt(root, release) {
 function repositoryBackend(project) {
   const answers = [['/about', ABOUT], ['/repos/status', CLEAN], ['/repos', ONE_REPO], ['/project', project], ['/store/query', MANIFEST_RECORD], ['/store/introspect', MANIFEST_SCHEMA]];
   return async (path) => answers.find(([prefix]) => path.startsWith(prefix))[1];
+}
+
+/**
+ * A backend that rejects the first call to `path` with `rejection`, and
+ * passes every other call to `rest`.
+ *
+ * @param rest The backend that answers.
+ * @param {string} path The path whose first call fails.
+ * @param {string} rejection The message of the error the call rejects with.
+ */
+function failingOnce(rest, path, rejection) {
+  let failed = false;
+  return async (asked, ...args) => {
+    if (asked.startsWith(path) && !failed) {
+      failed = true;
+      throw new Error(rejection);
+    }
+    return rest(asked, ...args);
+  };
 }
 
 /**

@@ -260,21 +260,28 @@ test('a key the schema does not describe is not shown', async ({ mount }) => {
   await expect(component.getByRole('group', { name: 'Field' })).toHaveCount(0);
 });
 
-test('a component that does not fit the key says why, with no editor', async ({ mount }) => {
+test('a component that does not fit the key shows its value read-only, with an error glyph that says why', async ({ mount, page }) => {
   const component = await mount(<Harness component="text" fieldKey="count" />);
 
-  await expect(component.getByRole('alert')).toHaveText('text stores a string, but count is an integer.');
+  await expect(valueOf(component)).toHaveText('3');
   await expect(component.getByRole('button', { name: 'Edit Field' })).toHaveCount(0);
+  await component.getByRole('button', { name: 'About Field' }).hover();
+
+  await expect(page.getByRole('tooltip')).toHaveText("I can't let you edit this field: the pane would save text here, but count takes a whole number. This is an unexpected bug in the Workshop plugin, not something you did. Let us know about your issue at requests@creature-workshop.com and we'll look into it.");
 });
 
-test('a component that saves several types fits only a key that accepts each of them', async ({ mount }) => {
+test('a component that saves several types fits only a key that accepts each of them', async ({ mount, page }) => {
   const component = await mount(<Harness component="switch-select" fieldKey="channel" />);
 
-  await expect(component.getByRole('alert')).toHaveText('switch-select stores a string or a boolean, but channel is a string.');
+  await component.getByRole('button', { name: 'About Field' }).hover();
+
+  await expect(page.getByRole('tooltip')).toContainText('the pane would save text or on or off here, but channel takes text.');
 });
 
-test('a component nobody registered says so', async ({ mount }) => {
+test('a component nobody registered says so', async ({ mount, page }) => {
   const component = await mount(<Harness component="slider" />);
 
-  await expect(component.getByRole('alert')).toHaveText('There is no component named slider.');
+  await component.getByRole('button', { name: 'About Field' }).hover();
+
+  await expect(page.getByRole('tooltip')).toContainText('the pane asks for an editor named "slider", which doesn\'t exist.');
 });

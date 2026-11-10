@@ -27,7 +27,8 @@ const STABLE_HINT = 'The newest release of this project that is not a prerelease
  * lock does not record shows None yet.
  */
 export function ProjectInfoPanel() {
-  const { project } = useWorkshop();
+  const { project: remote } = useWorkshop();
+  const project = remote.data;
 
   return (
     <div className={cn('workshop-project-info', 'flex', 'flex-col', 'gap-5')}>

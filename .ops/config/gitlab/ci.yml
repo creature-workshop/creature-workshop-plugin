@@ -29,8 +29,9 @@ plugin/build:
   stage: build
   needs: []
   script:
-    - $SHELLOPS_DIR/cli/install esbuild
+    - $SHELLOPS_DIR/cli/install esbuild pnpm
     - . ./.envrc
+    - pnpm install --frozen-lockfile --prod
     - shell/actions/hermes/build
   artifacts:
     paths:

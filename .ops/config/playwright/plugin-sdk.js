@@ -9,7 +9,7 @@
  */
 
 import { clsx } from 'clsx';
-import { createElement } from 'react';
+import { cloneElement, createElement } from 'react';
 import { Select as Primitive, Switch as SwitchPrimitive, Tabs as TabsPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import { twMerge } from 'tailwind-merge';
 
@@ -98,13 +98,18 @@ export function TabsTrigger(props) {
 }
 
 /**
- * Desktop's Button: a button, its variant and size dropped.
+ * Desktop's Button: a button, its variant and size dropped, or with
+ * `asChild` its one child, such as a link, given the button's props.
  *
  * @param props The button's props.
  * @param props.variant Desktop's look for it; unused here.
  * @param props.size Desktop's size for it; unused here.
+ * @param [props.asChild] Whether to draw the child in place of a button.
  */
-export function Button({ variant, size, ...props }) {
+export function Button({ variant, size, asChild = false, ...props }) {
+  if (asChild) {
+    return cloneElement(props.children, { 'data-variant': variant, 'data-size': size });
+  }
   return createElement('button', { type: 'button', 'data-variant': variant, 'data-size': size, ...props });
 }
 
