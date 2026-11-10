@@ -42,4 +42,5 @@ class Project(BaseModel):
   release: Release
   declared: list[DeclaredTool]
   refresh_seconds: int
+  approved: bool = False
   toolchain: Toolchain | None = None

@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 
 from .. import settings
+from ..consent import require_consent
 
 log = logging.getLogger("creature-workshop")
 
@@ -24,9 +25,17 @@ def run(root, args, timeout_seconds=None):
   """Runs `shell/ops <args>` in the project and returns what happened. Without a
   timeout of its own, the call gets the ops_timeout_seconds setting.
 
+  Returns a not-ok result without running anything when the project has not
+  been approved by the user.
+
     run(root, ["install", "--check"])  ->  {"ok": True, "command": "shell/ops install --check",
                         "stdout": "...", "stderr": "", "duration_ms": 1830}
   """
+
+  denial = require_consent(root)
+  if denial is not None:
+    return {"ok": False, "command": " ".join(["shell/ops", *args]),
+        "stdout": "", "stderr": denial, "duration_ms": 0}
 
   command = ["shell/ops", *args]
   started = time.monotonic()

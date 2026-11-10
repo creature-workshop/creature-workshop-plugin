@@ -17,8 +17,10 @@ import asyncio
 import os
 
 from fastapi import Query
+from pydantic import BaseModel
 
 from workshop import api, settings
+from workshop.consent import approve as approve_project, is_approved
 from workshop.models.project import DeclaredTool, NoProject, Project, Release
 from workshop.models.toolchain import Toolchain
 from workshop.project import check_table
@@ -38,7 +40,7 @@ async def project(path: str = Query(default=""), check: str = Query(default="1")
 
   answer = described(root, refresh_seconds)
 
-  if check != "0":
+  if check != "0" and answer.approved:
     answer.toolchain = await asyncio.to_thread(toolchain, root)
 
   return answer
@@ -55,6 +57,7 @@ def described(root, refresh_seconds):
     release=Release(**release(root)),
     declared=[DeclaredTool(channel=c, tool=t, version=v) for c, t, v in declared_tools(root)],
     refresh_seconds=refresh_seconds,
+    approved=is_approved(root),
   )
 
 
@@ -71,3 +74,24 @@ def toolchain(root):
     stderr=outcome["stderr"],
     duration_ms=outcome["duration_ms"],
   )
+
+
+class ApproveBody(BaseModel):
+  """The body of POST /project/approve: the project root to approve."""
+
+  root: str
+
+
+class ApproveAnswer(BaseModel):
+  """The answer of POST /project/approve."""
+
+  approved: bool
+  root: str
+
+
+@api.register("/project/approve", ApproveAnswer, method="POST")
+async def approve(body: ApproveBody):
+  """Approves a project for execution, so the plugin can run shell commands in it."""
+
+  approve_project(body.root)
+  return ApproveAnswer(approved=True, root=body.root)
