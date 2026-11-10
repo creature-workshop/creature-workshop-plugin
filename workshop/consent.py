@@ -85,6 +85,7 @@ def _data_dir():
 
 def _consent_path():
   """The path of the file that lists the approved project roots."""
+
   return _data_dir() / CONSENT_FILE
 
 
