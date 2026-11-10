@@ -1,5 +1,5 @@
 /**
- * @file A titled group of Project Info fields, such as Manifest or Versions,
+ * @file A titled group of inspector fields, such as Manifest or Versions,
  * that folds up. Its heading looks like the section headings of Desktop's
  * chat sidebar, such as Pinned and Projects.
  */
