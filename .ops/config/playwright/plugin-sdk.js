@@ -10,7 +10,7 @@
 
 import { clsx } from 'clsx';
 import { createElement } from 'react';
-import { Select as Primitive, Tabs as TabsPrimitive } from 'radix-ui';
+import { Select as Primitive, Switch as SwitchPrimitive, Tabs as TabsPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import { twMerge } from 'tailwind-merge';
 
 /**
@@ -138,3 +138,31 @@ export function Codicon({ name, ...props }) {
   return createElement('i', { 'aria-hidden': 'true', className: `codicon codicon-${name}`, ...props });
 }
 
+
+/**
+ * Desktop's Switch: a radix switch with its thumb, its size dropped.
+ *
+ * @param props The switch's props.
+ * @param props.size Desktop's size for it; unused here.
+ */
+export function Switch({ size, ...props }) {
+  return createElement(SwitchPrimitive.Root, { 'data-size': size, ...props }, createElement(SwitchPrimitive.Thumb));
+}
+
+/**
+ * Desktop's Tip: shows `label` in a tooltip while its one child is hovered
+ * or focused, under a provider of its own, as Desktop's does outside the
+ * app root; just the child when there is no label.
+ *
+ * @param props The tip's props.
+ * @param props.label The tooltip's text.
+ * @param props.children The element the tooltip belongs to.
+ */
+export function Tip({ label, children }) {
+  if (!label) {
+    return children;
+  }
+  const trigger = createElement(TooltipPrimitive.Trigger, { asChild: true }, children);
+  const content = createElement(TooltipPrimitive.Portal, null, createElement(TooltipPrimitive.Content, null, label));
+  return createElement(TooltipPrimitive.Provider, { delayDuration: 0 }, createElement(TooltipPrimitive.Root, null, trigger, content));
+}

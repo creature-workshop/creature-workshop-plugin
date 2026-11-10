@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import * as bindings from './bindings.js';
 import { componentFor, register } from './components.js';
 import { misfit } from './fits.js';
-import { canClear, stateOf } from './schema.js';
+import { canClear, optionsOf, stateOf, typesOf } from './schema.js';
 
 /** A component that stores a string, registered for the tests. */
 const STRING = register({ id: 'test-string', stores: { type: 'string' }, Component: () => null });
@@ -37,12 +37,12 @@ describe('bindings', () => {
     const binding = bindings.register({
       id: 'test/one',
       title: 'One',
-      collection: { kind: 'file', source: 'config/x.yaml' },
+      store: { kind: 'file', source: 'config/x.yaml' },
       record: 'document',
       fields: [{ key: 'a', component: 'text' }],
     });
     assert.equal(bindings.registered('test/one'), binding);
-    assert.ok(Object.isFrozen(binding.fields[0]) && Object.isFrozen(binding.collection));
+    assert.ok(Object.isFrozen(binding.fields[0]) && Object.isFrozen(binding.store));
     assert.equal(binding.fields[0].readOnly, false);
   });
 
@@ -59,6 +59,15 @@ describe('fits', () => {
     assert.equal(misfit(STRING, 'any', {}), null);
   });
 
+  it('fits a number component to an integer key, and a component that saves several types only where each is accepted', () => {
+    const number = register({ id: 'test-number', stores: { type: 'number' }, Component: () => null });
+    const either = register({ id: 'test-either', stores: { type: ['string', 'boolean'] }, Component: () => null });
+    const until = { anyOf: [{ type: 'string', enum: ['dev'] }, { type: 'boolean', const: false }] };
+    assert.equal(misfit(number, 'count', { type: 'integer' }), null);
+    assert.equal(misfit(either, 'until', until), null);
+    assert.equal(misfit(either, 'name', { type: 'string' }), 'test-either stores a string or a boolean, but name is a string.');
+  });
+
   it('says why a key does not fit', () => {
     assert.equal(misfit(STRING, 'count', { type: 'integer' }), 'test-string stores a string, but count is an integer.');
   });
@@ -72,6 +81,18 @@ describe('schema', () => {
     for (const key of ['off', 'zero', 'empty']) {
       assert.equal(stateOf(values, key), 'set');
     }
+  });
+
+  it('reads the types of each alternative, and allows any when one names none', () => {
+    assert.deepEqual(typesOf({ anyOf: [{ type: 'string' }, { type: 'boolean' }] }), ['string', 'boolean']);
+    assert.deepEqual(typesOf({ oneOf: [{ type: 'string' }, { type: 'array' }] }), ['string', 'array']);
+    assert.deepEqual(typesOf({ anyOf: [{ type: 'string' }, {}] }), []);
+  });
+
+  it('lists the string options of an enum, or of the first alternative with one', () => {
+    assert.deepEqual(optionsOf({ type: 'string', enum: ['dev', 'stable'] }), ['dev', 'stable']);
+    assert.deepEqual(optionsOf({ anyOf: [{ type: 'string', enum: ['false', 'dev'] }, { type: 'boolean', const: false }] }), ['false', 'dev']);
+    assert.deepEqual(optionsOf({ type: 'string' }), []);
   });
 
   it('lets a key be cleared only when it is not required and allows null', () => {

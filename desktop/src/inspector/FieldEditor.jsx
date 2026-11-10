@@ -1,20 +1,19 @@
 /**
- * @file A inspector field's editor: its input, Save and Cancel, and the
- * error from the last save.
+ * @file An inspector field's editor: its input, Save and Cancel, and Remove
+ * where the key may be cleared.
  */
 
 import { Button, cn, Input, Textarea } from '@hermes/plugin-sdk';
 
 /**
- * The input, with Save and Cancel, Remove when `onRemove` is given, and the
- * error from the last save.
+ * The input, with Save and Cancel, and Remove when `onRemove` is given. The
+ * Field around it shows the message from the last save.
  *
  * @param props The component's props.
  * @param {string} props.label The field's name, for the input's label.
  * @param {string} props.draft The text being edited.
  * @param {boolean} props.multiline Whether to use a text area.
  * @param {boolean} props.saving Whether a save is running.
- * @param {string} props.error The last save's error, or an empty string.
  * @param {(text: string) => void} props.onChange Takes the new text.
  * @param {() => void} props.onSave Saves the draft.
  * @param {() => void} props.onCancel Closes the editor without saving.
@@ -25,7 +24,6 @@ export function FieldEditor({
   draft,
   multiline,
   saving,
-  error,
   onChange,
   onSave,
   onCancel,
@@ -50,7 +48,6 @@ export function FieldEditor({
         <Button size="xs" variant="ghost" disabled={saving} onClick={onCancel}>Cancel</Button>
         {onRemove && <Button size="xs" variant="ghost" disabled={saving} onClick={onRemove}>Remove</Button>}
       </span>
-      {error && <span role="alert" className={cn('workshop-field-error', 'text-destructive')}>{error}</span>}
     </span>
   );
 }

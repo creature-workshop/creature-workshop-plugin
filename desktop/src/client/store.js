@@ -3,9 +3,9 @@
  * data through, named and shaped after GraphQL's operations so that a
  * GraphQL client can replace them later: `introspect` (GET
  * /store/introspect), `query` (GET /store/query) and `mutate` (POST
- * /store/mutate). Each call names a collection: the records one store
- * keeps in one file of one project, such as the `file` store's
- * `config/manifest.yaml` in the selected repository.
+ * /store/mutate). Each call names a store: the records in one file of one
+ * project, kept by a kind of store, such as `config/manifest.yaml` in the
+ * selected repository, kept by the `file` kind.
  *
  * Every call answers `{data}` or `{data: null, errors}` and never throws. A
  * query answers the record:
@@ -39,18 +39,18 @@
 import * as api from './api.js';
 
 /**
- * A collection: the records one store keeps in one file of one project.
+ * A store: the records in one file of one project.
  *
- * @typedef {object} Collection
- * @property {string} kind The store that keeps them, such as `file`.
+ * @typedef {object} Store
+ * @property {string} kind The kind of store that keeps them, such as `file`.
  * @property {string} root The project's root folder.
  * @property {string} source The file, such as `config/manifest.yaml`.
  */
 
 /**
- * Where one record lives: its collection, and its id.
+ * Where one record lives: its store, and its id.
  *
- * @typedef {Collection & {id: string}} Address
+ * @typedef {Store & {id: string}} Address
  */
 
 /**
@@ -93,7 +93,7 @@ import * as api from './api.js';
  * @typedef {SetOperation | KeyOperation | CreateOperation | DeleteOperation} Operation
  */
 
-/** The JSON Schema that describes a collection's records: `{data: {schema}}`. */
+/** The JSON Schema that describes a store's records: `{data: {schema}}`. */
 export const introspect = api.register('introspect', askIntrospect, failed);
 
 /**
@@ -115,41 +115,41 @@ export const mutate = api.register('mutate', askMutate, failed);
  * GET /store/introspect.
  *
  * @param rest The backend call.
- * @param {Collection} collection The records.
+ * @param {Store} store The store.
  */
-function askIntrospect(rest, collection) {
-  return rest(`/store/introspect?${search(collectionOf(collection))}`);
+function askIntrospect(rest, store) {
+  return rest(`/store/introspect?${search(storeOf(store))}`);
 }
 
 /**
  * GET /store/query.
  *
  * @param rest The backend call.
- * @param {Collection} collection The records.
+ * @param {Store} store The store.
  * @param {Selection} [selection] Which record, and the revision the caller has.
  */
-function askQuery(rest, collection, { id = '', revision = '' } = {}) {
-  return rest(`/store/query?${search({ ...collectionOf(collection), id, revision })}`);
+function askQuery(rest, store, { id = '', revision = '' } = {}) {
+  return rest(`/store/query?${search({ ...storeOf(store), id, revision })}`);
 }
 
 /**
  * POST /store/mutate.
  *
  * @param rest The backend call.
- * @param {Collection} collection The records.
+ * @param {Store} store The store.
  * @param {Operation} operation The operation.
  */
-function askMutate(rest, collection, operation) {
-  const body = { ...collectionOf(collection), ...operation };
+function askMutate(rest, store, operation) {
+  const body = { ...storeOf(store), ...operation };
   return rest('/store/mutate', { method: 'POST', body });
 }
 
 /**
- * The fields of a collection the routes take, and nothing else.
+ * The fields of a store the routes take, and nothing else.
  *
- * @param {Collection} collection The collection.
+ * @param {Store} store The store.
  */
-function collectionOf({ kind, root, source }) {
+function storeOf({ kind, root, source }) {
   return { kind, root, source };
 }
 

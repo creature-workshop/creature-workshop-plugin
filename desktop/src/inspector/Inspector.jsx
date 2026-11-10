@@ -22,9 +22,9 @@ import { FieldGroup } from './FieldGroup.jsx';
  */
 export function Inspector({ binding }) {
   const { project } = useWorkshop();
-  const collection = { ...binding.collection, root: project.root };
-  const { record, failure, write } = useRecord({ ...collection, id: binding.record });
-  const schema = useSchema(collection);
+  const store = { ...binding.store, root: project.root };
+  const { record, failure, write } = useRecord({ ...store, id: binding.record });
+  const schema = useSchema(store);
 
   return (
     <FieldGroup title={binding.title}>

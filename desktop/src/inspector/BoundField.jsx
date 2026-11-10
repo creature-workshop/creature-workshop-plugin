@@ -12,11 +12,11 @@ import { definitionOf, isRequired, stateOf } from './schema.js';
 
 /**
  * Draws the field with the component its binding names. The name is the
- * binding's label, the schema's title, or the key; the tooltip is the
- * schema's description. A key the file's schema does not describe is not
- * shown: the project's shellops does not know it yet. A component that is
- * not listed, or that cannot save to the key, shows why instead of an
- * editor.
+ * binding's label, the schema's title, or the key; the help text is the
+ * binding's hint, or else the schema's description. A key the file's
+ * schema does not describe is not shown: the project's shellops does not
+ * know it yet. A component that is not listed, or that cannot save to the
+ * key, shows why instead of an editor.
  *
  * @param props The component's props.
  * @param {object} props.field The bound field, as boundField in bindings.js builds it.
@@ -42,7 +42,7 @@ export function BoundField({ field, schema, values, commit }) {
   const { Component } = component;
   const props = fieldProps({
     label,
-    hint: definition.description ?? '',
+    hint: field.hint ?? definition.description ?? '',
     schema: definition,
     value: values[field.key],
     state: stateOf(values, field.key),

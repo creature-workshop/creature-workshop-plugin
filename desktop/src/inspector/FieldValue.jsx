@@ -3,6 +3,7 @@
  */
 
 import { cn } from '@hermes/plugin-sdk';
+import { stateText } from './stateText.js';
 
 /**
  * Shows the value by its state:
@@ -41,11 +42,8 @@ export function FieldValue({ text, state, fallback = '' }) {
  * @param {string} fallback The schema's default as text, or empty.
  */
 function shownText(text, state, fallback) {
-  if (state === 'untouched') {
-    return fallback ? `Not set (default: ${fallback})` : 'Not set';
-  }
-  if (state === 'cleared') {
-    return 'Cleared';
+  if (state !== 'set') {
+    return stateText(state, fallback);
   }
   return text === '' ? 'Empty' : text;
 }

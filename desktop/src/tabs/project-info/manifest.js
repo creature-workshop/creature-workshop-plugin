@@ -10,7 +10,7 @@ import { register } from '../../inspector/bindings.js';
 export const MANIFEST = register({
   id: 'project-info/manifest',
   title: 'Manifest',
-  collection: { kind: 'file', source: 'config/manifest.yaml' },
+  store: { kind: 'file', source: 'config/manifest.yaml' },
   record: 'document',
   fields: [
     { key: 'name', component: 'text', label: 'Name' },

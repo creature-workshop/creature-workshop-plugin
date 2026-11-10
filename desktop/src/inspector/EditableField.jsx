@@ -4,10 +4,10 @@
  */
 
 import { useState } from 'react';
-import { EditButton } from './EditButton.jsx';
 import { Field } from './Field.jsx';
 import { FieldEditor } from './FieldEditor.jsx';
 import { FieldValue } from './FieldValue.jsx';
+import { IconButton } from './IconButton.jsx';
 
 /**
  * Shows `label` with a pencil button labelled "Edit <label>" at the far
@@ -23,7 +23,7 @@ import { FieldValue } from './FieldValue.jsx';
  *
  * @param props The component's props.
  * @param {string} props.label The field's name.
- * @param {string} [props.hint] Help text for the field, shown as the name row's tooltip.
+ * @param {string} [props.hint] Help text for the field, which the (i) icon after the name shows.
  * @param {string} props.text The value as text; empty when untouched or cleared.
  * @param {'untouched' | 'cleared' | 'set'} props.state The key's state.
  * @param {string} [props.fallback] The schema's default as text, shown while the key is untouched.
@@ -61,11 +61,11 @@ export function EditableField({
       setDraft(null);
     }
   };
-  const pencil = readOnly || editing ? null : <EditButton label={label} onClick={() => setDraft(text)} />;
+  const pencil = readOnly || editing ? null : <IconButton label={`Edit ${label}`} icon="edit" onClick={() => setDraft(text)} />;
   const remove = onRemove ? () => run(onRemove) : null;
 
   return (
-    <Field label={label} hint={hint} action={pencil}>
+    <Field label={label} hint={hint} action={pencil} error={editing ? error : ''}>
       {editing
         ? (
           <FieldEditor
@@ -73,7 +73,6 @@ export function EditableField({
             draft={draft}
             multiline={multiline}
             saving={saving}
-            error={error}
             onChange={setDraft}
             onSave={() => run(() => onSave(draft))}
             onCancel={cancel}
