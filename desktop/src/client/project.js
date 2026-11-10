@@ -7,21 +7,9 @@ import * as api from './api.js';
 
 /**
  * The shellops project at or above a folder, as GET /project answers; with
- * `check` false it leaves the toolchain out, and when the call failed it
- * answers that no project was found.
+ * `check` false it leaves the toolchain out.
  */
 export const project = api.register(
   'project',
   (rest, folder, check = true) => rest(`/project?path=${encodeURIComponent(folder || '')}&check=${check ? '1' : '0'}`),
-  noProject,
 );
-
-/**
- * The answer to GET /project when the call failed: no project.
- *
- * @param _failure Why the call failed.
- * @param folder The folder that was asked about.
- */
-function noProject(_failure, folder) {
-  return { found: false, start: folder || '', refresh_seconds: 20 };
-}

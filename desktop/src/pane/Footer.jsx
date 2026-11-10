@@ -1,15 +1,24 @@
 /**
  * @file The footer along the bottom of the pane: which build of the plugin
  * this is, and which checkout it was loaded from. When the pane is too
- * narrow for both, the branch wins, since the version is in the lock.
+ * narrow for both, the branch wins, since the version is in the lock. When
+ * GET /about failed, it says the Workshop plugin's version is unavailable,
+ * centred on one line with Desktop's error glyph, whose tooltip says why
+ * and what to try.
  */
 
 import { cn } from '@hermes/plugin-sdk';
 import { useLayoutEffect, useRef, useState } from 'react';
+import { describe } from '../failures/describe.js';
+import { InfoTip } from '../inspector/InfoTip.jsx';
 import { useWorkshop } from '../workshop/WorkshopProvider.jsx';
+import { FooterBar } from './FooterBar.jsx';
 
-/** The footer is one line that clips, and the box the measuring span is placed against. */
-const FOOTER_STYLE = { position: 'relative', overflow: 'hidden', whiteSpace: 'nowrap' };
+/** What the footer says before GET /about has answered. */
+const NOT_YET = Object.freeze({ version: '', branch: '' });
+
+/** What the footer says when GET /about failed. */
+const UNAVAILABLE = Object.freeze({ version: 'Workshop plugin version unavailable', branch: '' });
 
 /** The measuring span: laid out at full width in the footer's font, never seen and never in the way. */
 const MEASURE_STYLE = { position: 'absolute', left: 0, top: 0, visibility: 'hidden', whiteSpace: 'nowrap' };
@@ -42,39 +51,57 @@ export function fittedText(about, width, needed) {
 }
 
 /**
- * The footer: a contentinfo region with the version and the branch, or the
- * branch alone when the two do not fit side by side. The role is set by
- * hand because a footer inside a section has none of its own. The
- * geometry is inline style, not utility classes, so the fitting works in
- * any host, including the test page, which has no stylesheet.
+ * The footer: the version and the branch in the FooterBar, or the branch
+ * alone when the two do not fit side by side. The geometry is inline
+ * style, not utility classes, so the fitting works in any host, including
+ * the test page, which has no stylesheet.
  */
 export function Footer() {
-  const { about } = useWorkshop();
+  const { about: remote } = useWorkshop();
+  const about = aboutOf(remote);
   const footer = useRef(null);
   const measure = useRef(null);
   const [fit, setFit] = useState({ width: Infinity, needed: 0 });
   useLayoutEffect(fitToRoom(footer, measure, setFit), [about]);
 
   return (
-    <footer
-      ref={footer}
-      role="contentinfo"
-      className={cn(
-        'workshop-footer',
-        'mt-auto',
-        'border-t',
-        'border-(--ui-stroke-tertiary)',
-        'px-3',
-        'py-1.5',
-        'text-[0.6875rem]',
-        'text-(--ui-text-tertiary)',
-      )}
-      style={FOOTER_STYLE}
-    >
+    <FooterBar ref={footer}>
       <span ref={measure} aria-hidden="true" className={cn('workshop-footer-measure')} style={MEASURE_STYLE}>{footerText(about)}</span>
-      {fittedText(about, fit.width, fit.needed)}
-    </footer>
+      {remote.state === 'failure'
+        ? (
+          <span className={cn('workshop-footer-failed', 'flex', 'items-center', 'gap-1')}>
+            {UNAVAILABLE.version}
+            <InfoTip label="Version" hint={reasonOf(remote.error)} error />
+          </span>
+        )
+        : fittedText(about, fit.width, fit.needed)}
+    </FooterBar>
   );
+}
+
+/**
+ * The version and branch the footer shows for GET /about's answer: the
+ * answer once it arrived, nothing while it loads, and UNAVAILABLE when it
+ * failed.
+ *
+ * @param remote GET /about's answer, as remote data.
+ */
+function aboutOf(remote) {
+  if (remote.state === 'success') {
+    return remote.data;
+  }
+  return remote.state === 'failure' ? UNAVAILABLE : NOT_YET;
+}
+
+/**
+ * What the footer's (i) says when GET /about failed: what happened, why,
+ * and what to try.
+ *
+ * @param error The error.
+ */
+function reasonOf(error) {
+  const { why, hint } = describe(error);
+  return `I couldn't read the plugin's version. ${why} ${hint}`;
 }
 
 /**

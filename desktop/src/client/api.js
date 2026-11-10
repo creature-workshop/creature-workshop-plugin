@@ -6,22 +6,16 @@
  * names the backend call every registered call goes through: the plugin's
  * `ctx.rest` in Desktop, and a stand-in in a story or a test.
  *
- * A failed request becomes a failure, which the call's fallback is given,
- * shaped the way a GraphQL server answers an error. Desktop rejects an
- * answer whose status is 400 or more with an Error whose message is
- * `<status>: <body>`; when the body carries errors, the failure is that
- * body, so the backend's reason reaches the pane:
- *
- *   {
- *     "data": null,
- *     "errors": [{
- *       "message": "org cannot be removed: the schema requires it.",
- *       "extensions": { "code": "REFUSED", "status": 400 }
- *     }]
- *   }
- *
- * Any other failure, such as a backend that cannot be reached, is the same
- * shape with the code UNREACHABLE, the status 0, and the error's message.
+ * Every call answers a result, as Elm's Http does, and never throws: either
+ * `{ok: true, data}`, or `{ok: false, error}`, so every caller handles the
+ * failure as a value. The backend answers a failure the way a GraphQL server
+ * answers an error, and the result's error is that error, flattened:
+ *   {message: "No repository at /tmp/gone.", code: "NOT_FOUND", status: 404, extensions: {...}}
+ * Desktop rejects an answer whose status is 400 or more with an Error whose
+ * message is `<status>: <body>`, and the error is read from that body. A
+ * rejection whose body carries no errors is NO_ROUTE when its status is 404,
+ * since the plugin's own routes always carry errors, and UNREACHABLE
+ * otherwise.
  */
 
 /** Every registered call, by the name it was registered under. */
@@ -43,63 +37,72 @@ export function connect(rest) {
 }
 
 /**
- * Registers a call: the request it makes, and the answer it gives instead
- * when the request fails, whether the request throws at once or rejects
- * later, so a part of the pane draws nothing rather than breaking. A
- * fallback that is a function is given the failure, then the call's own
- * arguments.
- *
- *   export const about = register('about', (rest) => rest('/about'), NO_ABOUT);
- *   client.about()  ->  {version: '0.1.0-dev.9', branch: 'main'}
+ * Registers a call: the request it makes with the backend call and its own
+ * arguments. The call answers the request's result.
+ *   export const about = register('about', (rest) => rest('/about'));
+ *   await client.about()  ->  {ok: true, data: {version: '0.1.0-dev.9', branch: 'main'}}
  *
  * @param name The name the call takes in `client`.
  * @param request A function of the backend call and the call's own arguments that makes the request.
- * @param fallback The answer when the request fails, or a function of the failure and the call's arguments that gives it.
  *
  * @returns The call, which is also `client[name]`.
  */
-export function register(name, request, fallback) {
-  const call = (...args) => answered(request, fallback, args);
+export function register(name, request) {
+  const call = (...args) => resultOf(request, args);
   client[name] = call;
   return call;
 }
 
 /**
- * Makes the request with the call's arguments, and answers what it answers,
- * or what fallback gives for its failure.
+ * Makes the request with the call's arguments, and answers its result,
+ * whether it resolves, throws at once, or rejects later.
  *
  * @param request A function of the backend call and the call's own arguments that makes the request.
- * @param fallback The answer when the request fails, or a function of the failure and the call's arguments that gives it.
  * @param {unknown[]} args The call's arguments.
  */
-async function answered(request, fallback, args) {
+async function resultOf(request, args) {
   try {
-    return await request(backend, ...args);
+    return answered(await request(backend, ...args));
   } catch (error) {
-    return fallbackFor(fallback, failureOf(error), args);
+    return failed(rejected(error));
   }
 }
 
 /**
- * The answer for a failed call: the fallback itself, or what it gives for the failure and the call's arguments.
+ * The result of an answer that arrived. A GraphQL-shaped body, which has a
+ * `data` key, is a failure when it carries errors, as the store's 3xx
+ * outcomes do, and its data otherwise; any other body is the data itself.
  *
- * @param fallback The answer, or a function of the failure and the call's arguments that gives it.
- * @param failure The failure.
- * @param args The call's arguments.
+ * @param body The answer's body.
  */
-function fallbackFor(fallback, failure, args) {
-  return typeof fallback === 'function' ? fallback(failure, ...args) : fallback;
+function answered(body) {
+  if (body === null || typeof body !== 'object' || !('data' in body)) {
+    return { ok: true, data: body };
+  }
+  return Array.isArray(body.errors) && body.errors.length > 0 ? failed(body) : { ok: true, data: body.data };
 }
 
 /**
- * The failure an error stands for: the body with errors in its
- * `<status>: <body>` message, or UNREACHABLE with the message.
+ * The failed result for a body with errors: its first error, flattened.
+ *
+ * @param body A body with errors.
+ */
+function failed(body) {
+  const [error] = body.errors;
+  const extensions = error.extensions ?? {};
+  return { ok: false, error: { message: error.message, code: extensions.code, status: extensions.status, extensions } };
+}
+
+/**
+ * The body a rejection stands for: the one with errors in its
+ * `<status>: <body>` message, or one made from the message, NO_ROUTE for a
+ * bare 404 and UNREACHABLE for anything else.
  *
  * @param error What the request threw or rejected with.
  */
-function failureOf(error) {
+function rejected(error) {
   const message = String(error?.message ?? error);
-  return errorsIn(message) ?? unreachable(message);
+  return errorsIn(message) ?? madeFrom(message);
 }
 
 /**
@@ -118,11 +121,13 @@ function errorsIn(message) {
 }
 
 /**
- * The failure of a request that never reached the backend, or whose answer
- * carried no errors.
+ * The body for a rejection that carried no errors: NO_ROUTE when its
+ * message starts with 404, UNREACHABLE otherwise, with the message itself.
  *
  * @param {string} message The error's message.
  */
-function unreachable(message) {
-  return { data: null, errors: [{ message, extensions: { code: 'UNREACHABLE', status: 0 } }] };
+function madeFrom(message) {
+  const status = /^404\b/.test(message) ? 404 : 0;
+  const code = status === 404 ? 'NO_ROUTE' : 'UNREACHABLE';
+  return { data: null, errors: [{ message, extensions: { code, status } }] };
 }

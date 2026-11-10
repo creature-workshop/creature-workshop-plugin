@@ -105,7 +105,7 @@ test('a save the store refuses keeps the editor open and says why', async ({ mou
   await component.getByRole('textbox', { name: 'Name' }).fill('Field notes');
   await component.getByRole('button', { name: 'Save' }).click();
 
-  await expect(component.getByRole('alert')).toHaveText('description cannot be cleared: its schema has no empty value for it.');
+  await expect(component.getByRole('alert')).toHaveText("description cannot be cleared: its schema has no empty value for it. Change it and save again, or cancel to keep what's there.");
   await expect(component.getByRole('textbox', { name: 'Name' })).toHaveValue('Field notes');
 });
 

@@ -9,7 +9,7 @@
  */
 
 import { test, expect } from '@playwright/experimental-ct-react';
-import { Adopted, NotAdopted, OnMain, OutsideGit } from './WorkshopPane.story.jsx';
+import { Adopted, FailingOnce, NotAdopted, OnMain, OutsideGit } from './WorkshopPane.story.jsx';
 
 /**
  * What the footer shows: its text with the hidden measuring copy left out.
@@ -87,4 +87,52 @@ test('a repository with no shellops has no tabs', async ({ mount }) => {
 
   await expect(component.getByRole('banner', { name: 'Project' })).toContainText('notes');
   await expect(component.getByRole('tablist')).toHaveCount(0);
+});
+
+test('a failed read of the repositories says what happened, why and what to try, and Try again reads them again', async ({ mount }) => {
+  const component = await mount(<FailingOnce path="/repos?" kind="no-route" />);
+  const header = component.getByRole('banner', { name: 'Project' });
+
+  await expect(header.getByRole('alert')).toContainText("I couldn't read the repositories in this folder.");
+  await expect(header.getByRole('alert')).toContainText('older than the pane');
+  await expect(header.getByRole('alert')).toContainText('Quit Hermes from the tray and open it again');
+  await header.getByRole('button', { name: 'Try again' }).click();
+
+  await expect(header).toContainText('notes');
+  await expect(header.getByRole('alert')).toHaveCount(0);
+});
+
+test('a failed read of the project says so in place of the tabs, with Report it for a bug and the details on request', async ({ mount }) => {
+  const component = await mount(<FailingOnce path="/project" kind="internal" />);
+  const alert = component.getByRole('alert');
+
+  await expect(alert).toContainText("I couldn't read the project in");
+  await expect(alert).toContainText("ran into an unexpected bug. This isn't something you did.");
+  await expect(alert.getByRole('link', { name: 'Report it' })).toHaveAttribute('href', /^mailto:requests@creature-workshop\.com\?subject=Workshop%20plugin%3A%20I%20couldn't%20read%20the%20project/);
+  await expect(alert).not.toContainText("KeyError: 'root'");
+  await alert.getByRole('button', { name: 'Show details' }).click();
+  await expect(alert).toContainText("message: KeyError: 'root'");
+  await alert.getByRole('button', { name: 'Try again' }).click();
+
+  await expect(component.getByRole('tab', { name: 'Project Info' })).toBeVisible();
+});
+
+test('a failed read of the version says the Workshop plugin version is unavailable, with why in the (i)', async ({ mount, page }) => {
+  const component = await mount(<FailingOnce path="/about" kind="unreachable" />);
+  const footer = component.getByRole('contentinfo');
+
+  await expect(footer).toContainText('Workshop plugin version unavailable');
+  await footer.getByRole('button', { name: 'About Version' }).hover();
+
+  await expect(page.getByRole('tooltip')).toContainText("The Workshop plugin's backend didn't answer.");
+});
+
+test('a failed read of the manifest says so in its group, and Try again shows the fields', async ({ mount }) => {
+  const component = await mount(<FailingOnce path="/store/query" kind="unreachable" />);
+  const manifest = component.getByRole('region', { name: 'Manifest' });
+
+  await expect(manifest.getByRole('alert')).toContainText("I couldn't read the Manifest fields from config/manifest.yaml.");
+  await manifest.getByRole('button', { name: 'Try again' }).click();
+
+  await expect(manifest.getByRole('group', { name: 'Name' })).toContainText('Notes');
 });

@@ -10,7 +10,7 @@ import { RepoStatus } from './RepoStatus.jsx';
 /** The repository's name, then its state the way a shell prompt shows it. */
 export function SingleRepoHeader() {
   const { repos } = useWorkshop();
-  const [repo] = repos.repos;
+  const [repo] = repos.data.repos;
   return (
     <>
       <span

@@ -3,6 +3,7 @@
  */
 
 import { cn } from '@hermes/plugin-sdk';
+import { PartBoundary } from '../../failures/PartBoundary.jsx';
 
 /**
  * Room around the content for what reaches past it, given as margin and
@@ -13,7 +14,8 @@ const ROOM = { margin: '-0.5rem', padding: '0.5rem' };
 
 /**
  * Shows the open tab's Panel in a scrolling area labelled with the tab's
- * name. The SDK does not export a tab panel, so this one sets the tabpanel
+ * name, inside an error boundary, so a crash in the tab shows why in its
+ * place and leaves the rest of the pane drawn. The SDK does not export a tab panel, so this one sets the tabpanel
  * role itself. The area reaches 8px past the content on every side, with
  * the same padding inside, because a scrolling area clips what it holds at
  * its edge: a control may reach 4px past the content (as a group heading
@@ -36,7 +38,9 @@ export function TabPanel({ tab }) {
         'text-[0.6875rem]',
       )}
     >
-      <tab.Panel />
+      <PartBoundary key={tab.id} part={`The ${tab.label} tab`}>
+        <tab.Panel />
+      </PartBoundary>
     </section>
   );
 }

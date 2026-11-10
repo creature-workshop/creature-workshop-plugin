@@ -65,11 +65,11 @@ describe('fits', () => {
     const until = { anyOf: [{ type: 'string', enum: ['dev'] }, { type: 'boolean', const: false }] };
     assert.equal(misfit(number, 'count', { type: 'integer' }), null);
     assert.equal(misfit(either, 'until', until), null);
-    assert.equal(misfit(either, 'name', { type: 'string' }), 'test-either stores a string or a boolean, but name is a string.');
+    assert.equal(misfit(either, 'name', { type: 'string' }), 'the pane would save text or on or off here, but name takes text.');
   });
 
   it('says why a key does not fit', () => {
-    assert.equal(misfit(STRING, 'count', { type: 'integer' }), 'test-string stores a string, but count is an integer.');
+    assert.equal(misfit(STRING, 'count', { type: 'integer' }), 'the pane would save text here, but count takes a whole number.');
   });
 });
 

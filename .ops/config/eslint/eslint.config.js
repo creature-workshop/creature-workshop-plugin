@@ -38,6 +38,7 @@ const TOP_LEVEL_DECLARATIONS = [
 export default [
   {
     ignores: [
+      'build/**',
       'desktop/plugin.js',
       'shell/lint/**/fixtures/**',
       'shell/.ops/**',

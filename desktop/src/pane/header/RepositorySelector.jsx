@@ -36,7 +36,7 @@ export function RepositorySelector() {
         />
       </SelectTrigger>
       <SelectContent>
-        {repos.repos.map((repo) => <SelectItem key={repo.root} value={repo.root} title={repo.root}>{repo.name}</SelectItem>)}
+        {repos.data.repos.map((repo) => <SelectItem key={repo.root} value={repo.root} title={repo.root}>{repo.name}</SelectItem>)}
       </SelectContent>
     </Select>
   );

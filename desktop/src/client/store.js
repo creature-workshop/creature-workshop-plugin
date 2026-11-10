@@ -7,8 +7,8 @@
  * project, kept by a kind of store, such as `config/manifest.yaml` in the
  * selected repository, kept by the `file` kind.
  *
- * Every call answers `{data}` or `{data: null, errors}` and never throws. A
- * query answers the record:
+ * Every call answers a result, as api.js describes, and never throws. The
+ * backend answers a query with the record:
  *
  *   {
  *     "data": {
@@ -20,19 +20,19 @@
  *     }
  *   }
  *
- * When the store refuses or fails, the call answers the failure api.js reads
- * from the error, such as a stale mutation with the current record:
+ * so the result is `{ok: true, data: {record}}`. When the store refuses or
+ * fails, the result's error carries the store's code, and anything the
+ * store sent with it in `extensions`, such as the current record of a
+ * stale mutation:
  *
  *   {
- *     "data": null,
- *     "errors": [{
+ *     "ok": false,
+ *     "error": {
  *       "message": "The document changed since it was read.",
- *       "extensions": {
- *         "code": "STALE",
- *         "status": 409,
- *         "record": { "id": "document", "revision": "...", "values": {} }
- *       }
- *     }]
+ *       "code": "STALE",
+ *       "status": 409,
+ *       "extensions": { "record": { "id": "document", "revision": "...", "values": {} } }
+ *     }
  *   }
  */
 
@@ -93,23 +93,23 @@ import * as api from './api.js';
  * @typedef {SetOperation | KeyOperation | CreateOperation | DeleteOperation} Operation
  */
 
-/** The JSON Schema that describes a store's records: `{data: {schema}}`. */
-export const introspect = api.register('introspect', askIntrospect, failed);
+/** The JSON Schema that describes a store's records: a result whose data is `{schema}`. */
+export const introspect = api.register('introspect', askIntrospect);
 
 /**
- * One record (`{data: {record}}`), or every record (`{data: {records}}`)
- * when the selection names no id. A selection with the record's current
- * revision answers the UNCHANGED error.
+ * One record (data `{record}`), or every record (data `{records}`) when the
+ * selection names no id. A selection with the record's current revision
+ * fails with the code UNCHANGED.
  */
-export const query = api.register('query', askQuery, failed);
+export const query = api.register('query', askQuery);
 
 /**
- * One operation: the record after a set, clear or reset, or a create
- * (`{data: {record}}`); the id of a deleted record (`{data: {deleted}}`);
- * or the STALE error with the current record when it changed since the
- * operation's revision.
+ * One operation: the record after a set, clear or reset, or a create (data
+ * `{record}`); the id of a deleted record (data `{deleted}`); or a failure
+ * with the code STALE, whose extensions carry the current record, when it
+ * changed since the operation's revision.
  */
-export const mutate = api.register('mutate', askMutate, failed);
+export const mutate = api.register('mutate', askMutate);
 
 /**
  * GET /store/introspect.
@@ -151,16 +151,6 @@ function askMutate(rest, store, operation) {
  */
 function storeOf({ kind, root, source }) {
   return { kind, root, source };
-}
-
-/**
- * The answer of a failed store call: the failure itself, which is already
- * `{data: null, errors}`.
- *
- * @param failure Why the call failed.
- */
-function failed(failure) {
-  return failure;
 }
 
 /**

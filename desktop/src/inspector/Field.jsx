@@ -11,7 +11,8 @@ import { InfoTip } from './InfoTip.jsx';
 /**
  * Lays out one field as a group named `label`: a `<dt>` row holding the
  * label in semibold, followed by an (i) icon that shows `hint` when there
- * is one, and `action` at the far right, underlined by the theme's
+ * is one, or Desktop's red error glyph that shows `problem` when the field
+ * has one, and `action` at the far right, underlined by the theme's
  * tertiary stroke; and a `<dd>` below holding `children`, with the message
  * from the field's last save under them when there is one. Must sit inside
  * a `<dl>`.
@@ -19,11 +20,12 @@ import { InfoTip } from './InfoTip.jsx';
  * @param props The component's props.
  * @param {string} props.label The field's name.
  * @param {string} [props.hint] Help text for the field, which the (i) icon shows.
+ * @param {string} [props.problem] Why the field cannot work, which the error glyph shows in place of the (i).
  * @param [props.action] What goes at the far right of the name row, such as an edit button.
  * @param {string} [props.error] The message from the field's last save, or empty.
  * @param props.children The field's value.
  */
-export function Field({ label, hint = '', action = null, error = '', children }) {
+export function Field({ label, hint = '', problem = '', action = null, error = '', children }) {
   return (
     <div role="group" aria-label={label} className={cn('workshop-field', 'flex', 'flex-col', 'gap-1')}>
       <dt
@@ -42,7 +44,7 @@ export function Field({ label, hint = '', action = null, error = '', children })
       >
         <span className={cn('workshop-field-label', 'flex', 'items-center', 'gap-1')}>
           {label}
-          {hint && <InfoTip label={label} hint={hint} />}
+          {(problem || hint) && <InfoTip label={label} hint={problem || hint} error={Boolean(problem)} />}
         </span>
         {action}
       </dt>
