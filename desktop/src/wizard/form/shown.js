@@ -27,6 +27,23 @@ export function shownSteps(steps, values) {
 }
 
 /**
+ * The steps shown, split where the form's closing notes begin: the
+ * dialogs after the last step that takes an answer close the form, and
+ * sit with its buttons.
+ *
+ *     closingSplit([prompt, dialog], [0, 1])  ->  { body: [0], closing: [1] }
+ *
+ * @param {import('../steps.js').Step[]} steps The wizard's steps.
+ * @param {number[]} shown The indexes of the steps the form shows, in order.
+ *
+ * @returns {{body: number[], closing: number[]}} The indexes above the buttons' group, and those in it.
+ */
+export function closingSplit(steps, shown) {
+  const last = shown.findLastIndex((at) => steps[at].kind !== 'dialog');
+  return { body: shown.slice(0, last + 1), closing: shown.slice(last + 1) };
+}
+
+/**
  * Each step's answer before the user changes any: a prompt's fallback, the
  * form's starting text, and a select's default option.
  *

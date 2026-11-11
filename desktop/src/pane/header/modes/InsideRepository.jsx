@@ -29,7 +29,7 @@ export function InsideRepository() {
 
   return (
     <>
-      <LabelledField id={label} label="Session Repository" hint={HINT}>
+      <LabelledField id={label} qualifier="Session" label="Repository" hint={HINT}>
         <RepositoryName name={repo.name} root={repo.root} labelledBy={label} />
       </LabelledField>
       {hasWorktrees(repos.data.repos, repo.root) && <WorktreeTether />}

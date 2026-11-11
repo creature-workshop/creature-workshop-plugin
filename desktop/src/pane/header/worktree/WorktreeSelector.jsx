@@ -32,7 +32,8 @@ export function WorktreeSelector() {
   return (
     <LabelledField
       id={label}
-      label="Session Worktree"
+      qualifier="Session"
+      label="Worktree"
       hint={`Which worktree of ${name} would you like to inspect?`}
     >
       <Select value={selected} onValueChange={selectWorktree}>

@@ -31,6 +31,6 @@ export function setupMessage(state, name) {
 function noWorkshop(name) {
   return {
     what: `${name} doesn't have a workshop yet.`,
-    why: "Its branch has no .ops/config, so there's nothing here for me to show. Another branch may have one.",
+    why: "Its branch has no .ops/config, so there's nothing here for me to show.",
   };
 }

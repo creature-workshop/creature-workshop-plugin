@@ -4,12 +4,12 @@
  * plugin this is and which checkout it came from, keeping the branch alone
  * when the pane is too narrow for both. Between them, when the selected
  * repository is a shellops project, sit the Workshop tabs with the Project
- * Info tab open; when its branch has no workshop, a notice with Set up shop. The tests mount the pane's stories
+ * Info tab open; when its branch has no workshop, a notice with Initialize workshop. The tests mount the pane's stories
  * and read the pane by role and by text, never by a test id.
  */
 
 import { test, expect } from '@playwright/experimental-ct-react';
-import { Adopted, FailingOnce, NotAdopted, OnMain, OutsideGit, WorkshopDeleted } from './WorkshopPane.story.jsx';
+import { Adopted, FailingOnce, NotAdopted, OnMain, OutsideGit, Unapproved, WorkshopDeleted } from './WorkshopPane.story.jsx';
 
 /**
  * What the footer shows: its text with the hidden measuring copy left out.
@@ -91,10 +91,10 @@ test('a branch without a workshop says so in place of the tabs', async ({ mount 
   await expect(component.getByRole('tablist')).toHaveCount(0);
 });
 
-test('Set up shop opens a form filled from the folder, its remote and the agent, with the organization empty and the commit off', async ({ mount }) => {
+test('Initialize workshop opens a form filled from the folder, its remote and the agent, with the organization empty and the commit off', async ({ mount }) => {
   const component = await mount(<NotAdopted />);
 
-  await component.getByRole('button', { name: 'Set up shop' }).click();
+  await component.getByRole('button', { name: 'Initialize workshop' }).click();
   const form = component.getByRole('form', { name: 'Set up shop' });
 
   await expect(form.getByRole('textbox', { name: 'Project Name' })).toHaveValue('notes');
@@ -109,7 +109,7 @@ test('Set up shop opens a form filled from the folder, its remote and the agent,
 test('each field of the Set up shop form says what it is for in its (i)', async ({ mount, page }) => {
   const component = await mount(<NotAdopted />);
 
-  await component.getByRole('button', { name: 'Set up shop' }).click();
+  await component.getByRole('button', { name: 'Initialize workshop' }).click();
   const form = component.getByRole('form', { name: 'Set up shop' });
   await form.getByRole('button', { name: 'About Command' }).hover();
 
@@ -120,7 +120,7 @@ test('each field of the Set up shop form says what it is for in its (i)', async 
 test('without a guess from the agent, the description and the command start empty and unmarked', async ({ mount }) => {
   const component = await mount(<NotAdopted unguessed />);
 
-  await component.getByRole('button', { name: 'Set up shop' }).click();
+  await component.getByRole('button', { name: 'Initialize workshop' }).click();
   const form = component.getByRole('form', { name: 'Set up shop' });
 
   await expect(form.getByRole('textbox', { name: 'Description' })).toHaveValue('');
@@ -128,17 +128,17 @@ test('without a guess from the agent, the description and the command start empt
   await expect(form.getByText('Model suggestion')).toHaveCount(0);
 });
 
-test('Set up shop sends the manifest as the user left it and the commit switch, and the tabs replace the form', async ({ mount }) => {
+test('Confirm sends the manifest as the user left it and the commit switch, and the tabs replace the form', async ({ mount }) => {
   const sent = [];
   const component = await mount(<NotAdopted onAdopt={(body) => sent.push(body)} />);
 
-  await component.getByRole('button', { name: 'Set up shop' }).click();
+  await component.getByRole('button', { name: 'Initialize workshop' }).click();
   const form = component.getByRole('form', { name: 'Set up shop' });
   await form.getByRole('textbox', { name: 'Project Name' }).fill('Notes');
   await form.getByRole('textbox', { name: 'Description' }).fill('Notes, kept in git.');
   await form.getByRole('textbox', { name: 'Organization' }).fill('someone');
   await form.getByRole('switch', { name: 'Commit the workshop files to main' }).click();
-  await form.getByRole('button', { name: 'Set up shop' }).click();
+  await form.getByRole('button', { name: 'Confirm' }).click();
 
   await expect(component.getByRole('tablist')).toBeVisible();
   await expect.poll(() => sent).toEqual([{
@@ -148,27 +148,51 @@ test('Set up shop sends the manifest as the user left it and the commit switch, 
   }]);
 });
 
-test('the approval switch starts off, and setting up shop without it changes no setting', async ({ mount }) => {
-  const written = [];
-  const component = await mount(<NotAdopted onApprove={(roots) => written.push(roots)} />);
+test('the form says what completing setup agrees to, above its buttons, and has no switch for it', async ({ mount }) => {
+  const component = await mount(<NotAdopted />);
 
-  await component.getByRole('button', { name: 'Set up shop' }).click();
+  await component.getByRole('button', { name: 'Initialize workshop' }).click();
   const form = component.getByRole('form', { name: 'Set up shop' });
-  await expect(form.getByRole('switch', { name: 'Let the workshop run commands in this project' })).not.toBeChecked();
-  await form.getByRole('button', { name: 'Set up shop' }).click();
 
-  await expect(component.getByRole('tablist')).toBeVisible();
-  expect(written).toEqual([]);
+  await expect(form.getByText('By completing setup, you agree to let Creature Workshop run commands to manage this repository.')).toBeVisible();
+  await expect(form.getByRole('switch')).toHaveCount(1);
 });
 
-test('with the approval switch on, Set up shop adds the project to the approved projects and keeps the others', async ({ mount }) => {
+test('the notice sits with the buttons, apart from the last switch, and Confirm is the wider button', async ({ mount }) => {
+  const component = await mount(<NotAdopted />);
+
+  await component.getByRole('button', { name: 'Initialize workshop' }).click();
+  const form = component.getByRole('form', { name: 'Set up shop' });
+  const last = await form.getByRole('switch').boundingBox();
+  const notice = await form.getByText('By completing setup').boundingBox();
+  const confirm = await form.getByRole('button', { name: 'Confirm' }).boundingBox();
+  const cancel = await form.getByRole('button', { name: 'Cancel' }).boundingBox();
+
+  const above = notice.y - (last.y + last.height);
+  const below = confirm.y - (notice.y + notice.height);
+  expect(below).toBe(8);
+  expect(above).toBeGreaterThanOrEqual(2 * below);
+  expect(confirm.width).toBeGreaterThanOrEqual(96);
+  expect(confirm.width).toBeGreaterThan(cancel.width);
+});
+
+test('the description is a field of several lines, and the other fields are one line', async ({ mount }) => {
+  const component = await mount(<NotAdopted />);
+
+  await component.getByRole('button', { name: 'Initialize workshop' }).click();
+  const form = component.getByRole('form', { name: 'Set up shop' });
+
+  await expect(form.getByRole('textbox', { name: 'Description' })).toHaveJSProperty('tagName', 'TEXTAREA');
+  await expect(form.getByRole('textbox', { name: 'Project Name' })).toHaveJSProperty('tagName', 'INPUT');
+});
+
+test('Confirm adds the project to the approved projects and keeps the others', async ({ mount }) => {
   const written = [];
   const component = await mount(<NotAdopted approved={['/home/someone/other']} onApprove={(roots) => written.push(roots)} />);
 
-  await component.getByRole('button', { name: 'Set up shop' }).click();
+  await component.getByRole('button', { name: 'Initialize workshop' }).click();
   const form = component.getByRole('form', { name: 'Set up shop' });
-  await form.getByRole('switch', { name: 'Let the workshop run commands in this project' }).click();
-  await form.getByRole('button', { name: 'Set up shop' }).click();
+  await form.getByRole('button', { name: 'Confirm' }).click();
 
   await expect(component.getByRole('tablist')).toBeVisible();
   await expect.poll(() => written).toEqual([['/home/someone/other', '/home/someone/notes']]);
@@ -178,10 +202,9 @@ test('when Hermes does not save the approval, the pane says so and sets up nothi
   const sent = [];
   const component = await mount(<NotAdopted unsaved onAdopt={(body) => sent.push(body)} />);
 
-  await component.getByRole('button', { name: 'Set up shop' }).click();
+  await component.getByRole('button', { name: 'Initialize workshop' }).click();
   const form = component.getByRole('form', { name: 'Set up shop' });
-  await form.getByRole('switch', { name: 'Let the workshop run commands in this project' }).click();
-  await form.getByRole('button', { name: 'Set up shop' }).click();
+  await form.getByRole('button', { name: 'Confirm' }).click();
 
   const alert = component.getByRole('alert');
   await expect(alert).toContainText("I couldn't record your approval of notes, so I haven't set up shop yet.");
@@ -190,10 +213,64 @@ test('when Hermes does not save the approval, the pane says so and sets up nothi
   expect(sent).toEqual([]);
 });
 
+test('a project that is set up and not approved shows only the approval notice, centred, and no tabs', async ({ mount }) => {
+  const component = await mount(<Unapproved />);
+
+  const notice = component.getByRole('status').filter({ hasText: 'Approval needed for notes.' });
+  await expect(notice).toHaveText('Approval needed for notes.By approving, you agree to let Creature Workshop run commands to manage this repository.Approve project');
+  await expect(notice.getByRole('button', { name: 'Approve project' })).toBeVisible();
+  await expect(component.getByRole('tablist')).toHaveCount(0);
+  await expect(notice).toHaveCSS('text-align', 'center');
+  await expect(notice).toHaveCSS('justify-content', 'center');
+  await expect(notice).toHaveCSS('align-items', 'center');
+});
+
+test('Approve project adds the project to the approved projects, keeps the others, and the tabs replace the notice', async ({ mount }) => {
+  const written = [];
+  const component = await mount(<Unapproved approved={['/home/someone/other']} onApprove={(roots) => written.push(roots)} />);
+
+  await component.getByRole('button', { name: 'Approve project' }).click();
+
+  await expect(component.getByRole('tablist')).toBeVisible();
+  await expect(component.getByText('Approval needed for notes.')).toHaveCount(0);
+  expect(written).toEqual([['/home/someone/other', '/home/someone/notes']]);
+});
+
+test('when Hermes does not save the approval, the notice says so with Try again', async ({ mount }) => {
+  const component = await mount(<Unapproved unsaved />);
+
+  await component.getByRole('button', { name: 'Approve project' }).click();
+
+  const alert = component.getByRole('alert');
+  await expect(alert).toContainText("I couldn't record your approval of notes.");
+  await expect(alert).toContainText("Hermes didn't save the approved_projects setting: the gateway is restarting");
+  await expect(alert.getByRole('button', { name: 'Try again' })).toBeVisible();
+});
+
+test('an approved project shows no approval notice', async ({ mount }) => {
+  const component = await mount(<Adopted />);
+
+  await expect(component.getByRole('tablist')).toBeVisible();
+  await expect(component.getByRole('button', { name: 'Approve project' })).toHaveCount(0);
+});
+
+test('a checkout with no workshop shows its notice alone and centred, as the approval notice is', async ({ mount }) => {
+  const component = await mount(<NotAdopted />);
+
+  const notice = component.getByRole('status').filter({ hasText: "notes doesn't have a workshop yet." });
+  await expect(notice.getByRole('button', { name: 'Initialize workshop' })).toBeVisible();
+  await expect(notice).toContainText("Its branch has no .ops/config, so there's nothing here for me to show.");
+  await expect(notice).not.toContainText('Another branch');
+  await expect(notice).toHaveCSS('padding', '24px');
+  await expect(notice).toHaveCSS('text-align', 'center');
+  await expect(notice).toHaveCSS('justify-content', 'center');
+  await expect(notice).toHaveCSS('align-items', 'center');
+});
+
 test('Cancel goes back to the notice', async ({ mount }) => {
   const component = await mount(<NotAdopted />);
 
-  await component.getByRole('button', { name: 'Set up shop' }).click();
+  await component.getByRole('button', { name: 'Initialize workshop' }).click();
   await component.getByRole('button', { name: 'Cancel' }).click();
 
   await expect(component.getByRole('status')).toContainText("notes doesn't have a workshop yet.");
@@ -203,8 +280,8 @@ test('a refused adoption says so, and Try again sends the same answers', async (
   const sent = [];
   const component = await mount(<NotAdopted fails onAdopt={(body) => sent.push(body)} />);
 
-  await component.getByRole('button', { name: 'Set up shop' }).click();
-  await component.getByRole('form', { name: 'Set up shop' }).getByRole('button', { name: 'Set up shop' }).click();
+  await component.getByRole('button', { name: 'Initialize workshop' }).click();
+  await component.getByRole('form', { name: 'Set up shop' }).getByRole('button', { name: 'Confirm' }).click();
   await expect(component.getByRole('alert')).toContainText("I couldn't set up shop in notes.");
   await component.getByRole('button', { name: 'Try again' }).click();
 
@@ -277,13 +354,13 @@ test('a failed read of the manifest says so in its group, and Try again shows th
   await expect(manifest.getByRole('group', { name: 'Name' })).toContainText('Notes');
 });
 
-test('a workshop deleted outside the pane gives way to Set up shop within 5 seconds', async ({ mount, page }) => {
+test('a workshop deleted outside the pane gives way to Initialize workshop within 5 seconds', async ({ mount, page }) => {
   await page.clock.install();
   const component = await mount(<WorkshopDeleted />);
 
   await expect(component.getByRole('tab', { name: 'Project Info' })).toBeVisible();
   await page.clock.runFor(5_000);
 
-  await expect(component.getByRole('button', { name: 'Set up shop' })).toBeVisible();
+  await expect(component.getByRole('button', { name: 'Initialize workshop' })).toBeVisible();
   await expect(component.getByRole('tab', { name: 'Project Info' })).toHaveCount(0);
 });

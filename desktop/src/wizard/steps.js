@@ -22,6 +22,7 @@ const YES_NO = Object.freeze([
  * @property {string} text The message of a dialog, or the question of a prompt or select.
  * @property {string} [key] The answer's name in the answers a wizard finishes with; a dialog has none.
  * @property {string} [fallback] A prompt's answer when the user enters nothing.
+ * @property {boolean} [multiline] Whether a prompt's answer may run over several lines.
  * @property {{label: string, value: string}[]} [options] A select's options, in order.
  * @property {number} [defaultIndex] The option a select starts on.
  * @property {string} [id] The name a branch jumps to.
@@ -129,6 +130,18 @@ export function withHint(step, hint) {
  */
 export function withInfo(step, info) {
   return Object.freeze({ ...step, info });
+}
+
+/**
+ * The prompt taking an answer of several lines, which an implementation
+ * shows in a taller field that wraps; any other step unchanged.
+ *
+ * @param {Step} step The step.
+ *
+ * @returns {Step} A copy of the prompt that takes several lines.
+ */
+export function withLines(step) {
+  return step.kind === 'prompt' ? Object.freeze({ ...step, multiline: true }) : step;
 }
 
 /**

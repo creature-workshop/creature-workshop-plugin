@@ -152,6 +152,17 @@ test('each selector has a small label above it and a tooltip with the path', asy
   await expect(page.getByRole('tooltip')).toHaveText('/home/someone/code/site, on feat/x');
 });
 
+test('a header too narrow for its labels drops "Session" from them, keeps each on one line, and keeps the selector\'s name', async ({ mount }) => {
+  const component = await mount(<Worktrees width={120} />);
+
+  await expect(component.getByText('Repository', { exact: true })).toBeVisible();
+  await expect(component.getByText('Worktree', { exact: true })).toBeVisible();
+  await expect(component.getByText('Session Repository', { exact: true })).toHaveCount(0);
+  await expect(component.getByRole('combobox', { name: 'Session Worktree' })).toBeVisible();
+  const label = await component.getByText('Worktree', { exact: true }).boundingBox();
+  expect(label.height).toBeLessThan(24);
+});
+
 test('each label has an (i) that says what the selector is for', async ({ mount, page }) => {
   const component = await mount(<Worktrees />);
 
