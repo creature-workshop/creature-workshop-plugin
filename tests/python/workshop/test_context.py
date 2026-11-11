@@ -57,12 +57,11 @@ class BeforeTurn(Scratch):
     picking.select_repository("s1", self.code, self.demo)
     self.assertIn(f"at {self.demo}", context.before_turn(session_id="s1")["context"])
 
-  def test_says_that_a_checkout_whose_workshop_is_not_set_up_needs_setting_up(self):
+  def test_a_checkout_with_a_workshop_and_no_shellops_of_its_own_is_on_the_workshop(self):
     (self.demo / "shell" / "ops").unlink()
     picking.select_repository("s1", self.code, self.demo)
     told = context.before_turn(session_id="s1")["context"]
-    self.assertIn(f"{self.demo}, has a workshop that isn't set up yet", told)
-    self.assertIn(".ops/boot", told)
+    self.assertIn(f'this session is on the workshop "Demo" at {self.demo}', told)
 
   def test_says_that_nothing_is_selected_when_the_folder_holds_a_workshop(self):
     told = context.before_turn(session_id="s1")["context"]

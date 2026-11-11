@@ -16,7 +16,8 @@ The copy is made with the vendor installer in the Hermes tools home, packed
 without what running `hermes` does not need, checked by validating the tree
 that shell/actions/hermes/build wrote into build/ with it, and uploaded as one
 tarball. A copy is never replaced, so one that fails the check is never
-uploaded. The installed tree
+uploaded. A refused upload is a warning, not a failure, since Hermes still
+installs without the copy. The installed tree
 holds absolute paths, so this runs where the copy is used: the
 plugin/hermes-mirror job, with the same HERMES_TOOL_HOME as plugin/catalog.
 HERMES_MIRROR_URL names the registry and MIRROR_AUTH the header that
@@ -48,7 +49,7 @@ main() {
   __main__tarball="$(mktemp -d)/hermes-$__main__version.tar.gz"
   hermes__mirror__pack "$__main__version" "$(hermes__home)" "$__main__tarball"
   check_copy "$__main__version" "$__main__check"
-  hermes__mirror__upload "$__main__version" "$__main__tarball"
+  upload_copy "$__main__version" "$__main__tarball"
 }
 
 parse_args() {
@@ -89,6 +90,20 @@ Prints the field $1 of the hermes entry in .ops/config/tools.yaml.
 FUN
 pin() {
   @get "$(self__config__load tools)" ".script.hermes.$1"
+}
+
+: <<'FUN'
+Uploads the tarball $2 as the copy of Hermes Agent version $1. When the
+registry refuses it, for example as too large, it warns and succeeds: the copy
+only saves later jobs the vendor installer, and hermes__install falls back to
+that installer when the mirror holds no copy.
+FUN
+upload_copy() {
+  if hermes__mirror__upload "$1" "$2"; then
+    return 0
+  fi
+
+  warn "the registry refused the copy of hermes $1; later jobs install it with the vendor installer"
 }
 
 : <<'FUN'

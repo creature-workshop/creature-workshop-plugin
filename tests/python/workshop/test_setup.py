@@ -1,4 +1,4 @@
-"""Covers workshop.project.setup and GET /project/setup: how far a checkout is set up, from its files."""
+"""Covers workshop.project.setup and GET /project/setup: whether a checkout has a workshop, from its files."""
 
 import asyncio
 import tempfile
@@ -9,16 +9,12 @@ from workshop.project.setup import setup_state
 from workshop.routes.project import setup
 
 
-def checkout(root, adopted=False, dispatcher=False):
-  """A checkout at root: with .ops/config when adopted, and shell/ops when its dispatcher is installed."""
+def checkout(root, adopted=False):
+  """A checkout at root, with .ops/config when adopted."""
 
   root.mkdir(parents=True, exist_ok=True)
   if adopted:
     (root / ".ops" / "config").mkdir(parents=True)
-
-  if dispatcher:
-    (root / "shell").mkdir()
-    (root / "shell" / "ops").write_text("#!/bin/sh\n")
 
   return root
 
@@ -28,27 +24,19 @@ class SetupState(unittest.TestCase):
     with tempfile.TemporaryDirectory() as tmp:
       self.assertEqual(setup_state(checkout(Path(tmp) / "notes")), "no-workshop")
 
-  def test_a_declaration_without_the_dispatcher_is_not_set_up(self):
+  def test_a_declaration_is_ready_without_a_shellops_of_its_own(self):
     with tempfile.TemporaryDirectory() as tmp:
-      self.assertEqual(setup_state(checkout(Path(tmp) / "fresh", adopted=True)), "not-set-up")
-
-  def test_a_declaration_and_the_dispatcher_is_ready(self):
-    with tempfile.TemporaryDirectory() as tmp:
-      self.assertEqual(setup_state(checkout(Path(tmp) / "demo", adopted=True, dispatcher=True)), "ready")
-
-  def test_a_dispatcher_without_a_declaration_still_has_no_workshop(self):
-    with tempfile.TemporaryDirectory() as tmp:
-      self.assertEqual(setup_state(checkout(Path(tmp) / "odd", dispatcher=True)), "no-workshop")
+      self.assertEqual(setup_state(checkout(Path(tmp) / "demo", adopted=True)), "ready")
 
   def test_a_project_above_the_checkout_does_not_count(self):
     with tempfile.TemporaryDirectory() as tmp:
-      checkout(Path(tmp), adopted=True, dispatcher=True)
+      checkout(Path(tmp), adopted=True)
       self.assertEqual(setup_state(checkout(Path(tmp) / "nested")), "no-workshop")
 
 
 class SetupRoute(unittest.TestCase):
   def test_answers_the_root_and_its_state(self):
     with tempfile.TemporaryDirectory() as tmp:
-      root = checkout(Path(tmp) / "fresh", adopted=True)
+      root = checkout(Path(tmp) / "notes")
       answer = asyncio.run(setup(root=str(root)))
-      self.assertEqual((answer.root, answer.state), (str(root), "not-set-up"))
+      self.assertEqual((answer.root, answer.state), (str(root), "no-workshop"))

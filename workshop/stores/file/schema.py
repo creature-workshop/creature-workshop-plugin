@@ -1,24 +1,39 @@
 """The JSON Schema of a file store document: the project's own, from its pinned
 shell/.ops/schema/, so the pane describes the file as the shellops the
-project runs reads it. References to other schema files are followed for
-each top-level property. A document without a schema answers {}.
+project runs reads it, or else the one in the shellops that comes with the
+plugin (SHOP-101), for a checkout with no shellops of its own. References
+to other schema files are followed for each top-level property. A document
+without a schema answers {}.
 """
 
 import json
+from pathlib import Path
 
 from workshop.stores.file.location import stem_of
+
+BUNDLED_SCHEMAS = Path(__file__).resolve().parents[3] / "shell" / ".ops" / "schema"
 
 
 def schema_for(root, source):
   """The schema of source in the project at root, with each property's file reference resolved; {} when there is none."""
 
-  path = root / "shell" / ".ops" / "schema" / f"{stem_of(source)}.schema.json"
-  if not path.is_file():
+  path = schema_path(root, f"{stem_of(source)}.schema.json")
+  if path is None:
     return {}
 
   schema = json.loads(path.read_text())
   properties = {key: resolved(value, path.parent) for key, value in schema.get("properties", {}).items()}
   return {**schema, "properties": properties}
+
+
+def schema_path(root, name):
+  """The schema file called name: the project's own when it has one, else the plugin's; None when neither has it."""
+
+  for folder in (root / "shell" / ".ops" / "schema", BUNDLED_SCHEMAS):
+    if (folder / name).is_file():
+      return folder / name
+
+  return None
 
 
 def resolved(definition, folder):

@@ -83,6 +83,12 @@ class Describing(AProject):
     self.assertEqual(schema["properties"]["command-name"]["type"], "string")
     self.assertEqual(schema["properties"]["default-channel"]["enum"], ["dev", "stable"])
 
+  def test_a_checkout_without_shellops_takes_the_schema_from_the_plugins_shellops(self):
+    shutil.rmtree(self.root / "shell")
+    schema = schema_for(self.root, MANIFEST)
+    self.assertIn("name", schema["required"])
+    self.assertEqual(schema["properties"]["command-name"]["type"], "string")
+
   def test_a_document_without_a_schema_describes_as_empty(self):
     self.assertEqual(self.store.describe(self.root, "config/nothing.yaml"), {})
 

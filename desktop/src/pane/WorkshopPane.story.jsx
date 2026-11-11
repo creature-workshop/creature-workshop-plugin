@@ -2,9 +2,9 @@
  * @file The stories of the Workshop pane: each named export is the pane in
  * one scenario, with the backend's answers it runs against built in, so a
  * test mounts a story and passes nothing but plain data. In OnMain and
- * OutsideGit the session's directory holds no repository; in Adopted,
- * NotAdopted and NotSetUp it is one: with shellops, without a workshop on
- * its branch, and with a workshop this checkout has not set up. The header's own
+ * OutsideGit the session's directory holds no repository; in Adopted and
+ * NotAdopted it is one, with a workshop on its branch and without, and in
+ * WorkshopDeleted its workshop goes away while the pane is open. The header's own
  * scenarios are in header/Header.story.jsx. The pane's tests are in
  * pane.ct.jsx beside this file.
  */
@@ -13,6 +13,8 @@ import { cn } from '@hermes/plugin-sdk';
 import { useState } from 'react';
 import { standIn } from '../standIn/index.js';
 import { sessionSubject } from '../subject.js';
+import { FormWizard } from '../wizard/form/FormWizard.jsx';
+import { register } from '../wizard/implementation.js';
 import { WorkshopProvider } from '../workshop/WorkshopProvider.jsx';
 import { WorkshopPane } from './WorkshopPane.jsx';
 
@@ -55,7 +57,14 @@ const REJECTIONS = Object.freeze({
   'no-route': '404: {"detail":"Not Found"}',
   internal: `500: ${JSON.stringify({ data: null, errors: [{ message: "KeyError: 'root'", extensions: { code: 'INTERNAL', status: 500 } }] })}`,
   unreachable: 'bridge unavailable',
+  refused: `400: ${JSON.stringify({ data: null, errors: [{ message: 'notes already has a workshop.', extensions: { code: 'REFUSED', status: 400 } }] })}`,
 });
+
+/** What GET /project/adoption suggests in the stories: the folder's name, and the remote's repository. */
+const SUGGESTED = Object.freeze({ root: CWD, name: 'notes', repo: 'notes', branch: 'main' });
+
+/** What GET /project/adoption/guess answers in the stories: the agent's description and command. */
+const GUESSED = Object.freeze({ root: CWD, found: true, description: 'Notes kept in git.', command: 'notes' });
 
 /** What GET /about answers in the stories of a repository. */
 const ABOUT = { version: '0.1.0-dev.9', branch: 'main' };
@@ -98,6 +107,16 @@ export function Adopted({ latest = '0.1.0-dev.12', stable = '0.0.0' }) {
 }
 
 /**
+ * The pane over a repository whose workshop is deleted outside the pane
+ * after the first time the pane reads its setup: every later read finds no
+ * workshop.
+ */
+export function WorkshopDeleted() {
+  const [rest] = useState(() => deletingBackend());
+  return framed(rest, DOCKED_WIDTH);
+}
+
+/**
  * The pane over an adopted repository whose backend fails the first call
  * to `path` the way `kind` names, and answers every call after it, so Try
  * again succeeds.
@@ -111,14 +130,22 @@ export function FailingOnce({ path, kind }) {
   return framed(rest, DOCKED_WIDTH);
 }
 
-/** The pane over a repository whose branch has no workshop. */
-export function NotAdopted() {
-  return framed(repositoryBackend(NO_PROJECT, 'no-workshop'), DOCKED_WIDTH);
-}
-
-/** The pane over a checkout whose branch has a workshop that the checkout has not set up. */
-export function NotSetUp() {
-  return framed(repositoryBackend(NO_PROJECT, 'not-set-up'), DOCKED_WIDTH);
+/**
+ * The pane over a repository whose branch has no workshop, with the form
+ * wizard registered. GET /project/adoption suggests SUGGESTED; POST
+ * /project/adopt hands what it is sent to `onAdopt` and adopts the branch,
+ * after which the checkout is a shellops project, unless `fails` is set,
+ * when the first adoption is refused.
+ *
+ * @param props The story's props.
+ * @param {(body: object) => void} [props.onAdopt] Takes the body of each POST /project/adopt.
+ * @param {boolean} [props.fails] Whether the first adoption is refused.
+ * @param {boolean} [props.unguessed] Whether the agent's guess fails.
+ */
+export function NotAdopted({ onAdopt = () => {}, fails = false, unguessed = false }) {
+  register(FormWizard);
+  const [rest] = useState(() => adoptingBackend(onAdopt, fails, unguessed));
+  return framed(rest, DOCKED_WIDTH);
 }
 
 /**
@@ -137,7 +164,7 @@ function projectAt(root, release) {
  * /store/query and GET /store/introspect with its manifest.
  *
  * @param project The answer to GET /project.
- * @param {'no-workshop' | 'not-set-up' | 'ready'} [setup] How far the checkout is set up.
+ * @param {'no-workshop' | 'ready'} [setup] Whether the checkout has a workshop.
  */
 function repositoryBackend(project, setup = 'ready') {
   const answers = [
@@ -150,6 +177,53 @@ function repositoryBackend(project, setup = 'ready') {
     ['/store/introspect', MANIFEST_SCHEMA],
   ];
   return standIn(async (path) => answers.find(([prefix]) => path.startsWith(prefix))[1]);
+}
+
+/**
+ * A backend over a shellops project until its setup has been read once,
+ * and a checkout with no workshop after, as when .ops/ is deleted.
+ */
+function deletingBackend() {
+  let reads = 0;
+  return async (path) => {
+    const deleted = reads > 0;
+    if (path.startsWith('/project/setup')) {
+      reads += 1;
+    }
+    return repositoryBackend(deleted ? NO_PROJECT : projectAt(CWD, { latest: '', stable: '' }), deleted ? 'no-workshop' : 'ready')(path);
+  };
+}
+
+/**
+ * A backend over a checkout whose branch has no workshop until POST
+ * /project/adopt succeeds, and a shellops project after. Each POST's body
+ * goes to `onAdopt`; when `fails` is set, the first is refused.
+ *
+ * @param {(body: object) => void} onAdopt Takes the body of each POST /project/adopt.
+ * @param {boolean} fails Whether the first adoption is refused.
+ * @param {boolean} unguessed Whether GET /project/adoption/guess fails.
+ */
+function adoptingBackend(onAdopt, fails, unguessed) {
+  let adopted = false;
+  let posts = 0;
+  return async (path, options = {}) => {
+    if (path.startsWith('/project/adopt') && options.method === 'POST') {
+      posts += 1;
+      onAdopt(options.body);
+      if (fails && posts === 1) {
+        throw new Error(REJECTIONS.refused);
+      }
+      adopted = true;
+      return { root: CWD, path: '.ops/config/manifest.yaml', committed: options.body.commit, state: 'ready' };
+    }
+    if (path.startsWith('/project/adoption/guess')) {
+      return unguessed ? Promise.reject(new Error(REJECTIONS['no-route'])) : GUESSED;
+    }
+    if (path.startsWith('/project/adoption')) {
+      return SUGGESTED;
+    }
+    return repositoryBackend(adopted ? projectAt(CWD, { latest: '', stable: '' }) : NO_PROJECT, adopted ? 'ready' : 'no-workshop')(path);
+  };
 }
 
 /**

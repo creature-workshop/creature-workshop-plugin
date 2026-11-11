@@ -90,6 +90,17 @@ git submodule add https://gitlab.creature-workshop.com/ksoft/shellops.git shell/
 - The backend in `dashboard/plugin_api.py` runs `shell/ops install --check`
   for the pane on a timer. It reads files under the project only. What it
   answers with is the models under `workshop/models/`, one module per concept.
+- The pane's **Set up shop** form, on a branch with no `.ops/config/`, writes
+  `.ops/config/manifest.yaml` from the values you enter, after you press its
+  Set up shop button. It fills the name and the repository from the
+  folder's name and the `origin` remote's URL, and leaves the organization
+  to you. It asks the model you are
+  using, through Hermes, to suggest the description and the command: the
+  model sees the repository's name, the names at its top level and the
+  opening of its README, with secrets masked. Fields the model suggested are
+  marked in the form. You can change every field. It commits that one file, with
+  the message `chore: set up workshop files (.ops/)`, only when you choose
+  to; the choice starts on No.
 - Every `shell/ops` run is logged under the `creature-workshop` logger,
   which Hermes writes to `~/.hermes/logs/`: successes at INFO in agent.log,
   failures at WARNING with their stderr in errors.log too, so `hermes logs`

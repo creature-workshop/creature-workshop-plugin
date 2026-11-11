@@ -11,7 +11,8 @@
  *   repository's worktrees; the backend decides both, and the agent's
  *   tools work on the same checkout;
  * - `project`: the shellops project of that checkout;
- * - `setup`: how far that checkout is set up for shellops.
+ * - `setup`: whether that checkout has a workshop, read again every 5
+ *   seconds so a workshop added or deleted outside the pane shows.
  *
  * `about`, `repos`, `project` and `setup` are remote data, as remote.js
  * describes: loading, failure or success. `retry` asks for one of them
@@ -25,9 +26,17 @@ import { useCheckout } from './useCheckout.js';
 import { useProject } from './useProject.js';
 import { useRetry } from './useRetry.js';
 import { useSetup } from './useSetup.js';
+import { useSetupFollower } from './useSetupFollower.js';
 
 /** The shared state; null outside a WorkshopProvider. */
 const WorkshopContext = createContext(null);
+
+/**
+ * How often the pane re-reads the checkout's setup, in seconds. It is its
+ * own, shorter than pane_refresh_seconds, because the read only looks for
+ * .ops/config, while that setting paces the git status.
+ */
+const SETUP_REFRESH_SECONDS = 5;
 
 /**
  * Provides the pane's shared state to its children.
@@ -48,7 +57,8 @@ export function WorkshopProvider({ rest, subject, children }) {
   const about = useAbout(rest, retried.about);
   const checkout = useCheckout(rest, subject, retried.repos);
   const project = useProject(rest, checkout.selected, retried.project);
-  const setup = useSetup(rest, checkout.selected, retried.setup);
+  const setup = useSetup(rest, checkout.selected, retried.setup, SETUP_REFRESH_SECONDS);
+  useSetupFollower(checkout.selected, setup, retry);
   const value = useMemo(() => ({ about, subject, ...checkout, project, setup, retry }), [about, subject, checkout, project, setup, retry]);
 
   return <WorkshopContext.Provider value={value}>{children}</WorkshopContext.Provider>;

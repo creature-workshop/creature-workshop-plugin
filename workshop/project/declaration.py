@@ -1,7 +1,6 @@
 """Finding the shellops project a folder is in, and reading what it declares.
 
-A shellops project has shell/ops, the dispatcher its init copies in, and a
-declaration under .ops/config/. The declaration files are YAML; the lock,
+A shellops project is a folder with a declaration under .ops/config/. The declaration files are YAML; the lock,
 .ops/lock, is JSON written by ops install and the release job. The tools and
 the pane read a project through this module and nothing else: which files
 it has, what its manifest says, which tools it declares, and what its last
@@ -28,7 +27,7 @@ def find_project(start):
 
 
 def is_project(candidate):
-  """Whether a folder is the root of a shellops project: a checkout that is set up, with .ops/config and shell/ops."""
+  """Whether a folder is the root of a shellops project: a checkout whose branch has .ops/config."""
 
   return setup_state(candidate) == READY
 

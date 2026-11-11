@@ -77,7 +77,7 @@ hermes__install() {
     return 0
   fi
 
-  if @is_true "$(hermes__mirror__configured)"; then
+  if @is_true "$(__hermes__from_mirror "$1")"; then
     hermes__mirror__fetch "$1" "$(hermes__home)" || return 1
   else
     __hermes__run_installer "$1" "$2" || return 1
@@ -104,6 +104,26 @@ Removes Hermes Agent version $1 from the tools home.
 PUB_FUN
 hermes__uninstall() {
   rm -rf "$(hermes__install_dir "$1")"
+}
+
+: <<'FUN'
+Prints true when Hermes Agent version $1 can come from the mirror: a mirror is
+configured and holds a copy of it. Prints false otherwise, and says so when a
+mirror is configured but has no copy, as when the registry refused the upload,
+so the install falls back to the vendor installer.
+FUN
+__hermes__from_mirror() {
+  if @is_false "$(hermes__mirror__configured)"; then
+    println false
+    return 0
+  fi
+
+  __hermes__from_mirror__held="$(hermes__mirror__has "$1")"
+  if @is_false "$__hermes__from_mirror__held"; then
+    warn "the mirror holds no copy of hermes $1; installing it with the vendor installer"
+  fi
+
+  println "$__hermes__from_mirror__held"
 }
 
 : <<'FUN'
