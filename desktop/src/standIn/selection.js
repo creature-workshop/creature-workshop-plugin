@@ -87,7 +87,9 @@ export function checkoutOf(repo, picks, inside = '') {
  * pick when the request makes one.
  *
  * @param picksBySession Each session's picks, by session id.
- * @param request The request, `{path, options}`.
+ * @param request The request.
+ * @param request.path The path asked for, with its query.
+ * @param request.options The call's options: its method and its body.
  * @param backend The stand-in, whose `answer` is the story's own backend call.
  */
 async function selection(picksBySession, { path, options }, backend) {
@@ -104,7 +106,9 @@ async function selection(picksBySession, { path, options }, backend) {
  * the path names added.
  *
  * @param picksBySession Each session's picks, by session id.
- * @param request The request, `{path, options}`.
+ * @param request The request.
+ * @param request.path The path asked for, with its query.
+ * @param request.options The call's options.
  * @param backend The stand-in, whose `answer` is the story's own backend call.
  */
 async function reposWithSelection(picksBySession, { path, options }, backend) {
