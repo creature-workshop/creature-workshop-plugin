@@ -17,6 +17,15 @@ stages:
 variables:
   GIT_DEPTH: "0"
   GIT_SUBMODULE_DEPTH: "1"
+  # shellops' tools sit beside shellops at ksoft/<name>. `cli/install`
+  # records them in this project's lock with no repository, so the boot
+  # would look for them beside this project, in ksoft/hermes, where they are
+  # not. These name the repositories until shellops records them (SHOP-173).
+  SHELL_LINT_URL: $CI_SERVER_URL/ksoft/shell-lint.git
+  SHELL_SCAN_URL: $CI_SERVER_URL/ksoft/shell-scan.git
+  SHELL_TREE_URL: $CI_SERVER_URL/ksoft/shell-tree.git
+  SHELL_DOCS_URL: $CI_SERVER_URL/ksoft/shell-docs.git
+  SHELL_GOLDENS_URL: $CI_SERVER_URL/ksoft/shell-goldens.git
 
 workflow:
   rules:
