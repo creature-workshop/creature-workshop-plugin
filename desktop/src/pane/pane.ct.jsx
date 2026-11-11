@@ -148,6 +148,48 @@ test('Set up shop sends the manifest as the user left it and the commit switch, 
   }]);
 });
 
+test('the approval switch starts off, and setting up shop without it changes no setting', async ({ mount }) => {
+  const written = [];
+  const component = await mount(<NotAdopted onApprove={(roots) => written.push(roots)} />);
+
+  await component.getByRole('button', { name: 'Set up shop' }).click();
+  const form = component.getByRole('form', { name: 'Set up shop' });
+  await expect(form.getByRole('switch', { name: 'Let the workshop run commands in this project' })).not.toBeChecked();
+  await form.getByRole('button', { name: 'Set up shop' }).click();
+
+  await expect(component.getByRole('tablist')).toBeVisible();
+  expect(written).toEqual([]);
+});
+
+test('with the approval switch on, Set up shop adds the project to the approved projects and keeps the others', async ({ mount }) => {
+  const written = [];
+  const component = await mount(<NotAdopted approved={['/home/someone/other']} onApprove={(roots) => written.push(roots)} />);
+
+  await component.getByRole('button', { name: 'Set up shop' }).click();
+  const form = component.getByRole('form', { name: 'Set up shop' });
+  await form.getByRole('switch', { name: 'Let the workshop run commands in this project' }).click();
+  await form.getByRole('button', { name: 'Set up shop' }).click();
+
+  await expect(component.getByRole('tablist')).toBeVisible();
+  await expect.poll(() => written).toEqual([['/home/someone/other', '/home/someone/notes']]);
+});
+
+test('when Hermes does not save the approval, the pane says so and sets up nothing', async ({ mount }) => {
+  const sent = [];
+  const component = await mount(<NotAdopted unsaved onAdopt={(body) => sent.push(body)} />);
+
+  await component.getByRole('button', { name: 'Set up shop' }).click();
+  const form = component.getByRole('form', { name: 'Set up shop' });
+  await form.getByRole('switch', { name: 'Let the workshop run commands in this project' }).click();
+  await form.getByRole('button', { name: 'Set up shop' }).click();
+
+  const alert = component.getByRole('alert');
+  await expect(alert).toContainText("I couldn't record your approval of notes, so I haven't set up shop yet.");
+  await expect(alert).toContainText("Hermes didn't save the approved_projects setting: the gateway is restarting");
+  await expect(alert.getByRole('button', { name: 'Try again' })).toBeVisible();
+  expect(sent).toEqual([]);
+});
+
 test('Cancel goes back to the notice', async ({ mount }) => {
   const component = await mount(<NotAdopted />);
 

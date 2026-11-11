@@ -11,6 +11,7 @@
 
 import { cn } from '@hermes/plugin-sdk';
 import { useState } from 'react';
+import { requestWith } from '../modules/approval/approval.js';
 import { standIn } from '../standIn/index.js';
 import { sessionSubject } from '../subject.js';
 import { FormWizard } from '../wizard/form/FormWizard.jsx';
@@ -135,16 +136,23 @@ export function FailingOnce({ path, kind }) {
  * wizard registered. GET /project/adoption suggests SUGGESTED; POST
  * /project/adopt hands what it is sent to `onAdopt` and adopts the branch,
  * after which the checkout is a shellops project, unless `fails` is set,
- * when the first adoption is refused.
+ * when the first adoption is refused. Hermes's settings list `approved`
+ * as the approved projects and hand each write of them to `onApprove`,
+ * unless `unsaved` is set, when Hermes saves nothing.
  *
  * @param props The story's props.
  * @param {(body: object) => void} [props.onAdopt] Takes the body of each POST /project/adopt.
  * @param {boolean} [props.fails] Whether the first adoption is refused.
  * @param {boolean} [props.unguessed] Whether the agent's guess fails.
+ * @param {string[]} [props.approved] The roots the approved_projects setting lists.
+ * @param {(roots: string[]) => void} [props.onApprove] Takes the roots of each write of the setting.
+ * @param {boolean} [props.unsaved] Whether Hermes fails to save the setting.
  */
-export function NotAdopted({ onAdopt = () => {}, fails = false, unguessed = false }) {
+export function NotAdopted(props) {
+  const { onAdopt = () => {}, fails = false, unguessed = false, approved = [], onApprove = () => {}, unsaved = false } = props;
   register(FormWizard);
   const [rest] = useState(() => adoptingBackend(onAdopt, fails, unguessed));
+  useState(() => requestWith(settingsGateway(approved, onApprove, unsaved)));
   return framed(rest, DOCKED_WIDTH);
 }
 
@@ -191,6 +199,32 @@ function deletingBackend() {
       reads += 1;
     }
     return repositoryBackend(deleted ? NO_PROJECT : projectAt(CWD, { latest: '', stable: '' }), deleted ? 'no-workshop' : 'ready')(path);
+  };
+}
+
+/**
+ * A stand-in for Hermes's gateway as approval.js calls it: the plugin list
+ * holds `approved` as this plugin's approved_projects, and each write of
+ * the setting goes to `onApprove`. When `unsaved` is set, every call fails.
+ *
+ * @param {string[]} approved The roots the setting lists.
+ * @param {(roots: string[]) => void} onApprove Takes the roots of each write.
+ * @param {boolean} unsaved Whether every call fails.
+ */
+function settingsGateway(approved, onApprove, unsaved) {
+  return async (method, params) => {
+    if (unsaved) {
+      throw new Error('the gateway is restarting');
+    }
+    if (params.action === 'settings') {
+      onApprove(params.values.approved_projects);
+    }
+    const listing = {
+      plugins: [
+        { key: 'creature-workshop', settings_schema: [{ key: 'approved_projects', value: approved }] },
+      ],
+    };
+    return listing;
   };
 }
 

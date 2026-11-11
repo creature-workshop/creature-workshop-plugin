@@ -88,6 +88,11 @@ plugins:
           - /home/you/code/your-project
 ```
 
+The pane's **Set up shop** form can add the path for you: its switch "Let
+the workshop run commands in this project" is off until you turn it on, and
+when it is on, pressing Set up shop adds the project's root to the setting
+through Hermes's own settings call, the one behind Settings → Plugins.
+
 To withdraw the approval, remove the path.
 
 The agent cannot approve a project. No tool takes an approval, and in a
@@ -104,7 +109,9 @@ every command pass there, and the pane's backend does not run
   Approving a project).
 - The approved projects are a setting of the plugin in Hermes's
   configuration, which each profile has its own copy of. The plugin has no
-  tool and no route that changes it.
+  tool and no route that changes it. The pane changes it in one place: the
+  Set up shop form adds the project you are setting up, when you turn its
+  approval switch on, through Hermes's own settings call.
 - The project is the one selected for the session, which the pane shows. The
   plugin never selects a repository below the session's folder itself, and
   neither does the agent: until you select one in the pane, the tools run
