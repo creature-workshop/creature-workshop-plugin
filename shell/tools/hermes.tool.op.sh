@@ -14,14 +14,18 @@ DOC
   }
 
   @install() {
-    hermes__install "$(@get "$1" '.version' '')" "$(@get "$1" '.commit' '')"
+    @get __hermes__tool__version "$1" '.version' ''
+    @get __hermes__tool__commit "$1" '.commit' ''
+    hermes__install "$__hermes__tool__version" "$__hermes__tool__commit"
   }
 
   @uninstall() {
-    hermes__uninstall "$(@get "$1" '.version' '')"
+    @get __hermes__tool__version "$1" '.version' ''
+    hermes__uninstall "$__hermes__tool__version"
   }
 
   @installed() {
-    hermes__installed "$(@get "$1" '.version' '')"
+    @get __hermes__tool__version "$1" '.version' ''
+    hermes__installed "$__hermes__tool__version"
   }
 }
