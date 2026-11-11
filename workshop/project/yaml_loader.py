@@ -19,10 +19,25 @@ def load_yaml(text):
   return yaml.safe_load(text)
 
 
+class BlockDumper(yaml.SafeDumper):
+  """A safe dumper that writes a string of several lines as a literal block, one line of the file per line of the string."""
+
+
+def text_node(dumper, text):
+  """The YAML node for text: a literal block when it has a line break, a plain or quoted scalar otherwise."""
+
+  style = "|" if "\n" in text else None
+  return dumper.represent_scalar("tag:yaml.org,2002:str", text, style=style)
+
+
+BlockDumper.add_representer(str, text_node)
+
+
 def dump_yaml(data):
-  """data as a YAML document, its keys in the order data has them, block style, unicode kept.
+  """data as a YAML document, its keys in the order data has them, block style, unicode kept, and a string of several lines as a literal block.
 
     dump_yaml({"name": "Notes", "org": "someone"})  ->  "name: Notes\\norg: someone\\n"
+    dump_yaml({"description": "One.\\nTwo."})          ->  "description: |-\\n  One.\\n  Two.\\n"
   """
 
-  return yaml.safe_dump(data, sort_keys=False, allow_unicode=True, default_flow_style=False)
+  return yaml.dump(data, Dumper=BlockDumper, sort_keys=False, allow_unicode=True, default_flow_style=False)

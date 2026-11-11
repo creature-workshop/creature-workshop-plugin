@@ -168,6 +168,12 @@ every command pass there, and the pane's backend does not run
   marked in the form. You can change every field. It commits that one file, with
   the message `chore: set up workshop files (.ops/)`, only when you choose
   to; the choice starts on No.
+- The backend keeps a project's plan in `.ops/data/plan.yaml`, the file
+  shellops' file tracker reads, so `ops plan` shows the same plan: one entry
+  per ticket, with its title, its state and the tickets that block it. The
+  backend writes the file only to create, change or delete a ticket, and it
+  rewrites the whole file, so a comment in it is not kept. The pane has no
+  control that does this yet.
 - The **Explain** button on the Dependencies tab sends a model, through
   Hermes, the tool's name, channel and declared version, up to 40 lines of
   the repository that mention the tool, and the opening of the README, with

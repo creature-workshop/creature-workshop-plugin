@@ -3,7 +3,7 @@
 import unittest
 from pathlib import Path
 
-from workshop.project.yaml_loader import load_yaml
+from workshop.project.yaml_loader import dump_yaml, load_yaml
 
 TEMPLATE = Path(__file__).resolve().parents[3] / "shell" / "actions" / "hermes" / "plugin.yaml.template"
 
@@ -18,6 +18,16 @@ class LoadYaml(unittest.TestCase):
   def test_load_yaml_does_not_build_python_objects_from_tags(self):
     with self.assertRaises(Exception):
       load_yaml("!!python/object/apply:os.getcwd []\n")
+
+
+class DumpYaml(unittest.TestCase):
+  def test_dump_yaml_keeps_the_order_of_the_keys_and_writes_lists_as_blocks(self):
+    self.assertEqual(dump_yaml({"name": "Notes", "tools": ["ffmpeg"]}), "name: Notes\ntools:\n- ffmpeg\n")
+
+  def test_dump_yaml_writes_a_string_of_several_lines_as_a_literal_block_that_reads_back_the_same(self):
+    text = dump_yaml({"description": "One.\nTwo."})
+    self.assertEqual(text, "description: |-\n  One.\n  Two.\n")
+    self.assertEqual(load_yaml(text), {"description": "One.\nTwo."})
 
 
 class Declared(unittest.TestCase):
