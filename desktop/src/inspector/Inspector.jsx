@@ -17,21 +17,26 @@ import { FieldGroup } from './FieldGroup.jsx';
  * the selected project. Keys the binding does not list are left out. The
  * fields appear once both the record and its schema have arrived. When
  * reading either failed, it says so in their place, with why, what to try,
- * and Try again, which reads both again.
+ * and Try again, which reads both again. A record that does not exist is
+ * not a failure when `missing` is given: the group shows `missing` in the
+ * fields' place.
  *
  * @param props The component's props.
  * @param {object} props.binding What to show, as register in bindings.js returns it.
+ * @param [props.missing] What to show when the record does not exist, such as a button that creates it.
  */
-export function Inspector({ binding }) {
+export function Inspector({ binding, missing = null }) {
   const { project } = useWorkshop();
   const [attempt, setAttempt] = useState(0);
   const store = { ...binding.store, root: project.data.root };
   const { record, write } = useRecord({ ...store, id: binding.record }, attempt);
   const schema = useSchema(store, attempt);
-  const failed = [record, schema].find((remote) => remote.state === 'failure');
+  const absent = Boolean(missing) && notFound(record);
+  const failed = !absent && [record, schema].find((remote) => remote.state === 'failure');
 
   return (
     <FieldGroup title={binding.title}>
+      {absent && missing}
       {failed && (
         <FailureNotice
           what={`I couldn't read the ${binding.title} fields from ${binding.store.source}.`}
@@ -50,4 +55,13 @@ export function Inspector({ binding }) {
       ))}
     </FieldGroup>
   );
+}
+
+/**
+ * Whether reading the record failed because it does not exist.
+ *
+ * @param record The record, as remote data.
+ */
+function notFound(record) {
+  return record.state === 'failure' && record.error.code === 'NOT_FOUND';
 }

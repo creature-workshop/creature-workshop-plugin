@@ -59,7 +59,7 @@ const REJECTIONS = Object.freeze({
   'no-route': '404: {"detail":"Not Found"}',
   internal: `500: ${JSON.stringify({ data: null, errors: [{ message: "KeyError: 'root'", extensions: { code: 'INTERNAL', status: 500 } }] })}`,
   unreachable: 'bridge unavailable',
-  refused: `400: ${JSON.stringify({ data: null, errors: [{ message: 'notes already has a workshop.', extensions: { code: 'REFUSED', status: 400 } }] })}`,
+  refused: `400: ${JSON.stringify({ data: null, errors: [{ message: 'notes already has a manifest.', extensions: { code: 'REFUSED', status: 400 } }] })}`,
 });
 
 /** What GET /project/adoption suggests in the stories: the folder's name, and the remote's repository. */

@@ -1,8 +1,9 @@
 /**
  * @file The stories of the Dependencies tab: a project that declares tools
  * over three channels, one of them missing; the same with every tool
- * installed; one whose check fails once; one whose check says nothing; and
- * a project that declares none. The tests are in dependencies.ct.jsx
+ * installed; one whose check fails once; one whose check says nothing; a
+ * project that declares none; and one whose declaration gains its tools
+ * while the pane is open. The tests are in dependencies.ct.jsx
  * beside this file.
  */
 
@@ -60,6 +61,16 @@ export function CheckSaysNothing() {
 /** The tab over a project whose check never answers. */
 export function StillChecking() {
   const [rest] = useState(() => standIn(backend(DECLARED, () => new Promise(() => {}))));
+  return framed(rest);
+}
+
+/**
+ * The tab over a project that declares no tools the first time the pane
+ * reads it, and DECLARED on every later read, as when tools.yaml is
+ * written outside the pane.
+ */
+export function DeclaredLater() {
+  const [rest] = useState(() => standIn(declaringLater()));
   return framed(rest);
 }
 
@@ -121,6 +132,22 @@ function backend(declared, check) {
       return projectWith(declared, null);
     }
     return path.startsWith('/repos/status') ? STATUS : REPOS;
+  };
+}
+
+/**
+ * A backend call over a project that declares nothing on the first GET
+ * /project without the check, and DECLARED, all installed, on every read
+ * after.
+ */
+function declaringLater() {
+  let reads = 0;
+  return async (path) => {
+    const declared = reads > 0 ? DECLARED : [];
+    if (path.startsWith('/project?') && path.includes('check=0')) {
+      reads += 1;
+    }
+    return backend(declared, () => toolchain(declared, []))(path);
   };
 }
 

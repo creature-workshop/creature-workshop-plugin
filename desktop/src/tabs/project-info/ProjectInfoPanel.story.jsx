@@ -2,12 +2,16 @@
  * @file The stories of the Project Info tab: an adopted repository over a
  * backend whose file store keeps each change it is sent, as the real one
  * writes it to the manifest; one whose store refuses every change with a
- * reason; and one where the manifest changed outside the pane before the
- * first save. The tests are in
+ * reason; one where the manifest changed outside the pane before the
+ * first save; and one whose project has no manifest until the form writes
+ * it. The tests are in
  * project-info.ct.jsx beside this file.
  */
 
 import { useState } from 'react';
+import { requestWith } from '../../modules/approval/approval.js';
+import { FormWizard } from '../../wizard/form/FormWizard.jsx';
+import { register } from '../../wizard/implementation.js';
 import { WorkshopTabs } from '../../pane/tabs/WorkshopTabs.jsx';
 import { standIn } from '../../standIn/index.js';
 import { sessionSubject } from '../../subject.js';
@@ -74,6 +78,21 @@ export function ChangedOutside() {
 }
 
 /**
+ * The tabs over a project that has no manifest until POST /project/adopt
+ * writes one, with the form wizard registered. Each POST's body goes to
+ * `onAdopt`.
+ *
+ * @param props The story's props.
+ * @param {(body: object) => void} [props.onAdopt] Takes the body of each POST /project/adopt.
+ */
+export function NoManifestYet({ onAdopt = () => {} }) {
+  register(FormWizard);
+  const [rest] = useState(() => standIn(manifestlessBackend(onAdopt)));
+  useState(() => requestWith(async () => ({ plugins: [] })));
+  return framed(rest);
+}
+
+/**
  * The tabs under a provider over `rest`.
  *
  * @param rest The backend call.
@@ -105,6 +124,34 @@ function keepingBackend(stored = MANIFEST) {
     }
     reads += path.startsWith('/store/query') ? 1 : 0;
     return read(path, reads === 1 ? MANIFEST : manifest);
+  };
+}
+
+/**
+ * A backend call over a project whose manifest does not exist, so reading
+ * it is answered NOT_FOUND as Desktop rejects a 404, until POST
+ * /project/adopt writes it from the body's manifest.
+ *
+ * @param {(body: object) => void} onAdopt Takes the body of each POST /project/adopt.
+ */
+function manifestlessBackend(onAdopt) {
+  let manifest = null;
+  return async (path, options) => {
+    if (path.startsWith('/project/adopt') && options?.method === 'POST') {
+      onAdopt(options.body);
+      manifest = { id: 'document', revision: 'r1', values: options.body.manifest };
+      return { root: ROOT, path: '.ops/config/manifest.yaml', committed: options.body.commit, state: 'ready' };
+    }
+    if (path.startsWith('/project/adoption/guess')) {
+      return { root: ROOT, found: true, description: 'Notes kept in git.', command: 'notes' };
+    }
+    if (path.startsWith('/project/adoption')) {
+      return { root: ROOT, name: 'notes', repo: 'notes', branch: 'main' };
+    }
+    if (path.startsWith('/store/query') && !manifest) {
+      throw new Error(`404: ${JSON.stringify(failure('The project has no .ops/config/manifest.yaml.', { code: 'NOT_FOUND', status: 404 }))}`);
+    }
+    return read(path, manifest);
   };
 }
 
