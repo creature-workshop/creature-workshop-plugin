@@ -33,9 +33,9 @@ class Scratch(unittest.TestCase):
     self.code = self.root / "code"
     self.alpha = repo(self.code / "alpha")
     self.beta = repo(self.code / "beta")
-    data = mock.patch.object(data, "data_dir", return_value=self.root / "data")
-    data.start()
-    self.addCleanup(data.stop)
+    kept = mock.patch.object(data, "data_dir", return_value=self.root / "data")
+    kept.start()
+    self.addCleanup(kept.stop)
 
   def tearDown(self):
     self.scratch.cleanup()

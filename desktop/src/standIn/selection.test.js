@@ -23,7 +23,11 @@ const DEMO = {
 /** A repository whose answer lists no worktrees. */
 const BARE = { root: '/code/notes', name: 'notes', worktrees: [] };
 
-/** A story's own backend call, whose GET /repos lists DEMO and BARE for every folder. */
+/**
+ * A story's own backend call, whose GET /repos lists DEMO and BARE for every folder.
+ *
+ * @param path The path asked for.
+ */
 const listing = async (path) => (path.startsWith('/repos') ? { start: '/code', inside: false, checkout: '', repos: [DEMO, BARE], refresh_seconds: 20 } : { asked: path });
 
 describe('checkoutOf', () => {
