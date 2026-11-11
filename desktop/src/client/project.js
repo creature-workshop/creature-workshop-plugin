@@ -3,8 +3,9 @@
  * a folder belongs to; GET /project/setup, whether one checkout has a
  * workshop;
  * GET /project/adoption, what the adoption form starts with; GET
- * /project/adoption/guess, the agent's guesses for it; and POST
- * /project/adopt, which writes a branch's first manifest.
+ * /project/adoption/guess, the agent's guesses for it; POST
+ * /project/adopt, which writes a branch's first manifest; and GET
+ * /project/dependencies/explain, why the project has a declared tool.
  */
 
 import * as api from './api.js';
@@ -38,3 +39,12 @@ export const adoptionGuess = api.register(
  * commits it alone when `commit` is true, as POST /project/adopt answers.
  */
 export const adopt = api.register('adopt', (rest, root, manifest, commit) => rest('/project/adopt', { method: 'POST', body: { root, manifest, commit } }));
+
+/** How long the pane waits for an explanation, in milliseconds: the backend's 30-second model call and a margin. */
+const EXPLAIN_TIMEOUT_MS = 40_000;
+
+/** Why the project at a root has a declared tool, in the model's words, as GET /project/dependencies/explain answers. */
+export const explainDependency = api.register(
+  'explainDependency',
+  (rest, root, tool) => rest(`/project/dependencies/explain?root=${encodeURIComponent(root)}&tool=${encodeURIComponent(tool)}`, { timeoutMs: EXPLAIN_TIMEOUT_MS }),
+);

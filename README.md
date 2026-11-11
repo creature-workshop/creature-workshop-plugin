@@ -60,6 +60,18 @@ declared version and whether the tool is installed. Opening the tab runs
 `shell/ops install --check` in the project to find that out; it installs
 nothing.
 
+Each tool has an **Explain** button, which asks a model why the project has
+the tool and shows the answer under it, marked as a model suggestion. The
+model is a setting of its own, "Workshop: explain a dependency", under
+Settings → Models → Auxiliary. It starts on a free model on Nous Portal,
+`stepfun/step-3.7-flash:free`, and not on the model you chat with; choose
+another there at any time. When that model is busy, Hermes tries the other
+free models on Nous Portal, then the free models on OpenRouter if you have
+an OpenRouter key, 15 in all. Hermes uses the model you chat with only when
+it can set up none of them, for example with no Nous Portal sign-in and no
+OpenRouter key. Every answer names the model that gave it. When no model
+answers, the row says so, and Show details gives the reason.
+
 ## Install
 
 ```bash
@@ -156,6 +168,14 @@ every command pass there, and the pane's backend does not run
   marked in the form. You can change every field. It commits that one file, with
   the message `chore: set up workshop files (.ops/)`, only when you choose
   to; the choice starts on No.
+- The **Explain** button on the Dependencies tab sends a model, through
+  Hermes, the tool's name, channel and declared version, up to 40 lines of
+  the repository that mention the tool, and the opening of the README, with
+  secrets masked. It sends nothing until you press it, and it runs no
+  command of the project. Unless you choose another model for it, that
+  text goes to a free model on Nous Portal, or on OpenRouter if you have a
+  key for it, which may not be the provider you chat with; the answer names
+  the model.
 - Every `shell/ops` run is logged under the `creature-workshop` logger,
   which Hermes writes to `~/.hermes/logs/`: successes at INFO in agent.log,
   failures at WARNING with their stderr in errors.log too, so `hermes logs`

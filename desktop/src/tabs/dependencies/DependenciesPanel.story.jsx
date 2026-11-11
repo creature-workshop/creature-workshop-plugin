@@ -3,7 +3,8 @@
  * over three channels, one of them missing; the same with every tool
  * installed; one whose check fails once; one whose check says nothing; a
  * project that declares none; and one whose declaration gains its tools
- * while the pane is open. The tests are in dependencies.ct.jsx
+ * while the pane is open. In every story the model explains a tool as
+ * EXPLAINED says, unless `unexplained` is set, when its first answer fails. The tests are in dependencies.ct.jsx
  * beside this file.
  */
 
@@ -31,6 +32,16 @@ const DECLARED = Object.freeze([
   { channel: 'script', tool: 'hermes', version: '2026.9.24' },
 ]);
 
+/**
+ * What the model says about a tool in the stories.
+ *
+ * @param {string} tool The tool's name.
+ */
+const EXPLAINED = (tool) => `rec runs ${tool} to record every session.`;
+
+/** Why the model's first explanation fails with `unexplained`: what a provider says when it refuses the request. */
+const REFUSED = "Error code: 400 - output_config.format.schema: For 'object' type, 'additionalProperties' must be explicitly set to false";
+
 /** What the failing check rejects with: an answer of 500 from the backend. */
 const REJECTION = `500: ${JSON.stringify({ data: null, errors: [{ message: 'the check timed out', extensions: { code: 'INTERNAL', status: 500 } }] })}`;
 
@@ -40,9 +51,11 @@ const REJECTION = `500: ${JSON.stringify({ data: null, errors: [{ message: 'the 
  *
  * @param props The story's props.
  * @param {string[]} [props.missing] The tools that are not installed.
+ * @param {boolean} [props.unexplained] Whether the model's first explanation fails.
+ * @param {(path: string) => void} [props.onExplain] Takes the path of each GET /project/dependencies/explain.
  */
-export function Declared({ missing = ['uv'] }) {
-  const [rest] = useState(() => standIn(backend(DECLARED, () => toolchain(DECLARED, missing))));
+export function Declared({ missing = ['uv'], unexplained = false, onExplain = () => {} }) {
+  const [rest] = useState(() => standIn(explaining(backend(DECLARED, () => toolchain(DECLARED, missing)), unexplained, onExplain)));
   return framed(rest);
 }
 
@@ -148,6 +161,30 @@ function declaringLater() {
       reads += 1;
     }
     return backend(declared, () => toolchain(declared, []))(path);
+  };
+}
+
+/**
+ * `rest`, answering GET /project/dependencies/explain itself: the model's
+ * explanation of the tool the path names, after handing the path to
+ * `onExplain`; with `unexplained`, no explanation the first time, and
+ * REFUSED as the reason.
+ *
+ * @param rest The backend call that answers everything else.
+ * @param {boolean} unexplained Whether the first explanation fails.
+ * @param {(path: string) => void} onExplain Takes the path of each call.
+ */
+function explaining(rest, unexplained, onExplain) {
+  let asked = 0;
+  return async (path, ...args) => {
+    if (!path.startsWith('/project/dependencies/explain')) {
+      return rest(path, ...args);
+    }
+    asked += 1;
+    onExplain(path);
+    const tool = new URLSearchParams(path.split('?')[1]).get('tool');
+    const found = !(unexplained && asked === 1);
+    return { root: ROOT, tool, found, explanation: found ? EXPLAINED(tool) : '', reason: found ? '' : REFUSED, model: found ? 'stepfun/step-3.7-flash:free' : '' };
   };
 }
 

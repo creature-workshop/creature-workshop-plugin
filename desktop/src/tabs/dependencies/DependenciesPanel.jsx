@@ -21,7 +21,8 @@ const UNCHECKED = "I couldn't tell which of these are installed: the check said 
 /**
  * Shows how many dependencies the project declares and how many are
  * missing, then one group for each channel, named after it, with a row for
- * each tool. The list shows at once, from the declaration; each row says
+ * each tool, which has an Explain button that asks the model why the
+ * project has it. The list shows at once, from the declaration; each row says
  * Checking until `ops install --check` has answered, then Installed or
  * Missing. The list follows the declaration: a tool added to tools.yaml
  * outside the pane shows within 5 seconds, and the check runs again. When

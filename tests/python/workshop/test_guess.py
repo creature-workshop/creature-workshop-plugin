@@ -52,6 +52,12 @@ class Guess(unittest.TestCase):
       llm = StandInLlm({"description": " Notes kept in git. ", "command": "notes "})
       self.assertEqual(asyncio.run(guess(checkout(Path(tmp) / "notes"), llm)), {"description": "Notes kept in git.", "command": "notes"})
 
+  def test_asks_for_an_object_that_allows_no_other_property(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      llm = StandInLlm({"description": "x", "command": ""})
+      asyncio.run(guess(checkout(Path(tmp) / "notes"), llm))
+      self.assertIs(llm.asked[0]["json_schema"]["additionalProperties"], False)
+
   def test_shows_the_model_the_readme_and_the_top_level_names(self):
     with tempfile.TemporaryDirectory() as tmp:
       llm = StandInLlm({"description": "x", "command": ""})
