@@ -4,6 +4,7 @@
  * joins the strip by being listed here.
  */
 
+import { dependencies } from './dependencies/tab.js';
 import { projectInfo } from './project-info/tab.js';
 
 /**
@@ -16,4 +17,4 @@ import { projectInfo } from './project-info/tab.js';
  */
 
 /** @type {readonly Tab[]} Every tab, first to last; the first is open by default. */
-export const TABS = Object.freeze([projectInfo]);
+export const TABS = Object.freeze([projectInfo, dependencies]);
