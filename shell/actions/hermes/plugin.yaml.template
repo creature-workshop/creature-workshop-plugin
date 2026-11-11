@@ -33,3 +33,7 @@ config_schema:
     type: list
     default: []
     description: Names of more environment variables for every command the plugin runs, such as HTTPS_PROXY. A command gets PATH, HOME, the locale and the terminal without them.
+  approved_projects:
+    type: list
+    default: []
+    description: Absolute paths of the project roots the plugin may run shell/ops in. Empty until you add one; the plugin runs nothing in a project that is not approved.

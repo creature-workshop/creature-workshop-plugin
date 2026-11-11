@@ -4,8 +4,7 @@ inside a project and outside one.
 
 The backend is loaded the way Hermes loads it, from the file's path, and the
 route is called directly; the project is the golden case `installed`, whose
-shell/ops stub prints a check table with every tool installed. The approvals
-are kept in a scratch data folder.
+shell/ops stub prints a check table with every tool installed.
 """
 
 import asyncio
@@ -15,10 +14,8 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 
-from workshop import consent
-from workshop.about import data
+from tests.python.workshop.test_consent import approving
 from workshop.models.project import NoProject, Project
 
 HERE = Path(__file__).parent
@@ -46,7 +43,7 @@ def answer_for(path, check="1"):
 class Mounting(unittest.TestCase):
   def test_the_router_carries_every_route_the_pane_reads(self):
     paths = {route.path for route in load_backend().router.routes}
-    self.assertEqual(paths, {"/about", "/project", "/project/adopt", "/project/adoption", "/project/adoption/guess", "/project/approve", "/project/setup", "/repos", "/repos/status", "/selection", "/selection/worktree", "/store/introspect", "/store/mutate", "/store/query"})
+    self.assertEqual(paths, {"/about", "/project", "/project/adopt", "/project/adoption", "/project/adoption/guess", "/project/setup", "/repos", "/repos/status", "/selection", "/selection/worktree", "/store/introspect", "/store/mutate", "/store/query"})
 
 
 class InsideAProject(unittest.TestCase):
@@ -55,16 +52,14 @@ class InsideAProject(unittest.TestCase):
     self.root = Path(self.scratch) / "demo"
     shutil.copytree(INSTALLED, self.root)
     (self.root / "shell" / "ops").chmod(0o755)
-    kept = mock.patch.object(data, "data_dir", return_value=Path(self.scratch) / "data")
-    kept.start()
-    self.addCleanup(kept.stop)
 
   def tearDown(self):
     shutil.rmtree(self.scratch)
 
   def test_answers_an_approved_project_with_the_toolchain_checked(self):
-    consent.approve(self.root.resolve())
-    answer = answer_for(self.root)
+    with approving(self.root):
+      answer = answer_for(self.root)
+
     self.assertIsInstance(answer, Project)
     self.assertTrue(answer.approved)
     self.assertEqual(answer.root, str(self.root.resolve()))
@@ -81,8 +76,9 @@ class InsideAProject(unittest.TestCase):
     self.assertFalse((self.root / "ran").exists())
 
   def test_leaves_the_toolchain_out_when_the_check_is_off(self):
-    consent.approve(self.root.resolve())
-    answer = answer_for(self.root, check="0")
+    with approving(self.root):
+      answer = answer_for(self.root, check="0")
+
     self.assertIsInstance(answer, Project)
     self.assertIsNone(answer.toolchain)
 

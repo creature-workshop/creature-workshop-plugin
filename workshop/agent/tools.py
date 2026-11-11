@@ -11,7 +11,7 @@ the Workshop pane.
 import json
 
 from .. import settings
-from ..consent import approve, is_approved, require_consent
+from ..consent import require_consent
 from ..project import check_table
 from ..project.declaration import declaration, declared_tools, release, summary_line
 from ..run import ops
@@ -70,9 +70,6 @@ def workshop_install(args, **kwargs):
   root, error = project_for(kwargs)
   if error:
     return failure(error)
-
-  if args.get("approve"):
-    approve(root)
 
   denial = require_consent(root)
   if denial is not None:

@@ -29,7 +29,7 @@ import tempfile
 from pathlib import Path
 from unittest import mock
 
-from workshop import consent
+from tests.python.workshop.test_consent import approving
 from workshop.about import data
 from workshop.agent import session, tools
 
@@ -61,7 +61,7 @@ def transcript(case):
   with tempfile.TemporaryDirectory() as scratch:
     root = Path(scratch).resolve() / "project"
     kept = Path(scratch).resolve() / "data"
-    with mock.patch.object(session, "directory", return_value=str(root)), mock.patch.object(data, "data_dir", return_value=kept):
+    with mock.patch.object(session, "directory", return_value=str(root)), mock.patch.object(data, "data_dir", return_value=kept), approving(root):
       copy_input(case, root)
       blocks = [block(line, root) for line in calls_of(case)]
 
@@ -69,8 +69,8 @@ def transcript(case):
 
 
 def copy_input(case, root):
-  """Copies the case's input/ tree to root as an approved git repository, or
-  makes root an empty directory when the case has none."""
+  """Copies the case's input/ tree to root as a git repository, or makes root
+  an empty directory when the case has none."""
 
   source = case / "input"
   if not source.is_dir():
@@ -79,7 +79,6 @@ def copy_input(case, root):
 
   shutil.copytree(source, root)
   subprocess.run(["git", "init", "-q", str(root)], check=True)
-  consent.approve(root)
 
 
 def calls_of(case):

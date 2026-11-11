@@ -68,12 +68,14 @@ class BeforeTurn(Scratch):
     self.assertIn("No repository is selected for this session", told)
     self.assertIn("It holds 2 checkouts below it, and only the user selects one", told)
 
-  def test_says_that_an_unapproved_project_needs_the_users_consent(self):
+  def test_says_that_only_the_user_can_approve_an_unapproved_project(self):
     picking.select_repository("s1", self.code, self.demo)
     with mock.patch.object(context, "is_approved", return_value=False):
       told = context.before_turn(session_id="s1")["context"]
 
     self.assertIn("has not been approved for execution yet", told)
+    self.assertIn("Only the user can approve it", told)
+    self.assertNotIn("approve: true", told)
 
   def test_says_nothing_in_a_folder_that_holds_no_workshop(self):
     self.work_in(self.site)

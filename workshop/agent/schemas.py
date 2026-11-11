@@ -15,13 +15,12 @@ PROJECT_SCHEMA = {
 
 INSTALL_SCHEMA = {
   "name": "workshop_install",
-  "description": "Check which of the project's declared tools are installed (check true, the default), or install the missing ones (check false), optionally only the tools named. Installing fetches from the channel the declaration names. The first call in a project that has not been approved yet must pass approve: true to record the user's consent before any shell command runs.",
+  "description": "Check which of the project's declared tools are installed (check true, the default), or install the missing ones (check false), optionally only the tools named. Installing fetches from the channel the declaration names. Nothing runs in a project the user has not approved.",
   "parameters": {
     "type": "object",
     "properties": {
       "check": {"type": "boolean", "description": "true to only report; false to install what is missing."},
       "tools": {"type": "array", "items": {"type": "string"}, "description": "Only these tools, by name."},
-      "approve": {"type": "boolean", "description": "true to approve this project for execution. Required once per project before any shell command runs."},
     },
     "required": [],
   },

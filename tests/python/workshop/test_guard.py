@@ -12,8 +12,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from tests.python.workshop.test_consent import approving
 from tests.python.workshop.test_repos import repo
-from workshop import consent
 from workshop.about import data
 from workshop.selection import picking
 from workshop.agent import guard, session
@@ -38,7 +38,9 @@ class InAProject(unittest.TestCase):
     (self.root / "shell" / "ops").chmod(0o755)
     self.patch(data, "data_dir", Path(self.scratch) / "data")
     self.patch(session, "directory", str(self.root))
-    consent.approve(self.root)
+    approved = approving(self.root)
+    approved.start()
+    self.addCleanup(approved.stop)
 
   def tearDown(self):
     shutil.rmtree(self.scratch)
