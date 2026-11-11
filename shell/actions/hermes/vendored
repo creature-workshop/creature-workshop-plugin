@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+set -eu
+# shellcheck disable=SC1091  # the project's own .envrc, which sets PROJ and SHELLOPS_DIR
+. "$(dirname "$0")/../../../.envrc"
+
+USAGE="$(cat <<'HELP'
+Checks that the shellops a built tree carries boots the way the installed
+plugin boots it: with no submodules, no network and nothing to compile.
+
+Hermes Agent installs the built branch as a shallow git clone. This action
+copies the built tree into a scratch directory, makes it a git repository
+that tracks every file, as such a clone does, and boots shell/.ops there in
+an environment that carries nothing from this shell. git may use only local
+protocols, so a boot that tries to fetch a tree fails. The check fails when
+the boot fails, when a structs verb does not answer, or when the boot
+compiles shellops again instead of reading the compiled tree the build
+shipped.
+
+The plugin/vendored job runs this on the directory plugin/build keeps.
+
+Usage: shell/actions/hermes/vendored [--from <dir>] [-h,--help]
+
+  --from <dir>  the built tree; build/ at the project root when left out
+HELP
+)"
+
+ARG_FROM=""
+
+main() {
+  parse_args "$@"
+  __main__from="${ARG_FROM:-$PROJ/build}"
+  __main__scratch="$(mktemp -d)"
+  install_like_hermes "$__main__from" "$__main__scratch/plugin"
+  __main__shipped="$(compiled_tree "$__main__scratch/plugin")"
+  boot "$__main__scratch/plugin"
+  require_same_compiled_tree "$__main__shipped" "$(compiled_tree "$__main__scratch/plugin")"
+  rm -rf "$__main__scratch"
+  printf 'vendored shellops boots offline from %s and reads its shipped compiled tree\n' "$__main__from"
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) printf '%s\n' "$USAGE"; exit 0 ;;
+      --from) ARG_FROM="$2"; shift ;;
+      *) printf 'vendored: unknown argument %s\n' "$1" >&2; exit 2 ;;
+    esac
+    shift
+  done
+}
+
+: <<'FUN'
+Copies the built tree $1 to $2 and makes $2 a git repository that tracks
+every file, which is what the installed plugin is.
+FUN
+install_like_hermes() {
+  cp -a "$1" "$2"
+  git -C "$2" init -q
+  git -C "$2" add -A -f .
+}
+
+: <<'FUN'
+Prints the compiled tree that the shellops in the plugin $1 reads.
+FUN
+compiled_tree() {
+  readlink "$1/shell/.ops/.ops/__compiled__"
+}
+
+: <<'FUN'
+Boots the shellops in the plugin $1 with a clean environment and only local
+git protocols, and asks structs for a value. Exits when the boot fails or the
+answer is wrong; the answer is compared, since a verb whose backend did not
+load can still succeed.
+FUN
+boot() {
+  # shellcheck disable=SC2016  # the expression expands in the shell it boots
+  if ! (
+    cd "$1/shell/.ops" &&
+      env -i HOME="$HOME" PATH="$PATH" GIT_ALLOW_PROTOCOL=file \
+        bash -c '. ./.envrc >/dev/null && @get __probe "{\"a\":1}" .a && [ "$__probe" = 1 ]'
+  ); then
+    printf 'vendored: the shellops in the built tree does not boot offline\n' >&2
+    exit 1
+  fi
+}
+
+: <<'FUN'
+Exits when the compiled tree $2 the boot left differs from the one $1 the
+build shipped, since the installed plugin would then compile shellops into
+its own directory on its first boot.
+FUN
+require_same_compiled_tree() {
+  if [ "$1" != "$2" ]; then
+    printf 'vendored: the boot compiled shellops again (%s, shipped %s); the build must ship the tree the installed plugin keys\n' "$2" "$1" >&2
+    exit 1
+  fi
+}
+
+main "$@"

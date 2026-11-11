@@ -68,7 +68,8 @@ Prints true when Hermes Agent version $1 is installed in the tools home, false
 otherwise.
 PUB_FUN
 hermes__installed() {
-  @succeeds [ -x "$(hermes__bin_dir "$1")/hermes" ]
+  @succeeds __hermes__installed__answer [ -x "$(hermes__bin_dir "$1")/hermes" ]
+  println "$__hermes__installed__answer"
 }
 
 : <<'PUB_FUN'
@@ -181,7 +182,8 @@ Prints true when the clone in the directory $1 holds commit $2, false
 otherwise.
 FUN
 __hermes__holds_commit() {
-  @succeeds __hermes__in_clone "$1" git__ref_exists "$2"
+  @succeeds __hermes__holds_commit__answer __hermes__in_clone "$1" git__ref_exists "$2"
+  println "$__hermes__holds_commit__answer"
 }
 
 : <<'FUN'

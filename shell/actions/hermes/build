@@ -5,7 +5,8 @@ set -eu
 
 import \
   "$SHELLOPS_DIR/lib/git/api.sh" \
-  "$PROJ/shell/lib/built/api.sh"
+  "$PROJ/shell/lib/built/api.sh" \
+  "$PROJ/shell/lib/vendor/api.sh"
 
 USAGE="$(cat <<'HELP'
 Builds the tree that Hermes installs, in a directory, from the current commit.
@@ -17,6 +18,12 @@ and copies the generated files in beside them. git archive leaves out every
 path that .gitattributes marks export-ignore, which is the tests and their
 fixtures, so consumers get only what runs. The commit is read from git, not
 from the working tree, so the tree must be clean.
+
+Hermes Agent installs no submodules, so the build writes a complete copy of
+shellops at shell/.ops in place of the submodule: shellops at the commit the
+submodule pins, with every tree it pins and its compiled tree, so that the
+installed plugin boots shellops with no network. jq is the one thing the copy
+cannot carry, since it is a binary; the user's machine provides it.
 
 The plugin/build job runs this and keeps the directory as an artifact;
 plugin/catalog runs hermes plugins validate on it, and
@@ -39,6 +46,7 @@ main() {
   generate
   archive_source "$__main__out"
   copy_generated "$__main__out"
+  copy_vendored "$__main__out"
   printf 'built %s into %s\n' "$(git -C "$PROJ" rev-parse HEAD)" "$__main__out"
 }
 
@@ -102,6 +110,14 @@ copy_generated() {
   for __copy_generated__file in $(built__generated); do
     cp "$PROJ/$__copy_generated__file" "$1/$__copy_generated__file"
   done
+}
+
+: <<'FUN'
+Writes into the directory $1 a copy of each dependency the tracked tree has
+as a submodule.
+FUN
+copy_vendored() {
+  vendor__shellops "$1/shell/.ops"
 }
 
 main "$@"

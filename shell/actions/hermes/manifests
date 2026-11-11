@@ -31,7 +31,7 @@ main() {
       ;;
   esac
   __main__id="$(manifest__get command_name)"
-  __main__name="$(@get "$(self__config__load manifest)" '.name')"
+  @get __main__name "$(self__config__load manifest)" '.name'
   __main__description="$(manifest__get description)"
   __main__version="$(releases__record__get_latest)"
   __main__homepage="https://gitlab.creature-workshop.com/$(forge_path)"
@@ -67,8 +67,8 @@ Writes dashboard/manifest.json: the backend's entry for the gateway, with the
 tab hidden because the plugin's face is the Desktop pane.
 FUN
 write_dashboard_manifest() {
-  __write_dashboard_manifest__tab="$(@obj '.path' "/$1" '.hidden' true)"
-  @obj \
+  @obj __write_dashboard_manifest__tab '.path' "/$1" '.hidden' true
+  @obj __write_dashboard_manifest__manifest \
     '.name' "$1" \
     '.label' "$2" \
     '.description' "$4" \
@@ -76,8 +76,9 @@ write_dashboard_manifest() {
     '.version' "$3" \
     '.tab' "$__write_dashboard_manifest__tab" \
     '.entry' dist/index.js \
-    '.api' plugin_api.py \
-    > "$PROJ/dashboard/manifest.json"
+    '.api' plugin_api.py
+  @dump __write_dashboard_manifest__text "$__write_dashboard_manifest__manifest"
+  println "$__write_dashboard_manifest__text" > "$PROJ/dashboard/manifest.json"
 }
 
 : <<'FUN'

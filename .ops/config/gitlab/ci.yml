@@ -74,10 +74,18 @@ plugin/catalog:
     - . ./.envrc
     - hermes plugins validate build
 
+plugin/vendored:
+  extends: [.shellops, .rules--check]
+  stage: validation
+  needs: [plugin/build]
+  script:
+    - . ./.envrc
+    - shell/actions/hermes/vendored
+
 plugin/deploy:
   extends: [.shellops]
   stage: deploy
-  needs: [plugin/build, plugin/catalog]
+  needs: [plugin/build, plugin/catalog, plugin/vendored]
   rules:
     - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_PIPELINE_SOURCE == "web"

@@ -1,0 +1,2 @@
+# A structs verb assigns its result to the variable named first, by name, which shellcheck cannot follow (shellops disables it the same way).
+disable=SC2154

@@ -78,14 +78,15 @@ require_built_tree() {
 Writes the directory $1 into the object store as a tree and prints the tree's
 hash. A throwaway index keeps the checkout's own index untouched. The source's
 .gitignore still applies inside the directory, so a cache that something wrote
-there after the build stays out; the generated files match it too, so they are
-added by force.
+there after the build stays out. The generated files match it, and a vendored
+dependency carries a .gitignore of its own that leaves out its cache, so both
+are added by force.
 FUN
 write_tree() {
   __write_tree__index="$(mktemp -u)"
   tree_git "$1" "$__write_tree__index" add -A -- "$1"
-  for __write_tree__file in $(built__generated); do
-    tree_git "$1" "$__write_tree__index" add -f -- "$1/$__write_tree__file"
+  for __write_tree__path in $(built__generated) $(built__vendored); do
+    tree_git "$1" "$__write_tree__index" add -f -- "$1/$__write_tree__path"
   done
   tree_git "$1" "$__write_tree__index" write-tree
   rm -f "$__write_tree__index"
