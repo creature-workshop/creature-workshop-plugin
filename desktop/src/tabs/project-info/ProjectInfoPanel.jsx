@@ -34,7 +34,7 @@ export function ProjectInfoPanel() {
 
   return (
     <div className={cn('workshop-project-info', 'flex', 'flex-col', 'gap-5')}>
-      <Inspector binding={MANIFEST} missing={<NoManifest />} />
+      <Inspector binding={MANIFEST} missing={(reread) => <NoManifest onCreated={reread} />} />
       <FieldGroup title="Versions">
         <Field label="Latest" hint={LATEST_HINT}>{project.release.latest || NONE}</Field>
         <Field label="Stable" hint={STABLE_HINT}>{project.release.stable || NONE}</Field>

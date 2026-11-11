@@ -17,15 +17,17 @@ import { useSetUpShop } from './useSetUpShop.js';
  * /project/adoption's suggestions and the agent's guesses; while those
  * load it says "Reading <name>" with dots. While the adoption runs it says
  * "Setting up shop" with dots; when recording the approval or the adoption
- * fails, which of the two and why, with Try again. Cancel calls `onCancel`.
+ * fails, which of the two and why, with Try again. Cancel calls `onCancel`,
+ * and an adoption that went through calls `onDone`.
  *
  * @param props The component's props.
  * @param {string} props.root The checkout's root.
  * @param {string} props.name The checkout's folder name.
  * @param {() => void} props.onCancel Leaves the wizard.
+ * @param {() => void} [props.onDone] Called once shop is set up.
  */
-export function SetUpShop({ root, name, onCancel }) {
-  const { suggested, reload, attempt, adopt } = useSetUpShop(root);
+export function SetUpShop({ root, name, onCancel, onDone }) {
+  const { suggested, reload, attempt, adopt } = useSetUpShop(root, onDone);
   const steps = useMemo(() => suggested.state === 'success' && adoptionSteps(suggested.data, suggested.data.guessed), [suggested]);
   if (suggested.state === 'failure') {
     return <FailureNotice what={`I couldn't read ${name} to fill in the form.`} error={suggested.error} onRetry={reload} />;

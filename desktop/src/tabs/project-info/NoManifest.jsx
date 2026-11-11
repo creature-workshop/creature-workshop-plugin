@@ -18,14 +18,18 @@ const WHY = "The manifest says what the project is: its name, description, comma
  * is for, with a Create manifest button. The button opens the form
  * Initialize workshop opens, in the status's place, filled the same way;
  * Confirm writes the manifest, after which the pane reads the project
- * again and the group shows its fields. Cancel goes back to the status.
+ * again and `onCreated` is called, so the group shows its fields. Cancel
+ * goes back to the status.
+ *
+ * @param props The component's props.
+ * @param {() => void} props.onCreated Called once the manifest is written.
  */
-export function NoManifest() {
+export function NoManifest({ onCreated }) {
   const { selected } = useWorkshop();
   const [open, setOpen] = useState(false);
   const name = folderName(selected);
   if (open) {
-    return <SetUpShop root={selected} name={name} onCancel={() => setOpen(false)} />;
+    return <SetUpShop root={selected} name={name} onCancel={() => setOpen(false)} onDone={onCreated} />;
   }
 
   return (
