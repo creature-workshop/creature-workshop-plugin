@@ -1,11 +1,15 @@
 /**
  * @file The stories of the header: the session's directory holding no git
  * repository, one, and several, one with several worktrees, and a session
- * inside a linked worktree, each over a backend whose answers are built in, under the provider that holds the pane's shared state. The header's
- * tests are in header.ct.jsx beside this file.
+ * inside a linked worktree, each over a stand-in backend whose answers are built in, under the provider that holds the pane's shared state. The
+ * stand-in keeps each session's selected repository and worktree, as the
+ * real backend does. The header's tests are in header.ct.jsx beside this file.
  */
 
 import { cn } from '@hermes/plugin-sdk';
+import { useState } from 'react';
+import { listenWith } from '../../events.js';
+import { standIn } from '../../standIn/index.js';
 import { sessionSubject } from '../../subject.js';
 import { WorkshopProvider } from '../../workshop/WorkshopProvider.jsx';
 import { Header } from './Header.jsx';
@@ -53,14 +57,17 @@ const STATUSES = {
 /** The backend when the directory holds no repository. */
 const noneBackend = backendOver([]);
 
-/** The backend when the directory holds DEMO alone. */
-const oneBackend = backendOver([DEMO]);
+/** The backend when the directory is inside DEMO. */
+const oneBackend = backendOver([DEMO], DEMO.root);
+
+/** The backend when the directory is inside no repository and holds DEMO alone below it. */
+const oneBelowBackend = backendOver([DEMO]);
 
 /** The backend when the directory holds DEMO and SITE. */
 const severalBackend = backendOver([DEMO, SITE]);
 
-/** The backend when the directory holds SITE alone, with its three worktrees. */
-const worktreesBackend = backendOver([SITE]);
+/** The backend when the directory is inside SITE's main worktree; SITE has three worktrees. */
+const worktreesBackend = backendOver([SITE], SITE.root);
 
 /** The backend when the directory is inside SITE_HOTFIX. */
 const insideBackend = backendOver([SITE], SITE_HOTFIX.root);
@@ -70,9 +77,14 @@ export function Empty() {
   return docked(noneBackend);
 }
 
-/** The header for a directory that holds one git repository. */
+/** The header for a directory inside a git repository. */
 export function Single() {
   return docked(oneBackend);
+}
+
+/** The header for a directory that is inside no git repository and holds one below it. */
+export function OneBelow() {
+  return docked(oneBelowBackend);
 }
 
 /** The header for a directory that holds two git repositories. */
@@ -80,7 +92,7 @@ export function Several() {
   return docked(severalBackend);
 }
 
-/** The header for a directory that holds one repository with three worktrees. */
+/** The header for a directory inside the main worktree of a repository with three worktrees. */
 export function Worktrees() {
   return docked(worktreesBackend);
 }
@@ -102,6 +114,23 @@ export function Following({ second = false }) {
 }
 
 /**
+ * The header for a directory inside SITE's main worktree, with a button
+ * that picks SITE's hotfix worktree the way another window's pane does: through the
+ * backend, which then says that a selection changed.
+ */
+export function PickedElsewhere() {
+  const [other] = useState(withAnotherWindow);
+  return (
+    <div className={cn('workshop-story')} style={{ width: DOCKED_WIDTH }}>
+      <WorkshopProvider rest={other.rest} subject={SUBJECT}>
+        <Header />
+      </WorkshopProvider>
+      <button type="button" onClick={other.pickHotfix}>Pick site-hotfix in another window</button>
+    </div>
+  );
+}
+
+/**
  * The header in a box as wide as the docked pane, under a provider over a backend call.
  *
  * @param rest The backend call the header makes.
@@ -118,14 +147,33 @@ function docked(rest, subject = SUBJECT) {
 }
 
 /**
+ * A backend for a directory inside SITE's main worktree, with another
+ * window beside it: `rest` is the backend call, and `pickHotfix` picks SITE_HOTFIX
+ * for SUBJECT's session through the backend and then calls every listener
+ * the pane registered for an event, as the backend's event does.
+ */
+function withAnotherWindow() {
+  const rest = backendOver([SITE], SITE.root);
+  const listeners = new Set();
+  listenWith((type, listener) => {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  });
+  const body = { session: SUBJECT.id, path: CWD, root: SITE_HOTFIX.root };
+  const pickHotfix = () => rest('/selection/worktree', { method: 'POST', body }).then(() => listeners.forEach((listener) => listener()));
+  return { rest, pickHotfix };
+}
+
+/**
  * A backend call that answers GET /repos with repos for CWD and none for
- * any other folder, and GET /repos/status from STATUSES.
+ * any other folder, and GET /repos/status from STATUSES, with what every
+ * stand-in backend does besides.
  *
  * @param repos The repositories GET /repos lists for CWD.
  * @param [checkout] The worktree CWD is inside, when it is inside one.
  */
 function backendOver(repos, checkout = '') {
-  return async (path) => (path.startsWith('/repos/status') ? STATUSES[rootOf(path)] : answerFor(path, repos, checkout));
+  return standIn(async (path) => (path.startsWith('/repos/status') ? STATUSES[rootOf(path)] : answerFor(path, repos, checkout)));
 }
 
 /**

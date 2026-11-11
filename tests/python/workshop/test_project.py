@@ -31,24 +31,11 @@ class FindProject(unittest.TestCase):
     with tempfile.TemporaryDirectory() as tmp:
       self.assertIsNone(find_project(tmp))
 
-  def test_finds_the_first_project_below_a_directory_above_its_projects(self):
+  def test_none_for_a_directory_above_its_projects(self):
     with tempfile.TemporaryDirectory() as tmp:
+      make_project(Path(tmp) / "code" / "alpha")
       make_project(Path(tmp) / "code" / "beta")
-      alpha = make_project(Path(tmp) / "code" / "alpha")
-      (Path(tmp) / "code" / "node_modules").mkdir()
-      make_project(Path(tmp) / "code" / "node_modules" / "ignored")
-      self.assertEqual(find_project(Path(tmp) / "code"), alpha.resolve())
-
-  def test_a_nearer_level_wins_over_name_order(self):
-    with tempfile.TemporaryDirectory() as tmp:
-      make_project(Path(tmp) / "zeta")
-      make_project(Path(tmp) / "alpha" / "deep" / "nested")
-      self.assertEqual(find_project(tmp), (Path(tmp) / "zeta").resolve())
-
-  def test_nothing_four_levels_down(self):
-    with tempfile.TemporaryDirectory() as tmp:
-      make_project(Path(tmp) / "a" / "b" / "c" / "d")
-      self.assertIsNone(find_project(tmp))
+      self.assertIsNone(find_project(Path(tmp) / "code"))
 
 
 class Declaration(unittest.TestCase):

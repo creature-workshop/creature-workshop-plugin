@@ -1,4 +1,4 @@
-"""Finding the shellops project a session is in, and reading what it declares.
+"""Finding the shellops project a folder is in, and reading what it declares.
 
 A shellops project has shell/ops, the dispatcher its init copies in, and a
 declaration under .ops/config/. The declaration files are YAML; the lock,
@@ -15,25 +15,16 @@ from .setup import READY, setup_state
 from .yaml_loader import load_yaml
 
 DECLARATION_FILES = ("manifest.yaml", "tools.yaml", "ecosystems.yaml", "imports.yaml", "lint.yaml")
-SEARCH_DEPTH = 3
-SKIPPED_DIRECTORY_NAMES = ("node_modules", "target", "dist", "build")
 
 
 def find_project(start):
-  """The shellops project a session at start is in: the nearest one at or above
-  start, else the first one below it, else None.
-
-  A session inside a project finds that project. A session above its
-  projects, at ~ or a code folder, finds the first project up to three
-  levels down, in name order; a session that keeps several there sees one
-  until the pane shows them all.
+  """The shellops project a folder is in: the nearest one at or above start, or None.
 
     find_project("/home/me/proj/lib/x")  ->  Path("/home/me/proj")
-    find_project("/home/me/code")        ->  Path("/home/me/code/alpha")
+    find_project("/home/me/code")        ->  None
   """
 
-  path = Path(start).resolve()
-  return project_above(path) or project_below(path)
+  return project_above(Path(start).resolve())
 
 
 def is_project(candidate):
@@ -50,34 +41,6 @@ def project_above(path):
       return candidate
 
   return None
-
-
-def project_below(path):
-  """The first project below path, nearest level first and in name order within a
-  level, down to SEARCH_DEPTH levels; None when there is none."""
-
-  level = [path]
-  for _ in range(SEARCH_DEPTH):
-    children = [child for parent in level for child in subdirectories(parent)]
-    for child in children:
-      if is_project(child):
-        return child
-
-    level = children
-
-  return None
-
-
-def subdirectories(path):
-  """The directories in path worth searching: not hidden, not a build output,
-  in name order; none when path cannot be read."""
-
-  try:
-    entries = sorted(path.iterdir())
-  except OSError:
-    return []
-
-  return [entry for entry in entries if entry.is_dir() and not entry.name.startswith(".") and entry.name not in SKIPPED_DIRECTORY_NAMES]
 
 
 def declaration(root):

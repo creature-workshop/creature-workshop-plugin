@@ -15,9 +15,11 @@ def checkout(root, adopted=False, dispatcher=False):
   root.mkdir(parents=True, exist_ok=True)
   if adopted:
     (root / ".ops" / "config").mkdir(parents=True)
+
   if dispatcher:
     (root / "shell").mkdir()
     (root / "shell" / "ops").write_text("#!/bin/sh\n")
+
   return root
 
 

@@ -4,8 +4,12 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from workshop.agent import tools
+from tests.python.workshop.test_repos import repo
+from workshop import consent
+from workshop.about import data
+from workshop.agent import session, tools
 from workshop.project import check_table
 from workshop.run import ops
 
@@ -28,13 +32,23 @@ class ParseCheckTable(unittest.TestCase):
     self.assertEqual(check_table.parse(""), [])
 
 
-class Run(unittest.TestCase):
+class ScratchData(unittest.TestCase):
+  def setUp(self):
+    kept = tempfile.TemporaryDirectory()
+    self.addCleanup(kept.cleanup)
+    patched = mock.patch.object(data, "data_dir", return_value=Path(kept.name))
+    patched.start()
+    self.addCleanup(patched.stop)
+
+
+class Run(ScratchData):
   def test_reports_the_dispatcher_output_and_duration(self):
     with tempfile.TemporaryDirectory() as tmp:
       root = Path(tmp)
       (root / "shell").mkdir()
       (root / "shell" / "ops").write_text("#!/bin/sh\necho \"ran $*\"\n")
       (root / "shell" / "ops").chmod(0o755)
+      consent.approve(root)
       outcome = ops.run(root, ["install", "--check"])
       self.assertTrue(outcome["ok"])
       self.assertEqual(outcome["stdout"].strip(), "ran install --check")
@@ -47,25 +61,44 @@ class Run(unittest.TestCase):
       (root / "shell").mkdir()
       (root / "shell" / "ops").write_text("#!/bin/sh\necho nope >&2\nexit 3\n")
       (root / "shell" / "ops").chmod(0o755)
+      consent.approve(root)
       outcome = ops.run(root, ["lint"])
       self.assertFalse(outcome["ok"])
       self.assertEqual(outcome["stderr"].strip(), "nope")
 
-
-class Tools(unittest.TestCase):
-  def test_a_tool_outside_a_project_answers_with_an_error_not_an_exception(self):
-    with tempfile.TemporaryDirectory() as tmp:
-      answer = json.loads(tools.workshop_project({"path": tmp}))
-      self.assertFalse(answer["ok"])
-      self.assertIn("not inside a shellops project", answer["error"])
-
-  def test_test_verb_is_checked(self):
+  def test_runs_nothing_in_a_project_the_user_has_not_approved(self):
     with tempfile.TemporaryDirectory() as tmp:
       root = Path(tmp)
       (root / "shell").mkdir()
+      (root / "shell" / "ops").write_text("#!/bin/sh\ntouch ran\n")
+      (root / "shell" / "ops").chmod(0o755)
+      outcome = ops.run(root, ["lint"])
+      self.assertFalse(outcome["ok"])
+      self.assertIn("has not been approved for execution", outcome["stderr"])
+      self.assertFalse((root / "ran").exists())
+
+
+class Tools(unittest.TestCase):
+  def test_a_tool_in_a_session_on_no_repository_answers_with_an_error_not_an_exception(self):
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.object(session, "directory", return_value=tmp):
+      answer = json.loads(tools.workshop_project({}))
+      self.assertFalse(answer["ok"])
+      self.assertIn("No repository is selected for this session", answer["error"])
+
+  def test_a_tool_in_a_repository_without_a_workshop_says_so(self):
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.object(session, "directory", return_value=tmp):
+      repo(Path(tmp))
+      answer = json.loads(tools.workshop_lint({}))
+      self.assertFalse(answer["ok"])
+      self.assertIn("doesn't have a workshop", answer["error"])
+
+  def test_test_verb_is_checked(self):
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.object(session, "directory", return_value=tmp):
+      root = repo(Path(tmp))
+      (root / "shell").mkdir()
       (root / "shell" / "ops").write_text("#!/bin/sh\n")
       (root / ".ops" / "config").mkdir(parents=True)
-      answer = json.loads(tools.workshop_test({"path": tmp, "verb": "bogus"}))
+      answer = json.loads(tools.workshop_test({"verb": "bogus"}))
       self.assertFalse(answer["ok"])
       self.assertIn("verb must be", answer["error"])
 
@@ -74,9 +107,10 @@ if __name__ == "__main__":
   unittest.main()
 
 
-class Logging(unittest.TestCase):
+class Logging(ScratchData):
   def test_a_failed_run_is_logged_as_a_warning_with_its_stderr(self):
     with tempfile.TemporaryDirectory() as tmp:
+      consent.approve(tmp)
       with self.assertLogs("creature-workshop", level="WARNING") as logged:
         ops.run(tmp, ["install", "--check"])
 
@@ -88,6 +122,7 @@ class Logging(unittest.TestCase):
       (root / "shell").mkdir()
       (root / "shell" / "ops").write_text("#!/bin/sh\nexit 0\n")
       (root / "shell" / "ops").chmod(0o755)
+      consent.approve(root)
       with self.assertLogs("creature-workshop", level="INFO") as logged:
         ops.run(root, ["lint"])
 

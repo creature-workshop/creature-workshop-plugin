@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from workshop.run.git import git
+from ..run.git import git
 
 
 def worktrees_of(root):

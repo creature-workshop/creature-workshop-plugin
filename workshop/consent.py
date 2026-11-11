@@ -10,7 +10,8 @@ anything, so they do not need consent.
 
 import json
 import logging
-from pathlib import Path
+
+from .about import data
 
 log = logging.getLogger("creature-workshop")
 
@@ -68,25 +69,14 @@ def require_consent(root):
     f"The shellops project at {root} has not been approved for execution. "
     f"The creature-workshop plugin needs the user's consent before it runs "
     f"shell commands in a project. Ask the user to approve it, then call "
-    f"workshop_install with approve: true and path: \"{root}\"."
+    f"workshop_install with approve: true."
   )
-
-
-def _data_dir():
-  """The plugin's data directory, which Hermes provides."""
-
-  try:
-    from hermes_cli.plugins import plugin_data_dir
-
-    return Path(plugin_data_dir("creature-workshop"))
-  except ImportError:
-    return Path.home() / ".hermes" / "plugin-data" / "creature-workshop"
 
 
 def _consent_path():
   """The path of the file that lists the approved project roots."""
 
-  return _data_dir() / CONSENT_FILE
+  return data.data_dir() / CONSENT_FILE
 
 
 def _approved_set():

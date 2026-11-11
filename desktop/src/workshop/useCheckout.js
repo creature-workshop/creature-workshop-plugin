@@ -1,80 +1,117 @@
 /**
  * @file The git repositories in the session's folder and which checkout of
- * them the pane reads, as the pane's shared state holds them.
+ * them the session is on, as the pane's shared state holds them. The
+ * backend decides the checkout, for the pane and for the agent alike, so
+ * the pane keeps no pick of its own: it sends a pick to the backend, and
+ * shows what the backend answered.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { client } from '../client/index.js';
+import { onSelectionChanged } from '../events.js';
 import { dataOr, LOADING, remoteOf } from '../remote.js';
-import { checkoutOf, repositoryAt, repositoryHolding } from './selection.js';
+
+/** GET /repos's answer while it has not arrived: no repositories, nothing selected, and the interval the pane reads on until the backend names one. */
+const NO_REPOS = Object.freeze({ repos: [], repository: '', selected: '', refresh_seconds: 20 });
+
+/** What to do with a failed read of the selection that only refreshes it: nothing, so the pane keeps what it shows. */
+const KEEP_SHOWING = () => {};
 
 /**
- * Returns `{repos, repo, selected, select, selectWorktree}` for `folder`:
+ * Returns `{repos, repo, selected, select, selectWorktree}` for `subject`:
  *
- * - `repos`, GET /repos's answer as remote data, loaded each time `folder`,
- *   `rest` or `retried` changes;
- * - `repo`, the selected repository's root: the only one when there is one,
- *   else the one picked, else an empty string;
- * - `selected`, the root of the checkout the pane reads: the worktree picked
- *   for `repo`, else its main worktree;
- * - `select(root)`, which selects a repository;
- * - `selectWorktree(root)`, which picks one of `repo`'s worktrees.
+ * - `repos`, GET /repos's answer as remote data, loaded each time the
+ *   subject, `rest` or `retried` changes; it says what the session is on;
+ * - `repo`, the root of the repository the session is on, or an empty string;
+ * - `selected`, the root of the checkout the session is on, one of
+ *   `repo`'s worktrees, or an empty string;
+ * - `select(root)`, which picks a repository, through POST /selection;
+ * - `selectWorktree(root)`, which picks one worktree, through POST
+ *   /selection/worktree.
  *
- * The answer is the same object until one of those changes. Loading clears
- * the selection; when `folder` is inside a linked worktree,
- * its repository and that worktree are selected.
+ * `repo` and `selected` follow the backend: they are read again from GET
+ * /selection every `refresh_seconds` and whenever the backend says a
+ * selection changed, which is how the pane follows a pick made in another window.
+ * A pick the backend refuses is shown as the failure of `repos`. The
+ * answer is the same object until one of those changes.
  *
  * @param rest The backend call the client is connected to.
- * @param {string} folder The session's folder.
+ * @param {import('../subject.js').Subject} subject What the pane is about.
  * @param {number} retried How many times `repos` has been asked for again.
  */
-export function useCheckout(rest, folder, retried) {
+export function useCheckout(rest, subject, retried) {
   const [repos, setRepos] = useState(LOADING);
-  const [picked, setPicked] = useState('');
-  const [picks, setPicks] = useState({});
-  useEffect(askRepos(folder, setRepos, setPicked, setPicks), [rest, folder, retried]);
-  const found = dataOr(repos, { repos: [] }).repos;
-  const repo = found.length === 1 ? found[0].root : picked;
-  const selected = checkoutOf(repositoryAt(found, repo), picks);
-  const selectWorktree = useCallback((root) => setPicks((before) => ({ ...before, [repo]: root })), [repo]);
-  return useMemo(() => ({ repos, repo, selected, select: setPicked, selectWorktree }), [repos, repo, selected, selectWorktree]);
+  const [moved, setMoved] = useState(null);
+  const asked = useRef(0);
+  useEffect(askRepos(subject, { asked, setRepos, setMoved }), [rest, subject.id, subject.folder, retried]);
+  const listed = dataOr(repos, NO_REPOS);
+  useEffect(follow(subject, listed.refresh_seconds, keeping(asked, setMoved, KEEP_SHOWING)), [rest, subject.id, subject.folder, listed.refresh_seconds]);
+  const { repository: repo, selected } = moved ?? listed;
+  const pick = useCallback(keeping(asked, setMoved, (result) => setRepos(remoteOf(result))), []);
+  const select = useCallback((root) => pick(client.select(subject, root)), [subject, pick]);
+  const selectWorktree = useCallback((root) => pick(client.selectWorktree(subject, root)), [subject, pick]);
+  return useMemo(() => ({ repos, repo, selected, select, selectWorktree }), [repos, repo, selected, select, selectWorktree]);
 }
 
 /**
- * Loads `repos` from GET /repos for the folder, and clears the selection;
- * when the folder is inside a linked worktree, selects its repository and
- * that worktree. An answer that arrives after the folder changes is dropped.
+ * A function that takes a request for the selection and keeps its answer,
+ * unless a later request was made before it answered. A selection is kept
+ * with `setMoved`, and a failure is handed to `onFailure`.
+ *
+ * @param asked A ref that counts the requests made.
+ * @param setMoved Stores the selection the backend answered.
+ * @param onFailure Takes the failed result.
+ */
+function keeping(asked, setMoved, onFailure) {
+  return (request) => {
+    asked.current += 1;
+    const mine = asked.current;
+    return request.then((result) => mine === asked.current && (result.ok ? setMoved(result.data) : onFailure(result)));
+  };
+}
+
+/**
+ * Loads `repos` from GET /repos for the subject, and forgets the selection
+ * read since the last load, so the pane shows what this answer says. An
+ * answer that arrives after the subject changes is dropped, and so is a
+ * read of the selection that was on its way.
  *
  * @effect
- * @param folder The session's folder.
- * @param setRepos Stores the answer.
- * @param setPicked Sets the selected repository.
- * @param setPicks Sets the worktree picked for each repository.
+ * @param {import('../subject.js').Subject} subject What the pane is about.
+ * @param state What the effect writes.
+ * @param state.asked A ref that counts the requests made for the selection.
+ * @param state.setRepos Stores the answer.
+ * @param state.setMoved Stores the selection read since the load.
  */
-function askRepos(folder, setRepos, setPicked, setPicks) {
+function askRepos(subject, { asked, setRepos, setMoved }) {
   return () => {
     let open = true;
-    setPicked('');
-    setPicks({});
+    asked.current += 1;
+    setMoved(null);
     setRepos(LOADING);
-    client.repos(folder).then((result) => open && arrived(result, setRepos, setPicked, setPicks));
+    client.repos(subject).then((result) => open && setRepos(remoteOf(result)));
     return () => { open = false; };
   };
 }
 
 /**
- * Stores GET /repos's result, and selects the worktree the folder is in when it names one.
+ * Reads the subject's selection again every `seconds` and whenever the
+ * backend says a selection changed, until the subject or the interval
+ * changes or the component goes away.
  *
- * @param result GET /repos's result.
- * @param setRepos Stores the answer.
- * @param setPicked Sets the selected repository.
- * @param setPicks Sets the worktree picked for each repository.
+ * @effect
+ * @param {import('../subject.js').Subject} subject What the pane is about.
+ * @param seconds How long to wait between reads.
+ * @param keep Takes a request for the selection and keeps its answer.
  */
-function arrived(result, setRepos, setPicked, setPicks) {
-  setRepos(remoteOf(result));
-  const holding = result.ok && result.data.checkout ? repositoryHolding(result.data.repos, result.data.checkout) : undefined;
-  if (holding) {
-    setPicked(holding.root);
-    setPicks({ [holding.root]: result.data.checkout });
-  }
+function follow(subject, seconds, keep) {
+  return () => {
+    const read = () => keep(client.selection(subject));
+    const timer = setInterval(read, seconds * 1000);
+    const stop = onSelectionChanged(read);
+    return () => {
+      clearInterval(timer);
+      stop();
+    };
+  };
 }

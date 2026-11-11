@@ -2,14 +2,17 @@
 not installed is blocked before it runs, with the install as the hint.
 
 Hermes calls before_tool_call before every tool runs. For the terminal tool,
-in a session whose directory is a shellops project, the hook reads the
-programs the command runs and checks them against the project's declaration.
+in a session that is on a project, the hook reads the programs the
+command runs and checks them against the project's declaration. A command
+that names a directory of its own is checked only when that directory is
+inside the project.
 A program the declaration names but `ops install --check` reports missing
 blocks the call: the message names the tool, its declared version and channel,
 and workshop_install as the fix, so the agent installs it and retries instead
 of failing on a command that was never going to work. Everything else passes:
-other tools, undeclared programs, a directory outside any project, and a check
-that fails or runs out of time, because the hook is a hint and not a gate.
+other tools, undeclared programs, a session on no project, a directory outside
+the project, and a check that fails or runs out of time, because the hook is
+a hint and not a gate.
 
 The check's result is cached per project for the pane_refresh_seconds setting
 and forgotten after an install, since Hermes gives a hook thirty seconds and
@@ -35,7 +38,7 @@ ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 CACHE = {}
 
 
-def before_tool_call(tool_name, args, task_id="", **kwargs):
+def before_tool_call(tool_name, args, task_id="", session_id="", **kwargs):
   """Hermes's pre_tool_call hook: the block directive for a terminal command that
   names a declared tool which is not installed, else None to let the call run.
 
@@ -46,7 +49,7 @@ def before_tool_call(tool_name, args, task_id="", **kwargs):
   if tool_name != TERMINAL_TOOL or not isinstance(args, dict):
     return None
 
-  root = find_project(args.get("workdir") or session.directory())
+  root = checked_project(args, session_id)
   if root is None:
     return None
 
@@ -58,6 +61,21 @@ def before_tool_call(tool_name, args, task_id="", **kwargs):
     return None
 
   return {"action": "block", "message": block_message(root, blocked)}
+
+
+def checked_project(args, session_id):
+  """The project a terminal call is checked against: the one the session is on,
+  unless the call names a directory outside it; None when there is none."""
+
+  root, _ = session.project(session_id)
+  if root is None:
+    return None
+
+  workdir = args.get("workdir")
+  if workdir and find_project(workdir) != root:
+    return None
+
+  return root
 
 
 def blocked_tools(root, programs):

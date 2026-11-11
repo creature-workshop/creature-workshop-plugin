@@ -9,6 +9,7 @@
 import './about.js';
 import './project.js';
 import './repos.js';
+import './selection.js';
 import './store.js';
 
 /** The client every part of the app calls, and the function that connects it to a backend call. */

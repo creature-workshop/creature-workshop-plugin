@@ -5,8 +5,29 @@ named for and rooted at its main worktree.
 
 from pathlib import Path
 
-from workshop.repos.worktrees import worktrees_of
-from workshop.run.git import git
+from ..run.git import git
+from .discovery import repos_of
+from .worktrees import worktrees_of
+
+
+def repositories_of(start):
+  """(inside, checkout, repositories) for a folder, as GET /repos lists it:
+  whether start is inside a repository, the root of the worktree it is in
+  ("" when it is in none), and the repositories its checkouts belong to,
+  sorted by root.
+
+    repositories_of("/home/someone/code")  ->  (False, "", [{"root": "/home/someone/code/demo", "name": "demo", "worktrees": [...]}])
+  """
+
+  inside, roots = repos_of(start)
+  found = sorted(repositories(roots), key=root_of)
+  return inside, (str(roots[0]) if inside else ""), found
+
+
+def root_of(repository):
+  """A repository's root, the key the listing is sorted by."""
+
+  return repository["root"]
 
 
 def repositories(checkouts):

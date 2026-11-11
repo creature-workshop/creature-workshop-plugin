@@ -6,9 +6,10 @@
  * - `subject`: what the pane is about;
  * - `repos`: the git repositories in the subject's folder, each with its
  *   worktrees;
- * - `repo`: the root of the selected repository;
- * - `selected`: the root of the checkout the pane reads, the worktree
- *   picked for the selected repository or else its main worktree;
+ * - `repo`: the root of the repository the session is on;
+ * - `selected`: the root of the checkout the session is on, one of that
+ *   repository's worktrees; the backend decides both, and the agent's
+ *   tools work on the same checkout;
  * - `project`: the shellops project of that checkout;
  * - `setup`: how far that checkout is set up for shellops.
  *
@@ -45,7 +46,7 @@ export function WorkshopProvider({ rest, subject, children }) {
   useMemo(() => connect(rest), [rest]);
   const [retried, retry] = useRetry();
   const about = useAbout(rest, retried.about);
-  const checkout = useCheckout(rest, subject.folder, retried.repos);
+  const checkout = useCheckout(rest, subject, retried.repos);
   const project = useProject(rest, checkout.selected, retried.project);
   const setup = useSetup(rest, checkout.selected, retried.setup);
   const value = useMemo(() => ({ about, subject, ...checkout, project, setup, retry }), [about, subject, checkout, project, setup, retry]);
@@ -60,8 +61,8 @@ export function WorkshopProvider({ rest, subject, children }) {
  * - `repos` is GET /repos's answer, as remote data.
  * - `repo` is the selected repository's root, or an empty string.
  * - `selected` is the root of the checkout the pane reads, or an empty string.
- * - `select(root)` selects a repository.
- * - `selectWorktree(root)` picks one of the selected repository's worktrees.
+ * - `select(root)` picks a repository for the session, through the backend.
+ * - `selectWorktree(root)` picks one worktree for the session, through the backend.
  * - `project` is GET /project's answer for the selected checkout, as
  *   remote data; loading while no repository is selected.
  * - `setup` is GET /project/setup's answer for the selected checkout, as

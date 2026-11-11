@@ -1,7 +1,7 @@
 /**
- * @file The header's mode when the session holds one git repository: its
- * name, its worktrees when it has several, and the state of the checkout
- * the pane reads.
+ * @file The header's mode when the session's folder is inside a git
+ * repository: the repository's name, its worktrees when it has several,
+ * and the state of the checkout the pane reads.
  */
 
 import { useId } from 'react';
@@ -13,8 +13,8 @@ import { RepositoryName } from '../repository/RepositoryName.jsx';
 import { WorktreeSelector } from '../worktree/WorktreeSelector.jsx';
 import { WorktreeTether } from '../worktree/WorktreeTether.jsx';
 
-/** What the Repository label's (i) says when the session holds one repository. */
-const HINT = "The git repository in this chat session's folder, which the pane inspects.";
+/** What the Repository label's (i) says when the session's folder is inside a repository. */
+const HINT = "The git repository this chat session's folder is in, which the pane inspects.";
 
 /**
  * The repository's name in a box that reads as a disabled selector, under
@@ -22,7 +22,7 @@ const HINT = "The git repository in this chat session's folder, which the pane i
  * when it has several worktrees, a tether and the worktree selector; then
  * the selected checkout's state the way a shell prompt shows it.
  */
-export function OneRepository() {
+export function InsideRepository() {
   const { repos, selected } = useWorkshop();
   const label = useId();
   const [repo] = repos.data.repos;

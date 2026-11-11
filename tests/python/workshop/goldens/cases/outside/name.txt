@@ -1,1 +1,1 @@
-a directory that is not a shellops project\n
+a session in a directory that is no repository

@@ -9,6 +9,7 @@
 
 import { useState } from 'react';
 import { WorkshopTabs } from '../../pane/tabs/WorkshopTabs.jsx';
+import { standIn } from '../../standIn/index.js';
 import { sessionSubject } from '../../subject.js';
 import { WorkshopProvider } from '../../workshop/WorkshopProvider.jsx';
 
@@ -16,7 +17,7 @@ import { WorkshopProvider } from '../../workshop/WorkshopProvider.jsx';
 const ROOT = '/home/someone/notes';
 
 /** GET /repos for a directory that is the repository itself. */
-const REPOS = { start: ROOT, inside: true, repos: [{ root: ROOT, name: 'notes' }], refresh_seconds: 20 };
+const REPOS = { start: ROOT, inside: true, checkout: ROOT, repos: [{ root: ROOT, name: 'notes' }], refresh_seconds: 20 };
 
 /** GET /repos/status for the repository. */
 const STATUS = { root: ROOT, ok: true, branch: 'main', detached: false, upstream: false, ahead: 0, behind: 0, staged: 0, modified: 0, untracked: 0, conflicted: 0 };
@@ -56,19 +57,19 @@ const REFUSAL = 'description cannot be cleared: its schema has no empty value fo
 
 /** The tabs over a backend that keeps every change it is sent. */
 export function Editable() {
-  const [rest] = useState(() => keepingBackend());
+  const [rest] = useState(() => standIn(keepingBackend()));
   return framed(rest);
 }
 
 /** The tabs over a backend that refuses every change. */
 export function Refusing() {
-  const [rest] = useState(() => refusingBackend());
+  const [rest] = useState(() => standIn(refusingBackend()));
   return framed(rest);
 }
 
 /** The tabs over a backend whose manifest changed outside the pane after the pane read it. */
 export function ChangedOutside() {
-  const [rest] = useState(() => keepingBackend(EDITED_OUTSIDE));
+  const [rest] = useState(() => standIn(keepingBackend(EDITED_OUTSIDE)));
   return framed(rest);
 }
 

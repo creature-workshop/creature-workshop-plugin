@@ -4,7 +4,8 @@ inside a project and outside one.
 
 The backend is loaded the way Hermes loads it, from the file's path, and the
 route is called directly; the project is the golden case `installed`, whose
-shell/ops stub prints a check table with every tool installed.
+shell/ops stub prints a check table with every tool installed. The approvals
+are kept in a scratch data folder.
 """
 
 import asyncio
@@ -14,7 +15,10 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
+from workshop import consent
+from workshop.about import data
 from workshop.models.project import NoProject, Project
 
 HERE = Path(__file__).parent
@@ -42,7 +46,7 @@ def answer_for(path, check="1"):
 class Mounting(unittest.TestCase):
   def test_the_router_carries_every_route_the_pane_reads(self):
     paths = {route.path for route in load_backend().router.routes}
-    self.assertEqual(paths, {"/about", "/project", "/repos", "/repos/status", "/store/introspect", "/store/mutate", "/store/query"})
+    self.assertEqual(paths, {"/about", "/project", "/project/approve", "/project/setup", "/repos", "/repos/status", "/selection", "/selection/worktree", "/store/introspect", "/store/mutate", "/store/query"})
 
 
 class InsideAProject(unittest.TestCase):
@@ -51,26 +55,41 @@ class InsideAProject(unittest.TestCase):
     self.root = Path(self.scratch) / "demo"
     shutil.copytree(INSTALLED, self.root)
     (self.root / "shell" / "ops").chmod(0o755)
+    kept = mock.patch.object(data, "data_dir", return_value=Path(self.scratch) / "data")
+    kept.start()
+    self.addCleanup(kept.stop)
 
   def tearDown(self):
     shutil.rmtree(self.scratch)
 
-  def test_answers_a_project_with_the_toolchain_checked(self):
+  def test_answers_an_approved_project_with_the_toolchain_checked(self):
+    consent.approve(self.root.resolve())
     answer = answer_for(self.root)
     self.assertIsInstance(answer, Project)
+    self.assertTrue(answer.approved)
     self.assertEqual(answer.root, str(self.root.resolve()))
     self.assertEqual([tool.tool for tool in answer.declared], ["ffmpeg", "rsync"])
     self.assertEqual([row.installed for row in answer.toolchain.rows], [True, True])
     self.assertEqual(answer.refresh_seconds, 20)
 
+  def test_runs_no_check_in_a_project_the_user_has_not_approved(self):
+    (self.root / "shell" / "ops").write_text("#!/bin/sh\ntouch ran\n")
+    answer = answer_for(self.root)
+    self.assertIsInstance(answer, Project)
+    self.assertFalse(answer.approved)
+    self.assertIsNone(answer.toolchain)
+    self.assertFalse((self.root / "ran").exists())
+
   def test_leaves_the_toolchain_out_when_the_check_is_off(self):
+    consent.approve(self.root.resolve())
     answer = answer_for(self.root, check="0")
     self.assertIsInstance(answer, Project)
     self.assertIsNone(answer.toolchain)
 
   def test_the_answer_carries_every_field_the_pane_reads(self):
     fields = set(answer_for(self.root).model_dump())
-    self.assertEqual(fields, {"found", "root", "name", "summary", "declaration", "release", "declared", "refresh_seconds", "toolchain"})
+    self.assertEqual(fields, {"found", "root", "name", "summary", "declaration", "release", "declared", "refresh_seconds", "approved", "toolchain"})
+
 
 class OutsideAProject(unittest.TestCase):
   def test_answers_not_found_with_where_the_search_started(self):
