@@ -2,23 +2,32 @@
 
 import \
   "$SHELLOPS_DIR/lib/self/api.sh" \
-  "$PROJ/shell/lib/hermes/mirror.sh"
+  "$SHELLOPS_DIR/lib/git/api.sh"
 
 : <<'MODULE'
 Hermes Agent, `hermes`, as a pinned tool, so that a job can run
 `hermes plugins validate` on the tree the catalog pins.
 
-When HERMES_MIRROR_URL is set, as it is in CI, the version comes from the
-copy in the GitLab generic package registry (mirror.sh beside this file).
-Otherwise the vendor's installer, taken from the pinned commit, clones that
-commit, brings its own uv and Python, and publishes `hermes`. It runs with
-HOME set to the version's directory in the tools home, so the commands it
-publishes and the shell files it edits stay inside that directory, and a
-workstation's own Hermes Agent is left alone.
+The install clones the Hermes Agent repository and runs the vendor installer
+from the pinned commit, which brings its own uv and Python, checks out that
+commit and publishes `hermes`. It runs with HOME set to the version's
+directory in the tools home, so the commands it publishes and the shell files
+it edits stay inside that directory, and a workstation's own Hermes Agent is
+left alone.
+
+HERMES_REPO_URL names the repository to clone, and GitHub is the default. CI
+sets it to the copy on the project's GitLab, ksoft/hermes/hermes-agent, which
+shell/actions/hermes/sync-copy keeps in step with GitHub.
 
 The tool plugin shell/tools/hermes.tool.op.sh hands over the version and the
 commit that .ops/config/tools.yaml pins.
 MODULE
+
+# CONST: The Hermes Agent repository on GitHub, which the copy on GitLab follows.
+__hermes__UPSTREAM="https://github.com/NousResearch/hermes-agent.git"
+
+# CONST: The branch the vendor installer follows, and the one the clone starts on.
+__hermes__BRANCH="main"
 
 : <<'PUB_FUN'
 Prints the directory Hermes Agent versions install under: HERMES_TOOL_HOME when set,
@@ -47,6 +56,14 @@ hermes__bin_dir() {
 }
 
 : <<'PUB_FUN'
+Prints the repository the install clones: HERMES_REPO_URL when set, otherwise
+Hermes Agent on GitHub.
+PUB_FUN
+hermes__repository() {
+  println "${HERMES_REPO_URL:-$__hermes__UPSTREAM}"
+}
+
+: <<'PUB_FUN'
 Prints true when Hermes Agent version $1 is installed in the tools home, false
 otherwise.
 PUB_FUN
@@ -58,8 +75,7 @@ hermes__installed() {
 Installs Hermes Agent version $1, which is commit $2 of the Hermes repository, into
 the tools home and puts `hermes` on PATH. Both values come from the tools
 declaration through the tool plugin; an empty one fails. A version that is
-already installed is only put on PATH. The version comes from the mirror when
-one is configured, and from the vendor installer otherwise.
+already installed is only put on PATH.
 
 args:
   $1  The version, for example 2026.9.24
@@ -77,26 +93,9 @@ hermes__install() {
     return 0
   fi
 
-  if @is_true "$(__hermes__from_mirror "$1")"; then
-    hermes__mirror__fetch "$1" "$(hermes__home)" || return 1
-  else
-    __hermes__run_installer "$1" "$2" || return 1
-  fi
+  __hermes__run_installer "$1" "$2" || return 1
   __hermes__export_env "$1"
   log "hermes $1 ready"
-}
-
-: <<'PUB_FUN'
-Installs Hermes Agent version $1, commit $2, into the tools home with the vendor
-installer, whether or not a mirror is configured. This is how a copy for the
-mirror is made.
-
-args:
-  $1  The version, for example 2026.9.24
-  $2  The full commit hash of that version
-PUB_FUN
-hermes__prepare() {
-  __hermes__run_installer "$1" "$2"
 }
 
 : <<'PUB_FUN'
@@ -107,54 +106,102 @@ hermes__uninstall() {
 }
 
 : <<'FUN'
-Prints true when Hermes Agent version $1 can come from the mirror: a mirror is
-configured and holds a copy of it. Prints false otherwise, and says so when a
-mirror is configured but has no copy, as when the registry refused the upload,
-so the install falls back to the vendor installer.
-FUN
-__hermes__from_mirror() {
-  if @is_false "$(hermes__mirror__configured)"; then
-    println false
-    return 0
-  fi
-
-  __hermes__from_mirror__held="$(hermes__mirror__has "$1")"
-  if @is_false "$__hermes__from_mirror__held"; then
-    warn "the mirror holds no copy of hermes $1; installing it with the vendor installer"
-  fi
-
-  println "$__hermes__from_mirror__held"
-}
-
-: <<'FUN'
-Prints the address of the installer script at commit $1.
-FUN
-__hermes__installer_url() {
-  println "https://raw.githubusercontent.com/NousResearch/hermes-agent/$1/scripts/install.sh"
-}
-
-: <<'FUN'
-Downloads the installer at commit $2 and runs it for version $1, with HOME and
-the Hermes home inside the version's directory. The browser and the
-computer-use driver are skipped, because validating a plugin needs neither.
+Clones the repository at commit $2, then runs the installer from that commit
+for version $1, with HOME and the Hermes home inside the version's directory.
+A checkout left by an install that did not finish is replaced.
+The installer finds the clone, updates its branch, and checks out the pinned
+commit; --force-commit makes it do that when the branch is already past the
+commit. The browser and the computer-use driver are skipped, because
+validating a plugin needs neither.
 FUN
 __hermes__run_installer() {
   __hermes__run_installer__dir="$(hermes__install_dir "$1")"
+  __hermes__run_installer__checkout="$__hermes__run_installer__dir/hermes-agent"
   __hermes__run_installer__script="$__hermes__run_installer__dir/install.sh"
 
   mkdir -p "$__hermes__run_installer__dir"
   log "installing hermes $1 at $2"
-  curl -fsSL \
-    -o "$__hermes__run_installer__script" \
-    "$(__hermes__installer_url "$2")" \
+  rm -rf "$__hermes__run_installer__checkout"
+  __hermes__clone "$2" "$__hermes__run_installer__checkout" || return 1
+  __hermes__in_clone "$__hermes__run_installer__checkout" git__file_at "$2" scripts/install.sh \
+    > "$__hermes__run_installer__script" \
     || return 1
   HOME="$__hermes__run_installer__dir" bash "$__hermes__run_installer__script" \
     --commit "$2" \
-    --dir "$__hermes__run_installer__dir/hermes-agent" \
+    --force-commit \
+    --dir "$__hermes__run_installer__checkout" \
     --hermes-home "$__hermes__run_installer__dir/home" \
     --non-interactive \
     --skip-browser \
     --skip-computer-use
+}
+
+: <<'FUN'
+Clones the repository that hermes__repository names into the directory $2 and
+makes sure the clone holds commit $1. When that repository does not hold the
+commit, as when the copy on GitLab has not yet caught up with a new pin, the
+commit comes from GitHub instead. The clone leaves file contents on the server
+until a checkout needs them. shellops' git module has no helper for a clone
+or for fetching one commit by its hash, so those two steps call git directly.
+
+args:
+  $1  The full commit hash to install
+  $2  The directory to clone into
+FUN
+__hermes__clone() {
+  log "cloning $(__hermes__repository_label)"
+  git clone \
+    --quiet \
+    --filter=blob:none \
+    --branch "$__hermes__BRANCH" \
+    "$(hermes__repository)" \
+    "$2" \
+    || return 1
+
+  if @is_true "$(__hermes__holds_commit "$2" "$1")"; then
+    return 0
+  fi
+
+  warn "$(__hermes__repository_label) does not hold $1; fetching it from GitHub"
+  git -C "$2" fetch --quiet "$__hermes__UPSTREAM" "$1"
+}
+
+: <<'FUN'
+Prints the repository the install clones, without the credentials a CI job
+puts in it, for log lines.
+
+    __hermes__repository_label  ->  https://gitlab.example/ksoft/hermes/hermes-agent.git
+FUN
+__hermes__repository_label() {
+  hermes__repository | sed 's#//[^/@]*@#//#'
+}
+
+: <<'FUN'
+Prints true when the clone in the directory $1 holds commit $2, false
+otherwise.
+FUN
+__hermes__holds_commit() {
+  @succeeds __hermes__in_clone "$1" git__ref_exists "$2"
+}
+
+: <<'FUN'
+Runs the shellops git helper $2, with the rest of the arguments, on the clone
+in the directory $1, in a subshell so that the rest of the program keeps its
+own repository.
+
+    __hermes__in_clone /opt/hermes-agent/hermes-2026.9.24/hermes-agent git__ref_exists f97608f...
+
+args:
+  $1     The clone's directory
+  $2...  The helper and its arguments
+FUN
+__hermes__in_clone() {
+  (
+    # shellcheck disable=SC2034  # the shellops git helpers read it
+    GIT_REPO="$1"
+    shift
+    "$@"
+  )
 }
 
 : <<'FUN'

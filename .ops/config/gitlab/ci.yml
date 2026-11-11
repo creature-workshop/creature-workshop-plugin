@@ -23,6 +23,7 @@ workflow:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "schedule"
 
 plugin/build:
   extends: [.shellops, .rules--check]
@@ -61,24 +62,13 @@ plugin/javascript:
     - pnpm run test:unit
     - pnpm run test:pane
 
-.hermes:
-  variables:
-    HERMES_TOOL_HOME: /opt/hermes-agent
-    HERMES_MIRROR_URL: $CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/hermes
-    MIRROR_AUTH: "JOB-TOKEN: $CI_JOB_TOKEN"
-
-plugin/hermes-mirror:
-  extends: [.shellops, .rules--check, .hermes]
+plugin/catalog:
+  extends: [.shellops, .rules--check]
   stage: validation
   needs: [plugin/build]
-  script:
-    - . ./.envrc
-    - shell/actions/hermes/mirror
-
-plugin/catalog:
-  extends: [.shellops, .rules--check, .hermes]
-  stage: validation
-  needs: [plugin/build, plugin/hermes-mirror]
+  variables:
+    HERMES_TOOL_HOME: /opt/hermes-agent
+    HERMES_REPO_URL: https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/ksoft/hermes/hermes-agent.git
   script:
     - $SHELLOPS_DIR/cli/install hermes
     - . ./.envrc
@@ -110,3 +100,13 @@ plugin/catalog-pin:
   script:
     - . ./.envrc
     - shell/actions/hermes/catalog-pin
+
+hermes-agent/sync:
+  extends: [.shellops]
+  stage: publishing
+  needs: []
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  script:
+    - . ./.envrc
+    - shell/actions/hermes/sync-copy --to "$CI_SERVER_URL/ksoft/hermes/hermes-agent.git"
