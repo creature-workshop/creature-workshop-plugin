@@ -79,9 +79,8 @@ hermes plugins install creature-workshop
 hermes plugins enable creature-workshop
 ```
 
-Then restart Hermes. The pane needs Hermes Desktop, and the shellops the
-plugin carries needs `jq` on PATH. Only projects that have `shell/ops` and
-`.ops/config/` are recognised; a project gets them with:
+Then restart Hermes. The pane needs Hermes Desktop. Only projects that have
+`shell/ops` and `.ops/config/` are recognised; a project gets them with:
 
 ```bash
 git submodule add https://gitlab.creature-workshop.com/ksoft/shellops.git shell/.ops && shell/.ops/init
@@ -193,8 +192,8 @@ every command pass there, and the pane's backend does not run
 - The plugin carries a copy of shellops at `shell/.ops`, as source: the
   version its submodule pins, with every repository that version pins and
   its compiled tree, and without their tests and documentation. Nothing is
-  fetched to run it. Its installers call `sudo` to install system packages,
-  and it needs `jq` on PATH. Loading it the first time rewrites
+  fetched to run it, and it needs no `jq`. Its installers call `sudo` to
+  install system packages. Loading it the first time rewrites
   `shell/.ops/.ops/cache/pins.sh` in the plugin's folder with the same
   content.
 - No network calls of the plugin's own, no telemetry, no credentials.
