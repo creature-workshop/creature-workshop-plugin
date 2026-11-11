@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+set -eu
+# shellcheck disable=SC1091  # the project's own .envrc, which sets PROJ and SHELLOPS_DIR
+. "$(dirname "$0")/../../../.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/structs/api.sh" \
+  "$SHELLOPS_DIR/lib/git/api.sh" \
+  "$SHELLOPS_DIR/lib/git/remotes.sh"
+
+USAGE="$(cat <<'HELP'
+Brings a copy of the Hermes Agent repository up to date with GitHub: its main
+branch and its tags.
+
+plugin/catalog installs Hermes Agent from the copy on this GitLab,
+ksoft/hermes/hermes-agent, and the hermes-agent/sync job runs this action on
+a schedule. The action clones GitHub's main into a scratch directory and
+pushes main and every tag to the copy. A push only adds commits and tags: if
+GitHub rewrites main or moves a tag, the copy refuses the push, the action
+fails, and the copy stays as it was.
+
+When FORGE_ADMIN_TOKEN is set, as it is in CI, the push authenticates as the
+Blizz bot with that token. Otherwise git uses the caller's own credentials
+for the copy's URL.
+
+Usage: shell/actions/hermes/sync-copy --to <url> [-h,--help]
+
+  --to <url>  the copy to push to, for example
+              https://gitlab.example/ksoft/hermes/hermes-agent.git
+HELP
+)"
+
+# CONST: The Hermes Agent repository on GitHub, which the copy follows.
+UPSTREAM="https://github.com/NousResearch/hermes-agent.git"
+
+# CONST: The branch the copy follows.
+BRANCH="main"
+
+# CONST: The account the push authenticates as when FORGE_ADMIN_TOKEN is set.
+BOT_USER="Blizz"
+
+ARG_TO=""
+
+main() {
+  parse_args "$@"
+  require_copy
+  GIT_REPO="$(clone_upstream)"
+  git__remotes__fetch_tags origin
+  git__remote_set copy "$ARG_TO"
+  authorize_copy
+  git__remotes__push_ref copy "refs/heads/$BRANCH"
+  git__remotes__push_ref copy 'refs/tags/*'
+  rm -rf "$GIT_REPO"
+  log "the copy at $ARG_TO is up to date with $UPSTREAM"
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) printf '%s\n' "$USAGE"; exit 0 ;;
+      --to) ARG_TO="$2"; shift ;;
+      *) printf 'sync-copy: unknown argument %s\n' "$1" >&2; exit 2 ;;
+    esac
+    shift
+  done
+}
+
+: <<'FUN'
+Exits, saying what to pass, when --to names no copy.
+FUN
+require_copy() {
+  if @defined "$ARG_TO"; then
+    return 0
+  fi
+  printf 'sync-copy: --to names no copy; pass the URL of the repository to push to\n' >&2
+  exit 2
+}
+
+: <<'FUN'
+Clones GitHub's main branch, with no working tree, into a scratch directory
+and prints the directory. shellops' git module has no clone helper, so this
+calls git directly.
+FUN
+clone_upstream() {
+  __clone_upstream__dir="$(mktemp -d "${TMPDIR:-/tmp}/hermes-agent.XXXXXX")"
+  git clone \
+    --quiet \
+    --bare \
+    --single-branch \
+    --branch "$BRANCH" \
+    "$UPSTREAM" \
+    "$__clone_upstream__dir"
+  println "$__clone_upstream__dir"
+}
+
+: <<'FUN'
+Lets the push to the copy authenticate as the bot when FORGE_ADMIN_TOKEN is
+set, and leaves the caller's own credentials in place otherwise.
+FUN
+authorize_copy() {
+  if ! @defined "${FORGE_ADMIN_TOKEN:-}"; then
+    return 0
+  fi
+  git__authorize_host "$(copy_server)" "$BOT_USER" "$FORGE_ADMIN_TOKEN"
+}
+
+: <<'FUN'
+Prints the scheme and host of the copy's URL, the server the bot's
+credentials are scoped to.
+
+    copy_server  ->  https://gitlab.example
+      (for --to https://gitlab.example/ksoft/hermes/hermes-agent.git)
+FUN
+copy_server() {
+  println "$ARG_TO" | sed -E 's#^(https?://[^/]+).*#\1#'
+}
+
+main "$@"
