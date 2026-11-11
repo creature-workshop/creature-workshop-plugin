@@ -80,14 +80,14 @@ class Describing(AProject):
   def test_the_schema_is_the_projects_own_with_references_followed(self):
     schema = schema_for(self.root, MANIFEST)
     self.assertIn("name", schema["required"])
-    self.assertEqual(schema["properties"]["command-name"]["type"], "string")
-    self.assertEqual(schema["properties"]["default-channel"]["enum"], ["dev", "stable"])
+    self.assertEqual(schema["properties"]["command-name"]["type"], ["string", "null"])
+    self.assertEqual(schema["properties"]["default-channel"]["enum"], ["dev", "stable", None])
 
   def test_a_checkout_without_shellops_takes_the_schema_from_the_plugins_shellops(self):
     shutil.rmtree(self.root / "shell")
     schema = schema_for(self.root, MANIFEST)
     self.assertIn("name", schema["required"])
-    self.assertEqual(schema["properties"]["command-name"]["type"], "string")
+    self.assertEqual(schema["properties"]["command-name"]["type"], ["string", "null"])
 
   def test_a_document_without_a_schema_describes_as_empty(self):
     self.assertEqual(self.store.describe(self.root, "config/nothing.yaml"), {})
@@ -140,9 +140,9 @@ class Writing(AProject):
       (Change("set", "description", "two\nlines"), "one line"),
       (Change("set", "default-channel", "nightly"), "one of dev, stable"),
       (Change("set", "name", 3), "must be string"),
-      (Change("set", "naming", "x"), "must be object"),
+      (Change("set", "naming", "x"), "must be null or object"),
       (Change("set", "naming", {"major": "x"}), "single values"),
-      (Change("clear", "command-name"), "cannot be cleared"),
+      (Change("clear", "name"), "cannot be cleared"),
       (Change("set", "nonsense", "x"), "not a key"),
     ]
 
