@@ -16,6 +16,9 @@ const FILLING = Object.freeze({ phase: 'filling' });
 /** While POST /project/adopt runs. */
 const ADOPTING = Object.freeze({ phase: 'adopting' });
 
+/** What happens once shop is set up when the caller asks for nothing. */
+const NOTHING = () => {};
+
 /** The guesses when the agent could not be asked. */
 const NO_GUESS = Object.freeze({ found: false, description: '', command: '' });
 
@@ -30,11 +33,13 @@ const NO_GUESS = Object.freeze({ found: false, description: '', command: '' });
  * done that trying again does not finish. `attempt.phase` is `filling`,
  * `adopting`, or `failed` with the `error`, the `step` that failed
  * (`approval` or `adoption`) and the `answers` to try again with. When it
- * succeeds the pane reads the checkout's setup and project again.
+ * succeeds the pane reads the checkout's setup and project again, and
+ * `onDone` is called.
  *
  * @param {string} root The checkout's root.
+ * @param {() => void} [onDone] Called once shop is set up.
  */
-export function useSetUpShop(root) {
+export function useSetUpShop(root, onDone = NOTHING) {
   const { retry } = useWorkshop();
   const [suggested, setSuggested] = useState(LOADING);
   const [asked, setAsked] = useState(0);
@@ -45,7 +50,10 @@ export function useSetUpShop(root) {
     setAttempt(ADOPTING);
     const failure = await carriedOut(root, adoptionOf(answers));
     settle(failure, answers, setAttempt, retry);
-  }, [root, retry]);
+    if (!failure) {
+      onDone();
+    }
+  }, [root, retry, onDone]);
 
   return { suggested, reload, attempt, adopt };
 }

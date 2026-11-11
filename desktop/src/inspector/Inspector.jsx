@@ -18,12 +18,13 @@ import { FieldGroup } from './FieldGroup.jsx';
  * fields appear once both the record and its schema have arrived. When
  * reading either failed, it says so in their place, with why, what to try,
  * and Try again, which reads both again. A record that does not exist is
- * not a failure when `missing` is given: the group shows `missing` in the
- * fields' place.
+ * not a failure when `missing` is given: the group shows what `missing`
+ * draws in the fields' place. `missing` is given `reread`, which reads the
+ * record and the schema again, for when it has made the record.
  *
  * @param props The component's props.
  * @param {object} props.binding What to show, as register in bindings.js returns it.
- * @param [props.missing] What to show when the record does not exist, such as a button that creates it.
+ * @param {(reread: () => void) => import('react').ReactNode} [props.missing] Draws what to show when the record does not exist, such as a button that creates it.
  */
 export function Inspector({ binding, missing = null }) {
   const { project } = useWorkshop();
@@ -36,7 +37,7 @@ export function Inspector({ binding, missing = null }) {
 
   return (
     <FieldGroup title={binding.title}>
-      {absent && missing}
+      {absent && missing(() => setAttempt((before) => before + 1))}
       {failed && (
         <FailureNotice
           what={`I couldn't read the ${binding.title} fields from ${binding.store.source}.`}
