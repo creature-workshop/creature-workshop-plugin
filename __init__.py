@@ -8,15 +8,19 @@ that says what the tools are for; and four hooks. One tells the agent each
 turn which project its session is on, two keep that selection with a chat
 when Hermes compresses it or starts a subagent, and the one in
 workshop/agent/guard.py blocks a terminal command naming a declared tool that
-is not installed. The Desktop pane in desktop/ reads the same selection and
+is not installed. It also registers the auxiliary task the Dependencies
+tab's Explain button asks a model through, so that model is a setting of
+its own, which starts on a free one.
+The Desktop pane in desktop/ reads the same selection and
 the same facts through the backend in dashboard/plugin_api.py.
 """
 
 from .workshop.agent import context, guard, tools
+from .workshop.project import explain
 
 
 def register(ctx):
-  """Registers the plugin with Hermes: its tools, its section of the system prompt, and its hooks."""
+  """Registers the plugin with Hermes: its tools, its section of the system prompt, its hooks, and its auxiliary task."""
 
   for schema, handler in tools.registry():
     ctx.register_tool(name=schema["name"], toolset="workshop", schema=schema, handler=handler)
@@ -26,3 +30,4 @@ def register(ctx):
   ctx.register_hook("pre_llm_call", context.before_turn)
   ctx.register_hook("post_compaction", context.after_compaction)
   ctx.register_hook("subagent_start", context.on_subagent_start)
+  explain.register_task(ctx)

@@ -43,7 +43,7 @@ def answer_for(path, check="1"):
 class Mounting(unittest.TestCase):
   def test_the_router_carries_every_route_the_pane_reads(self):
     paths = {route.path for route in load_backend().router.routes}
-    self.assertEqual(paths, {"/about", "/project", "/project/adopt", "/project/adoption", "/project/adoption/guess", "/project/setup", "/repos", "/repos/status", "/selection", "/selection/worktree", "/store/introspect", "/store/mutate", "/store/query"})
+    self.assertEqual(paths, {"/about", "/project", "/project/adopt", "/project/adoption", "/project/adoption/guess", "/project/dependencies/explain", "/project/setup", "/repos", "/repos/status", "/selection", "/selection/worktree", "/store/introspect", "/store/mutate", "/store/query"})
 
 
 class InsideAProject(unittest.TestCase):

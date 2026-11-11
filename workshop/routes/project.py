@@ -37,11 +37,13 @@ from workshop import api, settings
 from workshop.consent import is_approved
 from workshop.models.adoption import AdoptBody, Adopted, AdoptionGuess, AdoptionSuggestions
 from workshop.models.project import DeclaredTool, NoProject, Project, Release
+from workshop.models.dependencies import DependencyExplanation
 from workshop.models.setup import Setup
 from workshop.models.toolchain import Toolchain
 from workshop.project import check_table
 from workshop.project.adoption import MANIFEST_PATH, commit_manifest, has_manifest, suggestions, write_manifest
 from workshop.project.declaration import declaration, declared_tools, find_project, manifest, release, summary_line
+from workshop.project.explain import explain
 from workshop.project.guess import guess
 from workshop.project.setup import setup_state
 from workshop.run import ops
@@ -90,6 +92,18 @@ async def adoption_guess(root: str = Query()):
   return AdoptionGuess(root=root, found=True, **guessed)
 
 
+@api.register("/project/dependencies/explain", DependencyExplanation)
+async def explain_dependency(root: str = Query(), tool: str = Query()):
+  """Why the project at root has the declared tool, in the model's words, with the model that answered, or found
+  false and the reason when there is no explanation; refuses a tool the project does not declare."""
+
+  declared = declared_tool(root, tool)
+  if declared is None:
+    raise HTTPException(status_code=404, detail=f"{Path(root).name} declares no tool named {tool}.")
+
+  return DependencyExplanation(root=root, tool=tool, **await explain(root, declared))
+
+
 @api.register("/project/adopt", Adopted, method="POST")
 async def adopt(body: AdoptBody):
   """Writes the checkout's .ops/config/manifest.yaml from body.manifest and commits it alone when body.commit is set, refusing a checkout that already has a manifest."""
@@ -103,6 +117,16 @@ async def adopt(body: AdoptBody):
     raise HTTPException(status_code=400, detail=f"I wrote {MANIFEST_PATH}, but git didn't commit it: {failure}")
 
   return Adopted(root=body.root, path=MANIFEST_PATH, committed=body.commit, state=setup_state(body.root))
+
+
+def declared_tool(root, name):
+  """The declaration of the tool named name in the project at root, with the keys tool, channel and version, or None when it declares none."""
+
+  for channel, tool, version in declared_tools(Path(root)):
+    if tool == name:
+      return {"tool": tool, "channel": channel, "version": version}
+
+  return None
 
 
 def described(root, refresh_seconds):

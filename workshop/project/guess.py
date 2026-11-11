@@ -6,7 +6,8 @@ Hermes's ctx.llm surface (agent.plugin_llm), with the README's opening, the
 names at the top of the checkout and the repository's name as its input.
 Secrets in that text are masked before it leaves the machine. Outside
 Hermes, or when the call fails, there is no guess, and the form starts
-those fields empty.
+those fields empty. The answer's schema allows no other property, which
+Anthropic's models require of every object in a schema.
 """
 
 import logging
@@ -40,6 +41,7 @@ SCHEMA = {
     "command": {"type": "string"},
   },
   "required": ["description", "command"],
+  "additionalProperties": False,
 }
 
 
