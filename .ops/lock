@@ -253,7 +253,7 @@
     "imports": {}
   },
   "release": {
-    "latest": "0.1.0-dev.19",
+    "latest": "0.1.0-dev.20",
     "stable": "0.0.0"
   }
 }
