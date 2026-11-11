@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import "$SHELLOPS_DIR/lib/agents/api.sh"
+
+USAGE="$(cat <<HELP
+Prints a run on an agent: its status, its final reply once it has one, and
+the reviews it opened, as the provider's record.
+Without a run id, the agent's runs, newest first.
+
+Usage: action agents logs <agent-id> [<run-id>] [--provider <id>] [--text] [-h,--help]
+
+Flags:
+  --provider <id>   The adaptor to read; else the manifest's sole entry under
+                    agents.providers, else SHELLOPS_AGENTS.
+  --text            With a run id, print only the run's final reply.
+  -h, --help        Show this help text.
+
+Environment:
+  The selected provider's key variable (cursor: CURSOR_AGENT_API_KEY; cursor-cli:
+  CURSOR_API_KEY; claude-cli: ANTHROPIC_API_KEY).
+HELP
+)"
+
+ARG_PROVIDER=""
+@false ARG_TEXT
+ARG_AGENT=""
+ARG_RUN=""
+
+main() {
+  parse_args "$@"
+  if ! @defined "$ARG_AGENT"; then
+    error "an agent id is required"
+    log "$USAGE"
+    exit 1
+  fi
+  __main__options="$(agents__new_run_options "$ARG_PROVIDER")"
+  __main__options="$(agents__with_key "$__main__options")" || exit 1
+  if ! @defined "$ARG_RUN"; then
+    agents__list_runs "$__main__options" "$ARG_AGENT"
+  elif @is_true "$ARG_TEXT"; then
+    agents__result "$__main__options" "$ARG_AGENT" "$ARG_RUN"
+  else
+    agents__get_run "$__main__options" "$ARG_AGENT" "$ARG_RUN"
+  fi
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      --provider) ARG_PROVIDER="$2"; shift ;;
+      --text) @true __parse_args__true_1; ARG_TEXT="$__parse_args__true_1" ;;
+      -*)
+        error "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+      *) take_positional "$1" ;;
+    esac
+    shift
+  done
+}
+
+: <<'FUN'
+Takes the positional $1 as the agent id, then the run id; a third is refused.
+FUN
+take_positional() {
+  if ! @defined "$ARG_AGENT"; then
+    ARG_AGENT="$1"
+  elif ! @defined "$ARG_RUN"; then
+    ARG_RUN="$1"
+  else
+    error "logs takes an agent id and at most a run id, not '$1'"
+    log "$USAGE"
+    exit 1
+  fi
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  */agents/logs) main "$@" ;;
+esac

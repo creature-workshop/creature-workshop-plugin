@@ -1,0 +1,6 @@
+mutation($name: String!, $color: String!) {
+  issueLabelCreate(input: { name: $name, color: $color }) {
+    success
+    issueLabel { id name }
+  }
+}

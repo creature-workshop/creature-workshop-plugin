@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+if [ -n "${GITHUB_ACTIONS:-}" ]; then
+  event="$(cat "$GITHUB_EVENT_PATH")"
+  @get pr_number "$event" '.pull_request.number'
+  @get __at1 "$event" '.pull_request.labels'
+  @pluck __at2 "$__at1" '.name'
+  @join pr_labels "$__at2" ","
+
+  export CI_COMMIT_PULL_REQUEST="$pr_number"
+  export CI_COMMIT_PULL_REQUEST_LABELS="$pr_labels"
+
+  if [ -n "${GITHUB_ENV:-}" ]; then
+    echo "CI_COMMIT_PULL_REQUEST=$pr_number" >> "$GITHUB_ENV"
+    echo "CI_COMMIT_PULL_REQUEST_LABELS=$pr_labels" >> "$GITHUB_ENV"
+  fi
+  exit 0
+fi
+
+echo "Unsupported CI platform" >&2
+exit 1

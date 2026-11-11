@@ -1,0 +1,13 @@
+query($id: String!) {
+  issue(id: $id) {
+    id
+    identifier
+    url
+    title
+    description
+    priority
+    priorityLabel
+    state { name type }
+    labels { nodes { name parent { name } } }
+  }
+}

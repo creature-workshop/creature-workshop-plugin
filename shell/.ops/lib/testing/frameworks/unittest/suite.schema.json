@@ -1,0 +1,44 @@
+{
+  "type": "object",
+  "description": "unittest suite: the standard library's runner by file, under coverage.py when the suite names the packages it measures. Tests are discovered by filename glob, either as siblings under the area's own paths or under a central root whose filename stem matches a changed source file.",
+  "required": ["runner"],
+  "properties": {
+    "runner": { "const": "unittest" },
+    "project_dir": {
+      "type": "string",
+      "description": "The directory the tests import from and run in, relative to the repository root; \".\" by default."
+    },
+    "root": {
+      "type": "string",
+      "description": "Directory under which the \"filename\" strategy looks for centralized tests, and the whole suite is collected from. Defaults to \"tests\"."
+    },
+    "glob": {
+      "description": "Filename glob(s) identifying this suite's test files: a single pattern or an array of patterns whose matches are unioned. Defaults to \"test_*.py\".",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      ]
+    },
+    "exclude": {
+      "description": "Filename glob(s) to drop from the matched test files: a single pattern or an array of patterns.",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      ]
+    },
+    "interpreter": {
+      "type": "string",
+      "description": "The command that runs Python, one or several words: \"python3\" by default, or \"uv run python\" for a project whose environment uv keeps."
+    },
+    "source": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "The packages or directories coverage.py measures, as its --source takes them. Empty by default, which runs the tests with no coverage and leaves coverage_summary with nothing to report."
+    },
+    "report_dir": {
+      "type": "string",
+      "description": "Where coverage.py's JSON report is written, relative to the repository root. Defaults to \".ops/cache/coverage/unittest\"."
+    }
+  },
+  "additionalProperties": false
+}

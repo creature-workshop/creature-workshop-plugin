@@ -1,0 +1,12 @@
+mutation($issueId: String!, $title: String!, $url: String!, $subtitle: String, $metadata: JSONObject) {
+  attachmentCreate(input: {
+    issueId: $issueId
+    title: $title
+    url: $url
+    subtitle: $subtitle
+    metadata: $metadata
+  }) {
+    success
+    attachment { id }
+  }
+}

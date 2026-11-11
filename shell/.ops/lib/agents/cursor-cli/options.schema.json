@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "description": "What only the cursor-cli adaptor understands: the options' cursor-cli block, and the manifest's agents.providers.cursor-cli entry that seeds it. The three every headless adaptor understands are named here by $ref and defined once in ../headless/options.schema.json.",
+  "properties": {
+    "command": {
+      "$ref": "../headless/options.schema.json#/properties/command",
+      "description": "The Cursor CLI executable, on the PATH or by path.",
+      "default": "agent"
+    },
+    "workspace": {
+      "$ref": "../headless/options.schema.json#/properties/workspace"
+    },
+    "state_dir": {
+      "$ref": "../headless/options.schema.json#/properties/state_dir"
+    },
+    "force": {
+      "type": "boolean",
+      "description": "Whether the CLI may run commands and edit files without asking, which a headless run needs in order to do anything.",
+      "default": true
+    }
+  },
+  "additionalProperties": false
+}

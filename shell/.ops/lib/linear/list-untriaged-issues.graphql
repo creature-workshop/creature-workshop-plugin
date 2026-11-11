@@ -1,0 +1,24 @@
+query($cursor: String, $teamIds: [ID!]) {
+  issues(
+    first: 50
+    after: $cursor
+    filter: {
+      state: { type: { eq: "backlog" } }
+      labels: { every: { name: { notStartsWith: "blizz/" } } }
+      team: { id: { in: $teamIds } }
+    }
+  ) {
+    pageInfo { hasNextPage endCursor }
+    nodes {
+      id
+      identifier
+      title
+      description
+      priority
+      priorityLabel
+      state { name type }
+      team { id key name }
+      labels { nodes { id name } }
+    }
+  }
+}

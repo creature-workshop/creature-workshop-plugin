@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/creature-workshop/shellops/lib/scheduler/transitions.schema.json",
+  "title": "Transitions",
+  "description": "A queue's topology as data: the discipline that orders it, and one row per event a tick judges of a merge request, naming the state the merge request goes to and the actions the adaptor performs. The tick's module says which events and states a queue knows.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["queue", "discipline", "transitions"],
+  "properties": {
+    "queue": {
+      "type": "string",
+      "description": "The queue the table belongs to."
+    },
+    "discipline": {
+      "type": "string",
+      "description": "The queue discipline that orders the entries, a plugin of the queue kind."
+    },
+    "transitions": {
+      "type": "array",
+      "description": "One row per event, in any order.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["event", "to", "actions"],
+        "properties": {
+          "event": {
+            "type": "string",
+            "description": "The event the row answers, one the tick's module judges."
+          },
+          "to": {
+            "type": "string",
+            "description": "The state the merge request goes to, the label the tick renders."
+          },
+          "actions": {
+            "type": "array",
+            "description": "The actions the adaptor performs, in order, by name.",
+            "items": {"type": "string"}
+          }
+        }
+      }
+    }
+  }
+}

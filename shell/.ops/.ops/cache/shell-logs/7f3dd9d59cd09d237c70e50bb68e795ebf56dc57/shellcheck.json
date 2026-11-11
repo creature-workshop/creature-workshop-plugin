@@ -1,0 +1,8 @@
+{
+  "include": [
+    "shell/log/api.sh"
+  ],
+  "exclude": [
+    "shell/.ops"
+  ]
+}

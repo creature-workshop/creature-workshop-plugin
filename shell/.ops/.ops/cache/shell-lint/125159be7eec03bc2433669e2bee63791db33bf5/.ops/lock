@@ -1,0 +1,187 @@
+{
+  "release": {
+    "latest": "0.1.0-dev.5"
+  },
+  "dependencies": {
+    "tools": {
+      "cargo-binstall": {
+        "cargo-audit": {
+          "args": "--disable-strategies compile",
+          "version": "0.22.2",
+          "needs": [
+            "cargo-binstall"
+          ]
+        },
+        "cargo-fuzz": {
+          "args": "--disable-strategies compile",
+          "musl": true,
+          "version": "0.13.2",
+          "needs": [
+            "cargo-binstall"
+          ]
+        },
+        "cargo-llvm-cov": {
+          "args": "--disable-strategies compile",
+          "musl": true,
+          "version": "0.9.1",
+          "needs": [
+            "cargo-binstall"
+          ]
+        },
+        "cargo-nextest": {
+          "args": "--disable-strategies compile",
+          "musl": true,
+          "version": "0.9.144",
+          "needs": [
+            "cargo-binstall"
+          ]
+        },
+        "cargo-tarpaulin": {
+          "args": "--disable-strategies compile",
+          "musl": true,
+          "version": "0.35.4",
+          "needs": [
+            "cargo-binstall"
+          ]
+        },
+        "cargo-zigbuild": {
+          "args": "--disable-strategies compile",
+          "musl": true,
+          "version": "0.22.1",
+          "needs": [
+            "cargo-binstall"
+          ]
+        }
+      },
+      "go-install": {
+        "yq": {
+          "pkg": "github.com/mikefarah/yq/v4",
+          "version": "4.53.6",
+          "needs": [
+            "go"
+          ]
+        }
+      },
+      "script": {
+        "cargo-binstall": {
+          "needs": [
+            "rustup"
+          ],
+          "version": "1.18.0"
+        },
+        "fnm": {
+          "needs": [
+            "curl",
+            "ca-certificates",
+            "unzip"
+          ],
+          "version": "1.39.0"
+        },
+        "llvm-strip": {
+          "version": "14"
+        },
+        "node": {
+          "needs": [
+            "fnm"
+          ],
+          "version": "24.20.0"
+        },
+        "rustup": {
+          "components": [
+            "rustfmt",
+            "clippy",
+            "llvm-tools"
+          ],
+          "needs": [
+            "build-essential",
+            "curl",
+            "ca-certificates"
+          ],
+          "toolchain": "1.95.0",
+          "version": "1.28.2"
+        },
+        "tectonic": {
+          "needs": [
+            "curl",
+            "ca-certificates"
+          ],
+          "version": "0.15.0"
+        },
+        "terraform": {
+          "needs": [
+            "curl",
+            "ca-certificates",
+            "unzip"
+          ],
+          "version": "1.16.4"
+        },
+        "vercel": {
+          "needs": [
+            "node"
+          ],
+          "version": "59.10.0"
+        },
+        "zig": {
+          "needs": [
+            "build-essential"
+          ],
+          "version": "0.16.0"
+        },
+        "go": {
+          "version": "1.25.5"
+        }
+      },
+      "system": {
+        "build-essential": {
+          "version": "latest"
+        },
+        "ca-certificates": {
+          "version": "latest"
+        },
+        "curl": {
+          "version": "latest"
+        },
+        "direnv": {
+          "postinstall": ".scripts/shim_direnv.sh"
+        },
+        "git": {
+          "version": "latest"
+        },
+        "jq": {
+          "version": "1.6"
+        },
+        "libssl-dev": {
+          "version": "latest"
+        },
+        "openssh-client": {
+          "version": "latest"
+        },
+        "openssl": {
+          "version": "latest"
+        },
+        "pandoc": {
+          "version": "latest"
+        },
+        "parallel": {
+          "version": "latest"
+        },
+        "pkg-config": {
+          "version": "latest"
+        },
+        "shellcheck": {
+          "version": "0.9.0"
+        },
+        "strace": {
+          "version": "5.16"
+        },
+        "sudo": {
+          "version": "latest"
+        },
+        "unzip": {
+          "version": "latest"
+        }
+      }
+    }
+  },
+  "features": {}
+}

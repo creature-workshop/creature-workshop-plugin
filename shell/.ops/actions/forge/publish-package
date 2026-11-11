@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2119  # bare @arr is the structs empty constructor
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/forgejo/api.sh" \
+  "$SHELLOPS_DIR/lib/manifest/api.sh" \
+  "$SHELLOPS_DIR/lib/tarball/api.sh"
+
+USAGE="$(cat <<HELP
+Publishes a build's files to the Forgejo generic package registry, under the
+manifest's org as a package named after the repository: every path in the
+artifacts.json a build wrote beside its outputs, and any given directly, with
+their SHA256SUMS. The registry is Forgejo's whichever forge is active, since a
+package there is what a formula for a build below the public gate points at.
+Publishing the same version twice is a no-op: a file the registry already
+holds is left as it is.
+
+Usage: action forge publish-package --version <version> [--artifacts <file>]
+                                    [--package <name>] [--owner <owner>] [artifact...]
+
+Arguments:
+  artifact          A file to publish. Repeatable.
+
+Flags:
+  --version <v>     Required. The package version, the tag as the build spelled it.
+  --artifacts <f>   Load artifact paths from a JSON array file (e.g. artifacts.json).
+                    A file that does not exist publishes nothing and succeeds: a
+                    build with nothing to ship writes none.
+  --package <name>  The package name. Defaults to the manifest's repo.
+  --owner <owner>   The owner the package lives under. Defaults to the manifest's org.
+  -h, --help        Show this help text.
+
+Environment:
+  FORGEJO_PACKAGE_TOKEN   Required. A Forgejo token with package write.
+  FORGEJO_API_BASE        The Forgejo instance; defaults to the one lib/forgejo names.
+HELP
+)"
+
+ARG_VERSION=""
+@arr ARG_ARTIFACTS
+ARG_ARTIFACTS_FILE=""
+ARG_PACKAGE=""
+ARG_OWNER=""
+
+main() {
+  parse_args "$@"
+  validate_args
+
+  __main__options="$(package_options)"
+  __main__files="$(tarball__with_checksums "$(tarball__artifacts_dir "$ARG_ARTIFACTS_FILE")" "$ARG_ARTIFACTS")"
+  __main__counts="$(forgejo__publish_package_files "$__main__options" "$__main__files")" || exit 1
+
+  @get __main__get_1 "$__main__options" '.owner'
+  @get __main__get_2 "$__main__options" '.package'
+  @get __main__get_3 "$__main__counts" '.uploaded'
+  @get __main__get_4 "$__main__counts" '.present'
+  log "Published $__main__get_1/$__main__get_2 $ARG_VERSION on Forgejo: $__main__get_3 uploaded, $__main__get_4 already there"
+}
+
+validate_args() {
+  if ! @defined "$ARG_VERSION"; then
+    error "--version is required"
+    log "$USAGE"
+    exit 1
+  fi
+  if ! @defined "${FORGEJO_PACKAGE_TOKEN:-}"; then
+    error "FORGEJO_PACKAGE_TOKEN is not set"
+    exit 1
+  fi
+  if @len __validate_args__len_5 "$ARG_ARTIFACTS"; [ "$__validate_args__len_5" -eq 0 ]; then
+    error "nothing to publish: give --artifacts <file> or artifact paths"
+    log "$USAGE"
+    exit 1
+  fi
+  @foreach refuse_directory "$ARG_ARTIFACTS"
+}
+
+: <<'FUN'
+@foreach callback: stops on the wrapped path $1 when it is a directory, since
+packaging is the build's job (lib/tarball) and this action ships only what a
+build produced.
+FUN
+refuse_directory() {
+  if @unwrap __refuse_directory__unwrap_6 "$1"; [ -d "$__refuse_directory__unwrap_6" ]; then
+    @unwrap __refuse_directory__unwrap_7 "$1"
+    error "publish-package: $__refuse_directory__unwrap_7 is a directory; package it in the build (tarball_package) and publish the archive"
+    exit 1
+  fi
+}
+
+: <<'FUN'
+Prints the package options every upload shares: the owner and package the
+flags name or the manifest supplies, the version, and the token.
+FUN
+package_options() {
+  @patch __package_options__out "$(forgejo__new_package_options)" \
+    '.owner'   "$ARG_OWNER" \
+    '.package' "${ARG_PACKAGE:-$(manifest__get repo)}" \
+    '.version' "$ARG_VERSION" \
+    '.token'   "$FORGEJO_PACKAGE_TOKEN"
+  println "$__package_options__out"
+}
+
+: <<'FUN'
+Appends every path the artifacts file $1 names to the files to publish. A
+file that does not exist is a build that shipped nothing: the action logs it
+and exits clean. A file naming a missing path fails before anything uploads.
+FUN
+load_manifest() {
+  if [ ! -f "$1" ]; then
+    log "no artifacts file at $1: nothing to publish"
+    exit 0
+  fi
+  ARG_ARTIFACTS_FILE="$1"
+  __load_manifest__paths="$(tarball__artifacts_from "$1")" || exit 1
+  @concat ARG_ARTIFACTS "$ARG_ARTIFACTS" "$__load_manifest__paths"
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      --version) ARG_VERSION="${2:?--version requires a value}"; shift ;;
+      --artifacts) load_manifest "${2:?--artifacts requires a value}"; shift ;;
+      --package) ARG_PACKAGE="${2:?--package requires a value}"; shift ;;
+      --owner) ARG_OWNER="${2:?--owner requires a value}"; shift ;;
+      -*)
+        error "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+      *) @wrap __parse_args__wrap_8 "$1"; @push __parse_args__push_9 "$ARG_ARTIFACTS" "$__parse_args__wrap_8"; ARG_ARTIFACTS="$__parse_args__push_9" ;;
+    esac
+    shift
+  done
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  */forge/publish-package) main "$@" ;;
+esac

@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "description": "Tarpaulin suite. Runs the cargo tests under cargo-tarpaulin and measures line coverage: which source lines the tests executed. Test selection is cargo's (a changed file maps to its owning package), so a tarpaulin suite takes the same manifest a cargo suite does. After a run, the runner's coverage_summary reads the JSON report tarpaulin left in report_dir.",
+  "required": ["runner"],
+  "properties": {
+    "runner": { "const": "tarpaulin" },
+    "manifest": {
+      "type": "string",
+      "description": "$PROJ-relative path to the Cargo.toml of the workspace to measure, for a workspace below the repo root (e.g. \"engine/Cargo.toml\"). Omitted, cargo measures whatever workspace the working directory is in."
+    },
+    "ignore": {
+      "type": ["string", "array"],
+      "items": { "type": "string" },
+      "description": "Source files to leave out of the measurement, as tarpaulin file globs (e.g. \"src/bin/*\"). One glob or a list; each is passed to tarpaulin as its own --exclude-files."
+    },
+    "report_dir": {
+      "type": "string",
+      "description": "$PROJ-relative directory tarpaulin writes tarpaulin-report.json into. Defaults to \"target/coverage/tarpaulin\"."
+    },
+    "cargo_args": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Extra arguments for the instrumented cargo build, one shell word per element (e.g. [\"--features\", \"ml\"]). Defaults to [\"--no-default-features\", \"--locked\"]."
+    }
+  },
+  "additionalProperties": false
+}

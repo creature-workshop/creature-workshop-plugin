@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+import "$SHELLOPS_DIR/lib/homebrew/api.sh"
+import \
+  "$SHELLOPS_DIR/lib/manifest/api.sh" \
+  "$SHELLOPS_DIR/lib/releases/record/api.sh"
+
+USAGE="$(cat <<HELP
+Generates a Homebrew formula and pushes it to a tap repository.
+
+When --tap-repo is provided, handles the full cycle: clone, generate
+formula, commit, and push. When --dir is provided instead, only writes
+the formula file (caller handles git operations).
+
+Flags override manifest.json values. If --name, --version, --description,
+--homepage, or --bin are omitted, they fall back to the project manifest.
+
+Usage: action homebrew update-tap [options]
+
+Options:
+  --tap-repo <url>       Git clone URL of the tap repo (includes credentials if needed).
+                         Mutually exclusive with --dir.
+  --dir <path>           Path to an already-cloned tap repository.
+                         Mutually exclusive with --tap-repo.
+  --asset-url <url>      Base URL where release tarballs are hosted (required).
+  --asset-dir <dir>      Local directory containing tarballs for SHA256 computation (required).
+  --name <name>          Formula/binary name. Defaults to manifest command-name.
+  --version <version>    Release version. Defaults to manifest stable version.
+  --description <text>   One-line description. Defaults to manifest description.
+  --homepage <url>       Project homepage URL. Defaults to GitHub repo URL from manifest.
+  --license <spdx>       SPDX license identifier. Defaults to MIT.
+  --bin <name>           Binary filename to install. Defaults to manifest command-name.
+  --artifact-name <name> Name the release tarballs carry, <name>-<version>-<triple>.tar.gz,
+                         in the download URLs and under --asset-dir. Defaults to --name,
+                         for a formula named after its binary; a formula whose name
+                         differs from the tarballs' (tool-pre over tool-*.tar.gz)
+                         names them here.
+  -h, --help             Show this help text.
+HELP
+)"
+
+main() {
+  __main__args="$(parse_args "$@")"
+  __main__args="$(apply_manifest_defaults "$__main__args")"
+  validate_args "$__main__args"
+
+  @let "$__main__args" __main__ asset_url asset_dir tap_repo name version dir
+
+  __main__formula_rb="$(homebrew__generate_formula \
+    "$__main__args" \
+    "$__main__asset_url" \
+    "$__main__asset_dir" \
+  )"
+
+  if @defined "$__main__tap_repo"; then
+    homebrew__update_tap "$__main__tap_repo" "$__main__formula_rb" "$__main__name" "$__main__version"
+  else
+    mkdir -p "${__main__dir}/Formula"
+    echo "$__main__formula_rb" > "${__main__dir}/Formula/${__main__name}.rb"
+    log "wrote Formula/${__main__name}.rb"
+  fi
+  __main__status=$?
+  @unlet __main__ asset_url asset_dir tap_repo name version dir
+  return "$__main__status"
+}
+
+apply_manifest_defaults() {
+  __apply_manifest_defaults__args="$1"
+
+  @get __apply_manifest_defaults__get_1 "$__apply_manifest_defaults__args" '.name'
+  @defined "$__apply_manifest_defaults__get_1" || \
+    @set __apply_manifest_defaults__args "$__apply_manifest_defaults__args" '.name' "$(manifest__get command_name 2>/dev/null || true)"
+
+  @get __apply_manifest_defaults__get_2 "$__apply_manifest_defaults__args" '.version'
+  @defined "$__apply_manifest_defaults__get_2" || \
+    @set __apply_manifest_defaults__args "$__apply_manifest_defaults__args" '.version' "$(releases__record__get_stable 2>/dev/null || true)"
+
+  @get __apply_manifest_defaults__get_3 "$__apply_manifest_defaults__args" '.description'
+  @defined "$__apply_manifest_defaults__get_3" || \
+    @set __apply_manifest_defaults__args "$__apply_manifest_defaults__args" '.description' "$(manifest__get description 2>/dev/null || true)"
+
+  @get __apply_manifest_defaults__get_4 "$__apply_manifest_defaults__args" '.bin'
+  @defined "$__apply_manifest_defaults__get_4" || \
+    @set __apply_manifest_defaults__args "$__apply_manifest_defaults__args" '.bin' "$(manifest__get command_name 2>/dev/null || true)"
+
+  if @get __apply_manifest_defaults__get_5 "$__apply_manifest_defaults__args" '.homepage'; ! @defined "$__apply_manifest_defaults__get_5"; then
+    __apply_manifest_defaults__org="$(manifest__get org 2>/dev/null || true)"
+    __apply_manifest_defaults__repo="$(manifest__get repo 2>/dev/null || true)"
+    if @defined "$__apply_manifest_defaults__org" && @defined "$__apply_manifest_defaults__repo"; then
+      @set __apply_manifest_defaults__args "$__apply_manifest_defaults__args" '.homepage' "https://github.com/${__apply_manifest_defaults__org}/${__apply_manifest_defaults__repo}"
+    fi
+  fi
+
+  echo "$__apply_manifest_defaults__args"
+}
+
+validate_args() {
+  __validate_args__missing=""
+
+  @let "$1" __validate_args__ tap_repo dir asset_url asset_dir name version
+
+  if @defined "$__validate_args__tap_repo" && @defined "$__validate_args__dir"; then
+    error "--tap-repo and --dir are mutually exclusive"
+    exit 1
+  fi
+
+  ! @defined "$__validate_args__tap_repo" && ! @defined "$__validate_args__dir" && __validate_args__missing="${__validate_args__missing}  --tap-repo or --dir\n"
+  @defined "$__validate_args__asset_url" || __validate_args__missing="${__validate_args__missing}  --asset-url\n"
+  @defined "$__validate_args__asset_dir" || __validate_args__missing="${__validate_args__missing}  --asset-dir\n"
+  @defined "$__validate_args__name"      || __validate_args__missing="${__validate_args__missing}  --name (not in manifest either)\n"
+  @defined "$__validate_args__version"   || __validate_args__missing="${__validate_args__missing}  --version (not in manifest either)\n"
+
+  if [ -n "$__validate_args__missing" ]; then
+    error "missing required options:"
+    printf '%b' "$__validate_args__missing" >&2
+    log "$USAGE"
+    exit 1
+  fi
+  @unlet __validate_args__ tap_repo dir asset_url asset_dir name version
+}
+
+parse_args() {
+  @obj __parse_args__args '.license' 'MIT'
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help)      log "$USAGE"; exit 0 ;;
+      --tap-repo)     @set __parse_args__set_6 "$__parse_args__args" '.tap_repo' "$2"; __parse_args__args="$__parse_args__set_6"; shift ;;
+      --dir)          @set __parse_args__set_7 "$__parse_args__args" '.dir' "$2"; __parse_args__args="$__parse_args__set_7"; shift ;;
+      --name)         @set __parse_args__set_8 "$__parse_args__args" '.name' "$2"; __parse_args__args="$__parse_args__set_8"; shift ;;
+      --version)      @set __parse_args__set_9 "$__parse_args__args" '.version' "$2"; __parse_args__args="$__parse_args__set_9"; shift ;;
+      --asset-url)    @set __parse_args__set_10 "$__parse_args__args" '.asset_url' "$2"; __parse_args__args="$__parse_args__set_10"; shift ;;
+      --asset-dir)    @set __parse_args__set_11 "$__parse_args__args" '.asset_dir' "$2"; __parse_args__args="$__parse_args__set_11"; shift ;;
+      --description)  @set __parse_args__set_12 "$__parse_args__args" '.description' "$2"; __parse_args__args="$__parse_args__set_12"; shift ;;
+      --homepage)     @set __parse_args__set_13 "$__parse_args__args" '.homepage' "$2"; __parse_args__args="$__parse_args__set_13"; shift ;;
+      --license)      @set __parse_args__set_14 "$__parse_args__args" '.license' "$2"; __parse_args__args="$__parse_args__set_14"; shift ;;
+      --bin)          @set __parse_args__set_15 "$__parse_args__args" '.bin' "$2"; __parse_args__args="$__parse_args__set_15"; shift ;;
+      --artifact-name) @set __parse_args__set_16 "$__parse_args__args" '.artifact' "$2"; __parse_args__args="$__parse_args__set_16"; shift ;;
+      -*)
+        error "Unknown option: $1"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+
+  echo "$__parse_args__args"
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *update-tap) main "$@" ;;
+esac

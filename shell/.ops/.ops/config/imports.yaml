@@ -1,0 +1,8 @@
+# What this repository sources at run time from other repositories, each
+# pinned at a commit (ADR 000050): strata, for the SILT library structs
+# runs on and the YAML translator the config module reads with (ADR 000048).
+# The resolver walks what strata pins in turn, shell-logs today, and records
+# the whole graph under dependencies.imports of .ops/lock. A pin moves in a
+# merge request of its own.
+strata:
+  commit: 2f73ac6d385b411144941791679262592cae1ea2

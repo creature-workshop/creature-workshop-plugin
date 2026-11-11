@@ -1,0 +1,10 @@
+mutation($noteId: NoteID!) {
+  destroyNote(input: {
+    id: $noteId
+  }) {
+    note {
+      id
+    }
+    errors
+  }
+}

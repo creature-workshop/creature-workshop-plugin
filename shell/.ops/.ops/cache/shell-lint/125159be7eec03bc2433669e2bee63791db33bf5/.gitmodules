@@ -1,0 +1,6 @@
+[submodule "shell/.ops"]
+	path = shell/.ops
+	url = https://gitlab.creature-workshop.com/ksoft/shellops.git
+[submodule "shell/.scan"]
+	path = shell/.scan
+	url = https://gitlab.creature-workshop.com/ksoft/libraries/shell-scan.git

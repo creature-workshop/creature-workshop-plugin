@@ -1,0 +1,263 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2119  # bare @arr/@obj are the structs empty constructors
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/forge/api.sh" \
+  "$SHELLOPS_DIR/lib/git/api.sh"
+
+USAGE="$(cat <<HELP
+Hands a code review back to the reviewer who asked for changes.
+
+Usage: ops request-review [-c,--check] [-l,--list] [-b,--branch NAME] [-h,--help]
+
+A reviewer who requests changes drops out of their own review queue until review
+is requested again, so pushing the fixes without handing the review back leaves
+it waiting on nobody. This finds the code reviews in that state and clears them.
+
+Modes:
+  (default)          Hand the current branch's code review back to whoever asked
+                     for changes.
+  -c, --check        Report what is waiting; change nothing. Never fails, so a
+                     missing token or an unreachable forge cannot block a caller
+                     that runs on the way to somewhere else, like a pre-push hook.
+  -l, --list         Report every open code review awaiting a hand-back, not just
+                     the current branch's. Read-only.
+
+Options:
+  -b, --branch NAME  Use NAME instead of the checked-out branch.
+
+Environment:
+  FORGE_PR_TOKEN     Bot token for code-review work, then FORGE_ADMIN_TOKEN.
+  SHELLOPS_FORGE     Active forge ("gitlab" or "forgejo").
+HELP
+)"
+
+: <<'CONST'
+The most seconds a check's request may take, tighter than lib/http's
+default so that checking for code reviews is cheap enough to run as a git hook.
+CONST
+__request_review__CHECK_MAX_TIME=3
+
+# CONST: How many times a check's request is retried, kept low for the same reason.
+__request_review__CHECK_RETRIES=1
+
+@false __request_review__FLAG_CHECK
+@false __request_review__FLAG_LIST
+__request_review__BRANCH=""
+
+main() {
+  parse_args "$@"
+
+  if @is_true "$__request_review__FLAG_CHECK"; then
+    report_quietly
+    return 0
+  fi
+
+  if @is_true "$__request_review__FLAG_LIST"; then
+    report_waiting
+    return 0
+  fi
+
+  hand_back
+}
+
+: <<'FUN'
+Reports what is waiting, swallowing every failure. Check mode runs where the
+answer is a courtesy and the caller's own work is the point, so no token, no
+network, and no code review are all the same outcome: say nothing, succeed.
+FUN
+report_quietly() {
+  __report_quietly__found="$(waiting_reviews 2>/dev/null)" || return 0
+  print_reminders "$__report_quietly__found"
+}
+
+: <<'FUN'
+Reports what is waiting, letting failures surface. A person asked, so a missing
+token is worth a message rather than a silent empty answer.
+FUN
+report_waiting() {
+  __report_waiting__found="$(waiting_reviews)" || return 1
+
+  if @len __report_waiting__len_1 "$__report_waiting__found"; [ "$__report_waiting__len_1" -eq 0 ]; then
+    log "Nothing waiting: no reviewer has unaddressed changes requested$(scope_suffix)."
+    return 0
+  fi
+
+  print_reminders "$__report_waiting__found"
+}
+
+: <<'FUN'
+Hands back every code review the current scope turns up, then reports each one.
+
+Usage: hand_back
+FUN
+hand_back() {
+  __hand_back__options="$(review_options)" || return 1
+  __hand_back__handed="$(forge__hand_back_reviews "$__hand_back__options")" || return 1
+
+  if @len __hand_back__len_2 "$__hand_back__handed"; [ "$__hand_back__len_2" -eq 0 ]; then
+    log "Nothing to hand back: no reviewer has unaddressed changes requested$(scope_suffix)."
+    return 0
+  fi
+
+  @foreach print_handed_back "$__hand_back__handed"
+}
+
+: <<'FUN'
+Prints one handed-back code review: what went back, and to whom.
+
+Usage: print_handed_back "$review"
+FUN
+print_handed_back() {
+  @get __print_handed_back__get_3 "$1" '.iid'
+  log "Requested review again on !$__print_handed_back__get_3 from $(reviewer_mentions "$1")."
+}
+
+: <<'FUN'
+The open code reviews awaiting a hand-back in the current scope.
+
+Usage: waiting_reviews
+FUN
+waiting_reviews() {
+  __waiting_reviews__options="$(review_options)" || return 1
+  forge__reviews_awaiting_author "$__waiting_reviews__options"
+}
+
+: <<'FUN'
+Prints one reminder per code review, then the command that clears them. The
+command comes last so it is the final thing on screen wherever this runs inside
+another tool's output.
+
+Usage: print_reminders "$reviews"
+FUN
+print_reminders() {
+  @len __print_reminders__len_4 "$1"
+  [ "$__print_reminders__len_4" -gt 0 ] || return 0
+
+  @foreach print_reminder "$1"
+
+  log ""
+  log "  Hand it back once the fixes are pushed:  ops request-review"
+}
+
+: <<'FUN'
+Prints one code review's reminder: who is waiting, and where to look.
+
+Usage: print_reminder "$review"
+FUN
+print_reminder() {
+  @let "$1" __print_reminder__ iid branch url
+
+  log "Changes requested on !$__print_reminder__iid ($__print_reminder__branch) by $(reviewer_mentions "$1"), not yet handed back."
+  log "  $__print_reminder__url"
+  @unlet __print_reminder__ iid branch url
+}
+
+: <<'FUN'
+The waiting reviewers of a code review as an @-prefixed, comma-separated list.
+
+Usage: reviewer_mentions "$review"   # -> @jerrod, @blizz
+FUN
+reviewer_mentions() {
+  @get __reviewer_mentions__get_5 "$1" '.reviewers'
+  @map __reviewer_mentions__map_6 mention "$__reviewer_mentions__get_5"
+  @join __reviewer_mentions__out "$__reviewer_mentions__map_6" ", "
+  println "$__reviewer_mentions__out"
+}
+
+: <<'FUN'
+One username as a forge mention. @map hands each element over still JSON-encoded,
+so the name is unwrapped before the forge spells it.
+
+Usage: mention '"jerrod"'   # -> @jerrod
+FUN
+mention() {
+  @unwrap __mention__unwrap_7 "$1"
+  forge__mention "$__mention__unwrap_7"
+}
+
+: <<'FUN'
+The options every forge call in this CLI shares: the token, the branch scope,
+and, in check mode only, the tightened request budget.
+
+Usage: review_options
+FUN
+review_options() {
+  __review_options__token="$(forge__require_token)" || return 1
+
+  @set __review_options__options "$(forge__new_review_options)" \
+    '.token'  "$__review_options__token" \
+    '.branch' "$(target_branch)"
+
+  if @is_true "$__request_review__FLAG_CHECK"; then
+    @set __review_options__options "$__review_options__options" \
+      '.max_time' "$__request_review__CHECK_MAX_TIME" \
+      '.retries'  "$__request_review__CHECK_RETRIES"
+  fi
+
+  println "$__review_options__options"
+}
+
+: <<'FUN'
+The branch to scope the lookup to. List mode names none, because "no branch" is
+the filter that selects every open code review.
+
+Usage: target_branch
+FUN
+target_branch() {
+  if @is_true "$__request_review__FLAG_LIST"; then
+    return 0
+  fi
+
+  if [ -n "$__request_review__BRANCH" ]; then
+    println "$__request_review__BRANCH"
+    return 0
+  fi
+
+  git__current_branch
+}
+
+: <<'FUN'
+Names the current scope for a message, as a trailing clause: the branch, or
+nothing at all when the scope is every open code review and naming it would add
+no information.
+
+Usage: scope_suffix   # -> " on feat/some-slug"
+FUN
+scope_suffix() {
+  __scope_suffix__branch="$(target_branch)"
+  @defined "$__scope_suffix__branch" || return 0
+  printf ' on %s' "$__scope_suffix__branch"
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE" && exit 0 ;;
+      -c|--check) @true __parse_args__true_8; __request_review__FLAG_CHECK="$__parse_args__true_8" ;;
+      -l|--list) @true __parse_args__true_9; __request_review__FLAG_LIST="$__parse_args__true_9" ;;
+      -b|--branch)
+        __request_review__BRANCH="${2:-}"
+        if [ -z "$__request_review__BRANCH" ]; then
+          log "Missing value for $1"
+          log "$USAGE"
+          exit 1
+        fi
+        shift
+        ;;
+      -*)
+        log "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *request-review) main "$@" ;;
+esac

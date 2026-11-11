@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2119  # bare @arr is the structs empty constructor
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/pandoc/api.sh" \
+  "$SHELLOPS_DIR/lib/tectonic/api.sh" \
+  "$SHELLOPS_DIR/lib/tarball/api.sh"
+
+USAGE="$(cat <<HELP
+Renders documents to PDF. A .tex source is compiled with Tectonic; a .md
+source is turned into LaTeX by pandoc first, through a template when one is
+given. Writes the PDFs to the output directory with an artifacts.json naming
+them, in the shape cli/publish-release and action forge attach-artifacts read.
+
+Expects tectonic on PATH, and pandoc when a source is markdown (declare them
+in ops.lock and run \`cli/install tectonic pandoc\` first).
+
+Usage: action render [--template <file>] [--outdir <dir>] <source>...
+
+Arguments:
+  source             A .tex or .md file, or a directory whose .tex and .md
+                     files are rendered.
+
+Flags:
+  --template <file>  A pandoc LaTeX template that markdown sources are rendered
+                     through; front matter fills its variables.
+  --outdir <dir>     Directory for the PDFs and artifacts.json. Defaults to ./dist.
+  -h, --help         Show this help text.
+HELP
+)"
+
+# CONST: A newline, to print the elements of a list one on a line.
+NEWLINE='
+'
+
+@arr ARG_PATHS
+ARG_TEMPLATE=""
+ARG_OUTDIR="./dist"
+
+main() {
+  parse_args "$@"
+  validate_args
+
+  __main__sources="$(collect_sources "$ARG_PATHS")"
+  render_all "$ARG_OUTDIR" "$ARG_TEMPLATE" "$__main__sources"
+  log "wrote ${ARG_OUTDIR}/artifacts.json"
+}
+
+: <<'FUN'
+Appends every .tex and .md file directly under directory $1 to the struct
+array $2, in name order, and prints the result.
+FUN
+sources_in_dir() {
+  __sources_in_dir__list="$2"
+  while IFS= read -r __sources_in_dir__file; do
+    @defined "$__sources_in_dir__file" || continue
+    @wrap __sources_in_dir__wrap_1 "$__sources_in_dir__file"
+    @push __sources_in_dir__list "$__sources_in_dir__list" "$__sources_in_dir__wrap_1"
+  done <<EOF
+$(find "$1" -maxdepth 1 -type f \( -name '*.tex' -o -name '*.md' \) | sort)
+EOF
+  println "$__sources_in_dir__list"
+}
+
+: <<'FUN'
+Prints a struct array of the sources named by the struct array of paths $1:
+a file path is taken as it is, a directory contributes its .tex and .md
+files. A path that is neither fails the call.
+
+    collect_sources "$(@arr src)"  ->  ["src/one-pager.md","src/report.tex"]
+FUN
+collect_sources() {
+  @arr __collect_sources__list
+  @join __collect_sources__each "$1" "$NEWLINE"
+  while IFS= read -r __collect_sources__path; do
+    @defined "$__collect_sources__path" || continue
+    if [ -d "$__collect_sources__path" ]; then
+      __collect_sources__list="$(sources_in_dir "$__collect_sources__path" "$__collect_sources__list")"
+    elif [ -f "$__collect_sources__path" ]; then
+      @wrap __collect_sources__wrap_2 "$__collect_sources__path"
+      @push __collect_sources__list "$__collect_sources__list" "$__collect_sources__wrap_2"
+    else
+      error "source not found: $__collect_sources__path"
+      return 1
+    fi
+  done <<EOF
+$__collect_sources__each
+EOF
+  println "$__collect_sources__list"
+}
+
+: <<'FUN'
+Turns the markdown source $1 into LaTeX through template $2 in the .tex
+scratch directory under $3, compiles that into $3, and prints the PDF path.
+FUN
+render_markdown() {
+  __render_markdown__tex="$(pandoc__markdown_to_tex "$1" "$2" "$3/.tex")" || return 1
+  tectonic__compile "$__render_markdown__tex" "$3"
+}
+
+: <<'FUN'
+Renders one source $1 into directory $3, through template $2 when the source
+is markdown, and prints the PDF path.
+FUN
+render_source() {
+  case "$1" in
+    *.md)  render_markdown "$1" "$2" "$3" ;;
+    *.tex) tectonic__compile "$1" "$3" ;;
+    *)
+      error "not a .tex or .md source: $1"
+      return 1
+      ;;
+  esac
+}
+
+: <<'FUN'
+Renders every source in the struct array $3 into directory $1, markdown
+sources through template $2, and writes <outdir>/artifacts.json naming the
+PDFs. Prints that list. An empty source list fails before the directory is
+touched.
+
+    render_all dist templates/house.tex "$(collect_sources "$(@arr src)")"
+FUN
+render_all() {
+  __render_all__outdir="$1"
+  __render_all__template="$2"
+  __render_all__sources="$3"
+
+  if @len __render_all__len_3 "$__render_all__sources"; [ "$__render_all__len_3" -eq 0 ]; then
+    error "no sources to render"
+    return 1
+  fi
+
+  mkdir -p "$__render_all__outdir"
+  @join __render_all__each "$__render_all__sources" "$NEWLINE"
+  @arr __render_all__pdfs
+  while IFS= read -r __render_all__source; do
+    @defined "$__render_all__source" || continue
+    __render_all__pdf="$(render_source "$__render_all__source" "$__render_all__template" "$__render_all__outdir")" || return 1
+    @wrap __render_all__wrap_4 "$__render_all__pdf"
+    @push __render_all__pdfs "$__render_all__pdfs" "$__render_all__wrap_4"
+  done <<EOF
+$__render_all__each
+EOF
+
+  tarball__save_artifacts_json "$__render_all__outdir" "$__render_all__pdfs"
+}
+
+validate_args() {
+  if @len __validate_args__len_5 "$ARG_PATHS"; [ "$__validate_args__len_5" -eq 0 ]; then
+    error "a source is required"
+    log "$USAGE"
+    exit 1
+  fi
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      --template) ARG_TEMPLATE="$2"; shift ;;
+      --outdir) ARG_OUTDIR="$2"; shift ;;
+      -*)
+        error "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+      *) @wrap __parse_args__wrap_6 "$1"; @push __parse_args__push_7 "$ARG_PATHS" "$__parse_args__wrap_6"; ARG_PATHS="$__parse_args__push_7" ;;
+    esac
+    shift
+  done
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  */render|render) main "$@" ;;
+esac

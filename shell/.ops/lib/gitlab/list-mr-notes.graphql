@@ -1,0 +1,37 @@
+query($projectPath: ID!, $iid: String!, $cursor: String) {
+  project(fullPath: $projectPath) {
+    mergeRequest(iid: $iid) {
+      notes(first: 50, after: $cursor) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        nodes {
+          id
+          body
+          author {
+            username
+            name
+          }
+          createdAt
+          updatedAt
+          system
+          position {
+            filePath
+            newLine
+            oldLine
+          }
+          discussion {
+            id
+            notes(first: 1) {
+              nodes {
+                id
+                body
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "type": "object",
+  "description": "Cargo suite: package-based test selection. Changed files are mapped to their owning cargo package (the nearest ancestor Cargo.toml) and the package's tests are run; there is no file glob to configure.",
+  "required": ["runner"],
+  "properties": {
+    "runner": { "const": "cargo" },
+    "manifest": {
+      "type": "string",
+      "description": "Repo-relative path to the Cargo workspace manifest (e.g. \"engine/Cargo.toml\") for a workspace that is not at the repo root. Omitted, cargo runs against whatever workspace the working directory roots."
+    }
+  },
+  "additionalProperties": false
+}

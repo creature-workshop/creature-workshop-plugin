@@ -1,0 +1,31 @@
+{
+  "type": "object",
+  "description": "node:test suite: Node's own test runner over the files named. Tests are discovered by filename glob, either as siblings under the area's own paths or under a central root whose filename stem matches a changed source file.",
+  "required": ["runner"],
+  "properties": {
+    "runner": { "const": "node_test" },
+    "project_dir": {
+      "type": "string",
+      "description": "The directory the tests resolve their imports from, relative to the repository root. Defaults to \".\"."
+    },
+    "root": {
+      "type": "string",
+      "description": "Directory under which the \"filename\" strategy looks for centralized tests, and the whole suite is found. Defaults to \".\"."
+    },
+    "glob": {
+      "description": "Filename glob(s) identifying this suite's test files: a single pattern or an array of patterns whose matches are unioned. Defaults to \"*.test.js\".",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      ]
+    },
+    "exclude": {
+      "description": "Filename glob(s) to drop from the matched test files: a single pattern or an array of patterns.",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

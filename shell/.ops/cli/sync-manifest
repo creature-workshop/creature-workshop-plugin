@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/versions/api.sh" \
+  "$SHELLOPS_DIR/lib/releases/record/api.sh"
+
+USAGE="$(cat <<HELP
+Writes a release name into the release record, which lives in the lock, .ops/lock.
+
+Usage: ops sync-manifest <name>
+
+Arguments:
+  name            The release name to record as latest: a version alone
+                  (1.2.3), a version and its certification (1.2.3-dev, what
+                  the default branch holds), or a tag's name (1.2.3-4.rc,
+                  1.2.3-dev.1).
+
+Flags:
+  -h, --help      Show this help text.
+
+Behavior:
+  - Sets 'latest' to the name.
+  - For a version alone, a stable release: sets 'stable' too.
+  - For a prerelease: leaves 'stable' as it is. Only a release moves stable,
+    so the record keeps the last one cut; a tag from an earlier numbering of
+    the repository never reaches it.
+HELP
+)"
+
+ARG_VERSION=""
+
+main() {
+  parse_args "$@"
+  validate_version
+
+  releases__record__set_version "$ARG_VERSION"
+
+  log "Recorded v$(releases__record__get_latest) in the lock"
+}
+
+validate_version() {
+  if [ -z "$ARG_VERSION" ]; then
+    error "version not supplied"
+    log "$USAGE"
+    exit 1
+  fi
+
+  if ! versions__is_valid_semver "$ARG_VERSION"; then
+    error "Not valid semver: '$ARG_VERSION'"
+    exit 1
+  fi
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE" && exit 0 ;;
+      -*)
+        log "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+      *) ARG_VERSION="$1" ;;
+    esac
+    shift
+  done
+}
+
+main "$@"

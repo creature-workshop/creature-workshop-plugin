@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+import "$SHELLOPS_DIR/lib/args/api.sh"
+import "$SHELLOPS_DIR/lib/cargo/api.sh"
+import "$SHELLOPS_DIR/lib/manifest/api.sh"
+
+USAGE="$(cat <<HELP
+Publishes the crate or every member of the workspace at --cargo-path.
+
+With --confidence-gate, every version goes to the internal registry, and
+versions at or above the gate go to crates.io as well; without it, publishes
+go to --registry or the default. A single crate and a workspace take the same
+path. Already-published members are excluded on retry, so a re-run after a
+partial failure picks up where it stopped.
+
+Usage: action cargo publish [options]
+
+Options:
+  --registry <name>           Target registry (default: crates-io)
+  --dry-run                   Pass --dry-run to cargo publish
+  --cargo-path <p>            Path to Cargo.toml (auto-detects workspace root)
+  --confidence-gate <ch>      Always internal; also crates.io if version >= gate
+  --internal-registry <name>  Forgejo registry name (default: internal)
+  -h, --help                  Show this help text.
+HELP
+)"
+
+ARG_REGISTRY=""
+ARG_DRY_RUN=""
+ARG_CARGO_PATH=""
+ARG_CONFIDENCE_GATE=""
+ARG_INTERNAL_REGISTRY=""
+
+main() {
+  parse_args "$@"
+
+  __main__metadata="$(cargo__metadata "${ARG_CARGO_PATH:-}")"
+  @get __main__version "$__main__metadata" '.packages[0].version'
+
+  @apply cargo__workspace_publish "$__main__version" "$(publish_flags)"
+}
+
+: <<'FUN'
+Prints the flags the parsed arguments ask of cargo__workspace_publish, as a
+struct array: every option that was given, with its value where it takes one.
+
+  ARG_REGISTRY=crates-io ARG_DRY_RUN=true publish_flags
+    ->  ["--registry","crates-io","--dry-run"]
+FUN
+publish_flags() {
+  @arr __publish_flags__flags
+  __publish_flags__flags="$(args__flag_with_value "$__publish_flags__flags" --registry "$ARG_REGISTRY")"
+  __publish_flags__flags="$(args__flag_when_set "$__publish_flags__flags" --dry-run "$ARG_DRY_RUN")"
+  __publish_flags__flags="$(args__flag_with_value "$__publish_flags__flags" --cargo-path "$ARG_CARGO_PATH")"
+  __publish_flags__flags="$(args__flag_with_value "$__publish_flags__flags" --confidence-gate "$ARG_CONFIDENCE_GATE")"
+  __publish_flags__flags="$(args__flag_with_value "$__publish_flags__flags" --internal-registry "$ARG_INTERNAL_REGISTRY")"
+  println "$__publish_flags__flags"
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE" && exit 0 ;;
+      --registry) ARG_REGISTRY="$2"; shift ;;
+      --dry-run) ARG_DRY_RUN="true" ;;
+      --cargo-path) ARG_CARGO_PATH="$2"; shift ;;
+      --confidence-gate) ARG_CONFIDENCE_GATE="$2"; shift ;;
+      --internal-registry) ARG_INTERNAL_REGISTRY="$2"; shift ;;
+      -*)
+        error "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  */cargo/publish) main "$@" ;;
+esac

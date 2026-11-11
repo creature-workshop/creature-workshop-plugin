@@ -1,0 +1,192 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2119  # bare @arr is the structs empty constructor
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/releases/record/api.sh" \
+  "$SHELLOPS_DIR/lib/forge/api.sh" \
+  "$SHELLOPS_DIR/lib/forge/managed_comment.sh"
+
+USAGE="$(cat <<HELP
+Plans the next version for the current code review and says so on the review.
+
+The code-review counterpart to 'action release prepare': plans the next version
+from the review's labels and keeps one managed comment on the review current
+with the plan: the version, the labels it came from, and the version it was
+planned against. The branch itself is never written to; the version is
+recorded on the default branch when the review lands.
+
+Usage: action govern suggest-version [-h,--help]
+
+Flags:
+  -h, --help      Show this help text.
+
+Refreshed on every pipeline of the review, so the comment is never more than
+one push stale. A review with no version-affecting labels gets a comment saying
+no release comes of it. Contradictory channel labels fail the run, as
+cli/plan-version exits 1 on them.
+
+Environment:
+  FORGE_ADMIN_TOKEN   Forge token for the label lookup, and for the comment
+                      when FORGE_PR_TOKEN is not set.
+  FORGE_PR_TOKEN      The review bot's token, preferred for the comment.
+HELP
+)"
+
+__suggest_version__MARKER="<!-- shellops:planned-version -->"
+
+main() {
+  parse_args "$@"
+
+  __main__review_number="$(forge__review_in_context)"
+  if ! @defined "$__main__review_number"; then
+    error "No code review number available. Is this running in a code-review pipeline?"
+    exit 1
+  fi
+
+  __main__token="$(forge__comment_token)"
+  if ! @defined "$__main__token"; then
+    error "no token to comment with; set FORGE_PR_TOKEN or FORGE_ADMIN_TOKEN"
+    exit 1
+  fi
+
+  # Status is checked rather than left to set -e: a hard planning failure and
+  # "no labels to plan from" both leave the substitution empty, and only the
+  # exit status tells them apart.
+  if ! __main__planned="$("$SHELLOPS_DIR/cli/plan-version")"; then
+    error "version planning failed (see log above)"
+    exit 1
+  fi
+
+  if ! __main__recorded="$(releases__record__get_latest)"; then
+    error "could not read the recorded latest version (see log above)"
+    exit 1
+  fi
+
+  __main__labels="$(forge__review_labels)"
+  __main__body="$(planned_version_comment "$__main__planned" "$__main__recorded" "$__main__labels")"
+  @obj __main__forge_options \
+    '.review_number' "$__main__review_number" \
+    '.token' "$__main__token"
+
+  sync_plan_comment "$__main__forge_options" "$__main__body" "$__main__planned"
+}
+
+: <<'FUN'
+Prints the comment that states the plan.
+
+  PLANNED   the version cli/plan-version printed, empty when nothing bumps
+  RECORDED  the version the lock records, which the plan was made against
+  LABELS    the review's labels, as a struct array
+
+  planned_version_comment "1.3.0" "1.2.3" '["type/feature"]'
+    ->  **Planned version: 1.3.0** ...
+
+Usage: planned_version_comment "$planned" "$recorded" "$labels"
+FUN
+planned_version_comment() {
+  if ! @defined "$1"; then
+    no_release_comment "$2"
+    return 0
+  fi
+
+  __planned_version_comment__labels="$(labels_said "$3")"
+
+  cat <<EOF
+**Planned version: $1**
+
+Planned against \`$2\`, the version the lock records, from the labels ${__planned_version_comment__labels}.
+
+Refreshed on every pipeline of this merge request; change the labels to change the plan. The version is recorded on the default branch when this lands.
+EOF
+}
+
+: <<'FUN'
+Prints the comment for a review that bumps nothing.
+
+Usage: no_release_comment "$recorded"
+FUN
+no_release_comment() {
+  cat <<EOF
+**No release from this merge request**
+
+No version-affecting label is set, so the version stays at \`$1\`. Add a type/, crit/ or meta/ label to plan one; this comment is refreshed on every pipeline.
+EOF
+}
+
+: <<'FUN'
+Prints the labels as a comma-separated list of code spans, or "none" for an
+empty array.
+
+  labels_said '["type/feature","area/cli"]'  ->  \`type/feature\`, \`area/cli\`
+
+Usage: labels_said "$labels"
+FUN
+labels_said() {
+  if @len __labels_said__len_1 "$1"; [ "$__labels_said__len_1" -eq 0 ]; then
+    printf 'none\n'
+    return 0
+  fi
+
+  @map __labels_said__spans __suggest_version__code_span "$1"
+
+  @join __labels_said__out "$__labels_said__spans" ", "
+  println "$__labels_said__out"
+}
+
+__suggest_version__code_span() {
+  @unwrap __suggest_version__code_span__unwrap_2 "$1"
+  printf '\140%s\140' "$__suggest_version__code_span__unwrap_2"
+}
+
+: <<'FUN'
+Posts the plan comment, or rewrites the one already there when the plan has
+changed, and says in the log which happened.
+
+Usage: sync_plan_comment "$forge_options" "$body" "$planned"
+FUN
+sync_plan_comment() {
+  @get __sync_plan_comment__review "$1" '.review_number'
+  __sync_plan_comment__comments="$(forge__code_review_comments "$1" "$__sync_plan_comment__review")"
+  __sync_plan_comment__written="$(
+    forge__sync_managed_comment \
+      "$1" \
+      "$__sync_plan_comment__comments" \
+      "$__suggest_version__MARKER" \
+      "$2"
+  )" || {
+    error "could not write the planned-version comment on code review #${__sync_plan_comment__review}"
+    exit 1
+  }
+
+  if ! @defined "$__sync_plan_comment__written"; then
+    log "Planned-version comment already current (${3:-no release})."
+    return 0
+  fi
+
+  log "Wrote the planned version (${3:-no release}) as comment ${__sync_plan_comment__written} on code review #${__sync_plan_comment__review}"
+}
+
+: <<'FUN'
+Parses CLI arguments.
+See USAGE for flag descriptions.
+FUN
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE" && exit 0 ;;
+      *)
+        log "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  */suggest-version|suggest-version) main "$@" ;;
+esac

@@ -1,0 +1,48 @@
+{
+  "type": "object",
+  "description": "What only the claude-cli adaptor understands: the options' claude-cli block, and the manifest's agents.providers.claude-cli entry that seeds it. The three every headless adaptor understands are named here by $ref and defined once in ../headless/options.schema.json.",
+  "properties": {
+    "command": {
+      "$ref": "../headless/options.schema.json#/properties/command",
+      "description": "The Claude Code CLI executable, on the PATH or by path.",
+      "default": "claude"
+    },
+    "workspace": {
+      "$ref": "../headless/options.schema.json#/properties/workspace"
+    },
+    "state_dir": {
+      "$ref": "../headless/options.schema.json#/properties/state_dir"
+    },
+    "mcp_config": {
+      "type": "string",
+      "description": "A JSON file of the MCP servers the run may reach; named, it is the only place the CLI looks for them."
+    },
+    "permission_mode": {
+      "type": "string",
+      "description": "How the CLI asks before it acts. A run with nobody at the terminal needs one that does not ask.",
+      "enum": ["acceptEdits", "auto", "bypassPermissions", "manual", "dontAsk", "plan"],
+      "default": "bypassPermissions"
+    },
+    "bare": {
+      "type": "boolean",
+      "description": "Whether the run takes only what the workspace and these options give it, leaving the machine's own settings, skills and plugins out, so the same prompt on another machine is the same run.",
+      "default": true
+    },
+    "allowed_tools": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "The tools the run may use; empty leaves the CLI its own set.",
+      "default": []
+    },
+    "effort": {
+      "type": "string",
+      "description": "How long the model thinks before it answers.",
+      "enum": ["low", "medium", "high", "xhigh", "max"]
+    },
+    "max_budget_usd": {
+      "type": "number",
+      "description": "What the run may spend before the CLI stops it."
+    }
+  },
+  "additionalProperties": false
+}

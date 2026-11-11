@@ -1,0 +1,13 @@
+query($cursor: String, $filter: IssueFilter) {
+  issues(first: 50, after: $cursor, filter: $filter) {
+    pageInfo { hasNextPage endCursor }
+    nodes {
+      id
+      identifier
+      title
+      state { name type }
+      team { key }
+      attachments { nodes { url } }
+    }
+  }
+}

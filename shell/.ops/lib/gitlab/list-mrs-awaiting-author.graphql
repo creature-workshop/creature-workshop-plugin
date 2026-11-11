@@ -1,0 +1,24 @@
+query($fullPath: ID!, $branches: [String!], $cursor: String) {
+  project(fullPath: $fullPath) {
+    mergeRequests(state: opened, sourceBranches: $branches, first: 100, after: $cursor) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        iid
+        webUrl
+        sourceBranch
+        draft
+        reviewers {
+          nodes {
+            username
+            mergeRequestInteraction {
+              reviewState
+            }
+          }
+        }
+      }
+    }
+  }
+}

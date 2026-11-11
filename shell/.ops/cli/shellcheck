@@ -1,0 +1,227 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import "$SHELLOPS_DIR/lib/git/api.sh"
+
+USAGE="$(cat <<HELP
+Runs shellcheck against bash files in the project.
+
+A no-argument run is the git-tracked set: bash-shebang files, *.bats, and
+the include list in \$PROJ/shellcheck.json, minus its exclude prefixes.
+
+Usage: ops shellcheck [-h,--help] [files...] [-- shellcheck-args...]
+
+With no files, lints every tracked project bash file. Given files (as
+lefthook passes staged files), lints those that match the same
+shell-detection, include, and exclude rules — named paths are checked
+whether or not they are tracked.
+
+Flags:
+  -h, --help    Show this help text
+  --            Pass remaining args to shellcheck (e.g. -- --severity=warning)
+HELP
+)"
+
+CONFIG="$PROJ/shellcheck.json"
+
+__cli__NL="
+"
+
+main() {
+  parse_args "$@"
+
+  require_shellcheck
+  validate_config
+
+  if [ -n "$INPUT_FILES" ]; then
+    __main__files="$(select_named "$INPUT_FILES")"
+  else
+    __main__files="$(discover_files)"
+  fi
+
+  if ! @defined "$__main__files"; then
+    log "No files to lint."
+    exit 0
+  fi
+
+  # Rebuild the pass-through shellcheck argv from the newline-separated
+  # list parse_args collected after --.
+  set -f
+  IFS="$__cli__NL"
+  # shellcheck disable=SC2086
+  set -- $SC_ARGS
+  unset IFS
+  set +f
+
+  echo "$__main__files" | xargs shellcheck "$@"
+}
+
+: <<'FUN'
+Collects file arguments into INPUT_FILES and everything after -- into
+SC_ARGS (both newline-separated globals; POSIX sh functions cannot write
+the caller's argv).
+FUN
+parse_args() {
+  INPUT_FILES=""
+  SC_ARGS=""
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help)
+        log "$USAGE"
+        exit 0
+        ;;
+      --)
+        shift
+        while [ "$#" -gt 0 ]; do
+          SC_ARGS="$SC_ARGS$1$__cli__NL"
+          shift
+        done
+        return 0
+        ;;
+      -*)
+        error "Unknown option: $1"
+        exit 1
+        ;;
+      *)
+        INPUT_FILES="$INPUT_FILES$1$__cli__NL"
+        ;;
+    esac
+    shift
+  done
+}
+
+require_shellcheck() {
+  if command -v shellcheck >/dev/null 2>&1; then
+    return
+  fi
+
+  error "shellcheck is not installed."
+  log "Install it with: ops install shellcheck"
+  exit 1
+}
+
+validate_config() {
+  if [ ! -f "$CONFIG" ]; then
+    error "shellcheck.json not found at $CONFIG"
+    exit 1
+  fi
+}
+
+: <<'FUN'
+Tracked project bash sources: bash-shebang files, *.bats, and the
+shellcheck.json include list, minus its exclude prefixes. Ignored and
+untracked paths are not in the git index, so they are not discovered.
+FUN
+discover_files() {
+  __discover_files__excludes="$(read_config_array '.exclude')"
+
+  {
+    git__tracked_files "$PROJ" | while IFS= read -r __discover_files__rel; do
+      [ -n "$__discover_files__rel" ] || continue
+      if rel_is_excluded "$__discover_files__rel" "$__discover_files__excludes"; then
+        continue
+      fi
+      __discover_files__abs="$PROJ/$__discover_files__rel"
+      [ -f "$__discover_files__abs" ] || continue
+      if discover_is_shell "$__discover_files__abs" "$__discover_files__rel"; then
+        println "$__discover_files__abs"
+      fi
+    done
+    read_config_array '.include' | while IFS= read -r __discover_files__inc; do
+      [ -n "$__discover_files__inc" ] || continue
+      [ -f "$PROJ/$__discover_files__inc" ] || continue
+      printf '%s/%s\n' "$PROJ" "$__discover_files__inc"
+    done
+  } | sort -u
+}
+
+: <<'FUN'
+Narrows a newline-separated file list to the shell files this check applies
+to, using the same include/exclude and shell-detection rules as a full scan.
+A named path is checked whether or not it is tracked.
+FUN
+select_named() {
+  __select_named__excludes="$(read_config_array '.exclude')"
+  __select_named__includes="$(read_config_array '.include')"
+
+  println "$1" | while IFS= read -r __select_named__f; do
+    [ -n "$__select_named__f" ] || continue
+    [ -f "$__select_named__f" ] || continue
+    __select_named__rel="${__select_named__f#"$PROJ"/}"
+    case "$__select_named__f" in
+      "$PROJ"/*)
+        if rel_is_excluded "$__select_named__rel" "$__select_named__excludes"; then
+          continue
+        fi
+        ;;
+    esac
+    if discover_is_included "$__select_named__rel" "$__select_named__includes"; then
+      println "$__select_named__f"
+      continue
+    fi
+    if discover_is_shell "$__select_named__f" "$__select_named__rel"; then
+      println "$__select_named__f"
+    fi
+  done
+}
+
+: <<'FUN'
+Succeeds when <rel> is <prefixes> or a path under one of them. <prefixes>
+is a newline-separated list.
+FUN
+rel_is_excluded() {
+  __rel_is_excluded__rel="$1"
+  println "$2" | {
+    while IFS= read -r __rel_is_excluded__dir; do
+      [ -n "$__rel_is_excluded__dir" ] || continue
+      case "$__rel_is_excluded__rel" in
+        "$__rel_is_excluded__dir"|"$__rel_is_excluded__dir"/*)
+          exit 0
+          ;;
+      esac
+    done
+    exit 1
+  }
+}
+
+: <<'FUN'
+Succeeds when <rel> is listed in the newline-separated include list.
+FUN
+discover_is_included() {
+  __discover_is_included__rel="$1"
+  println "$2" | {
+    while IFS= read -r __discover_is_included__inc; do
+      [ -n "$__discover_is_included__inc" ] || continue
+      if [ "$__discover_is_included__rel" = "$__discover_is_included__inc" ]; then
+        exit 0
+      fi
+    done
+    exit 1
+  }
+}
+
+: <<'FUN'
+Succeeds when <abs> is a *.bats path or a bash-shebang file.
+FUN
+discover_is_shell() {
+  case "$2" in
+    *.bats)
+      return 0
+      ;;
+  esac
+  head -n1 "$1" 2>/dev/null | grep -q '#!/.*bash'
+}
+
+read_config_array() {
+  @arr __read_config_array__arr_1
+  @get __read_config_array__get_2 "$(cat "$CONFIG")" "$1" "$__read_config_array__arr_1"
+  @join __read_config_array__out "$__read_config_array__get_2" "$__cli__NL"
+  println "$__read_config_array__out"
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *shellcheck) main "$@" ;;
+esac

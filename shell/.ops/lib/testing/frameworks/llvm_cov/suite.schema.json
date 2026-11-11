@@ -1,0 +1,31 @@
+{
+  "type": "object",
+  "description": "llvm-cov suite. Runs the cargo tests under cargo-llvm-cov and measures region coverage: which LLVM code regions (a match arm, an early return, each side of &&) the tests executed. Test selection is cargo's (a changed file maps to its owning package), so an llvm-cov suite takes the same manifest a cargo suite does. After a run, the runner's coverage_summary reads the JSON export cargo-llvm-cov wrote to report_dir/llvm-cov.json.",
+  "required": ["runner"],
+  "properties": {
+    "runner": { "const": "llvm_cov" },
+    "manifest": {
+      "type": "string",
+      "description": "$PROJ-relative path to the Cargo.toml of the workspace to measure, for a workspace below the repo root (e.g. \"engine/Cargo.toml\"). Omitted, cargo measures whatever workspace the working directory is in."
+    },
+    "ignore": {
+      "type": ["string", "array"],
+      "items": { "type": "string" },
+      "description": "Source files to leave out of the measurement, as regular expressions matched against the file path (e.g. \"src/bin/\"). One regex or a list; a list is joined with | into cargo-llvm-cov's single --ignore-filename-regex."
+    },
+    "report_dir": {
+      "type": "string",
+      "description": "$PROJ-relative directory the JSON export is written into, as llvm-cov.json. Defaults to \"target/coverage/llvm-cov\"."
+    },
+    "cargo_args": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Extra arguments for the instrumented cargo build, one shell word per element (e.g. [\"--features\", \"ml\"]). Defaults to [\"--no-default-features\", \"--locked\"]."
+    },
+    "harness": {
+      "enum": ["cargo", "nextest"],
+      "description": "The test runner cargo-llvm-cov drives. \"cargo\" (the default) runs cargo test and measures the selected packages with -p. \"nextest\" runs cargo nextest under the runner's tia profile, building the whole workspace and filtering the run to the selected packages, so the run also leaves the JUnit report the escape join reads."
+    }
+  },
+  "additionalProperties": false
+}

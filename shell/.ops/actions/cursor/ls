@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# The cursor adaptor addressed by name (ADR 000005): the agents ls action
+# with the provider pinned to cursor, reaching the same code the registry does.
+set -euo pipefail
+exec "${SHELLOPS_DIR:?}/actions/agents/ls" --provider cursor "$@"

@@ -1,0 +1,17 @@
+{
+  "type": ["object", "null"],
+  "description": "The agent providers this repository may dispatch a run to, keyed by registered adaptor id, each with the defaults a run on it takes (ADR 000004: the manifest declares, an argument overrides). No model is declared here: a model depends on the task, so the caller names it per run.",
+  "properties": {
+    "providers": {
+      "type": ["object", "null"],
+      "description": "One entry per provider a run may reach, keyed by adaptor id, holding that provider's own options as lib/agents/<id>/options.schema.json defines them. With exactly one entry a run needs no provider named; with several, the caller names one.",
+      "properties": {
+        "claude-cli": { "$ref": "claude-cli/options.schema.json" },
+        "cursor": { "$ref": "cursor/options.schema.json" },
+        "cursor-cli": { "$ref": "cursor-cli/options.schema.json" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

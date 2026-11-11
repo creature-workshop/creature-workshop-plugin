@@ -1,0 +1,6 @@
+mutation($input: EmailIntakeAddressCreateInput!) {
+  emailIntakeAddressCreate(input: $input) {
+    success
+    emailIntakeAddress { id address }
+  }
+}

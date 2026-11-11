@@ -1,0 +1,374 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/agents/api.sh" \
+  "$SHELLOPS_DIR/lib/agents/incident.sh" \
+  "$SHELLOPS_DIR/lib/forge/api.sh"
+
+USAGE="$(cat <<HELP
+Runs a cloud agent over a prompt and waits for it, under the house
+guardrails: a budget, a throttle, the hand-back of anything it opened for
+review, and one incident ticket when it cannot start.
+
+Usage: action agents run (--prompt <file> | --text <prompt>) [--repo <url>] [--ref <ref>]
+         [--model <id>] [--provider <id>] [--env <type[:name]>] [--name <text>] [--open-review]
+         [--budget <secs>] [--max-running <n>] [--no-hand-back] [--reviewer <user>]
+         [--incident-team <KEY>] [--incident-title <text>] [-h,--help]
+
+Prints the run as a struct: agent_id, run_id, status, url, the reviews it
+opened, and its final reply. Exits 0 when the run FINISHED; 1 when
+it ended otherwise, could not start, or outran the budget; 3 when the
+throttle refused it.
+
+Prompt:
+  --prompt <file>        The prompt text, read from a file.
+  --text <prompt>        The prompt text, given directly.
+
+Run:
+  --repo <url>           The repository the agent works in; none runs without one.
+  --ref <ref>            The branch or commit it starts from (default main).
+  --model <id>           An explicit model id; else the provider's default.
+  --provider <id>        The adaptor; else the manifest's sole entry under agents.providers,
+                         else SHELLOPS_AGENTS.
+  --env <type[:name]>    The provider's execution environment in its own words (cursor:
+                         cloud, pool or machine, with a name); else its manifest block.
+  --name <text>          The agent's display name.
+  --open-review          Ask the provider to open a review when the run ends.
+
+Guardrails:
+  --budget <secs>        Give up waiting after this long and cancel the run (default 1800).
+  --max-running <n>      Refuse to start while the provider already has n runs in flight.
+  --no-hand-back         Do not comment on, and request review for, the reviews the run
+                         opened. With it on, every review gets a comment carrying the
+                         run's reply and a review request to --reviewer.
+  --reviewer <user>      Whose review the hand-back requests.
+  --incident-team <KEY>  When the run cannot start, open one Linear ticket on this team,
+                         found by title so a streak makes one; close it on the next start.
+  --incident-title <t>   The ticket's title (default "<name>: cannot run").
+
+Environment:
+  The selected provider's key variable (cursor: CURSOR_AGENT_API_KEY; cursor-cli:
+  CURSOR_API_KEY; claude-cli: ANTHROPIC_API_KEY).
+  FORGE_ADMIN_TOKEN   For the hand-back; without it the hand-back is skipped and said so.
+  LINEAR_API_KEY      For the incident ticket.
+HELP
+)"
+
+ARG_PROMPT_FILE=""
+ARG_TEXT=""
+ARG_REPO=""
+ARG_REF=""
+ARG_MODEL=""
+ARG_PROVIDER=""
+ARG_ENV=""
+ARG_NAME=""
+@false ARG_OPEN_REVIEW
+ARG_BUDGET=""
+ARG_MAX_RUNNING=0
+@true ARG_HAND_BACK
+ARG_REVIEWER=""
+ARG_INCIDENT_TEAM=""
+ARG_INCIDENT_TITLE=""
+
+main() {
+  parse_args "$@"
+  validate_args
+  __main__options="$(build_options)" || exit 1
+  __main__options="$(agents__with_key "$__main__options")" || exit 1
+  __main__prompt="$(read_prompt)"
+
+  refuse_when_saturated "$__main__options"
+  __main__started="$(start_run "$__main__options" "$__main__prompt")" || exit 1
+  @get __main__agent "$__main__started" '.agent_id'
+  @get __main__run "$__main__started" '.run_id'
+  log "agents: started run $__main__run on agent $__main__agent"
+
+  __main__status="$(wait_for_run "$__main__options" "$__main__agent" "$__main__run")"
+  __main__record="$(agents__get_run "$__main__options" "$__main__agent" "$__main__run")" || exit 1
+  __main__report="$(report "$__main__started" "$__main__status" "$__main__record")"
+  @dump __main__report_text "$__main__report"
+  println "$__main__report_text"
+  hand_back "$__main__options" "$__main__started" "$__main__record"
+
+  if [ "$__main__status" != FINISHED ]; then
+    error "agents: run $__main__run ended $__main__status"
+    exit 1
+  fi
+}
+
+: <<'FUN'
+Prints the run options the flags describe over the provider's manifest
+defaults: a flag given patches its key, one left empty leaves the default;
+--env lands in the provider's own block, so it fails as selection does when
+no provider answers.
+FUN
+build_options() {
+  @patch __build_options__options "$(agents__new_run_options "$ARG_PROVIDER")" \
+    '.repo'        "$ARG_REPO" \
+    '.ref'         "$ARG_REF" \
+    '.model'       "$ARG_MODEL" \
+    '.name'        "$ARG_NAME" \
+    '.open_review' "$ARG_OPEN_REVIEW" \
+    '.budget_secs' "$ARG_BUDGET"
+  if @defined "$ARG_ENV"; then
+    __build_options__options="$(agents__set_provider_option "$__build_options__options" '.env.type' "${ARG_ENV%%:*}")" || return 1
+    case "$ARG_ENV" in
+      *:*) __build_options__options="$(agents__set_provider_option "$__build_options__options" '.env.name' "${ARG_ENV#*:}")" || return 1 ;;
+    esac
+  fi
+  println "$__build_options__options"
+}
+
+: <<'FUN'
+Prints the prompt: the file's text, or the text given directly.
+FUN
+read_prompt() {
+  if @defined "$ARG_PROMPT_FILE"; then
+    cat "$ARG_PROMPT_FILE"
+  else
+    println "$ARG_TEXT"
+  fi
+}
+
+: <<'FUN'
+Exits 3 when the throttle is on and the provider already has as many runs
+in flight as it allows.
+FUN
+refuse_when_saturated() {
+  if [ "$ARG_MAX_RUNNING" -le 0 ]; then
+    return 0
+  fi
+  __refuse_when_saturated__count="$(in_flight_count "$1")" || exit 1
+  if [ "$__refuse_when_saturated__count" -ge "$ARG_MAX_RUNNING" ]; then
+    error "agents: $__refuse_when_saturated__count run(s) in flight, at the limit of $ARG_MAX_RUNNING; not starting another"
+    exit 3
+  fi
+}
+
+: <<'FUN'
+Prints how many of the provider's agents have a run still going.
+FUN
+in_flight_count() {
+  __in_flight_count__agents="$(agents__list_agents "$1")" || return 1
+  @reduce __in_flight_count__out count_in_flight "$__in_flight_count__agents" 0 "$1"
+  println "$__in_flight_count__out"
+}
+
+: <<'FUN'
+Adds one to the count $1 when the agent $2's latest run is still going, read
+with the options $3.
+FUN
+count_in_flight() {
+  @get __count_in_flight__run_id "$2" '.latestRunId' ''
+  if ! @defined "$__count_in_flight__run_id"; then
+    println "$1"
+    return 0
+  fi
+  @get __count_in_flight__get_1 "$2" '.id'
+  __count_in_flight__run="$(agents__get_run "$3" "$__count_in_flight__get_1" "$__count_in_flight__run_id")" || return 1
+  if @get __count_in_flight__get_2 "$__count_in_flight__run" '.status' ''; @is_true "$(agents__run_is_terminal "$__count_in_flight__get_2")"; then
+    println "$1"
+  else
+    println "$(( $1 + 1 ))"
+  fi
+}
+
+: <<'FUN'
+Starts the run and prints what started. A start that fails opens the
+incident when a team is named; a start that succeeds closes one left open.
+FUN
+start_run() {
+  if __start_run__started="$(agents__run "$1" "$2")"; then
+    incident_close
+    println "$__start_run__started"
+  else
+    incident_open "the provider refused to start a run; see the job log"
+    return 1
+  fi
+}
+
+: <<'FUN'
+Waits for the run $3 on the agent $2 and prints its terminal status. Past the
+budget the run is cancelled and the status is CANCELLED.
+FUN
+wait_for_run() {
+  if __wait_for_run__status="$(agents__poll "$1" "$2" "$3")"; then
+    println "$__wait_for_run__status"
+    return 0
+  fi
+  warn "agents: cancelling run $3 on agent $2"
+  agents__cancel "$1" "$2" "$3" >/dev/null || true
+  printf 'CANCELLED\n'
+}
+
+: <<'FUN'
+Prints the run as a struct: what started ($1), the status ($2), and from the
+record ($3) the reviews opened and the final reply.
+FUN
+report() {
+  @get __report__get_3 "$1" '.agent_id'
+  @get __report__get_4 "$1" '.run_id'
+  @get __report__get_5 "$1" '.url' ''
+  @arr __report__arr_6
+  @get __report__get_7 "$3" '.reviews' "$__report__arr_6"
+  @get __report__get_8 "$3" '.result' ''
+  @obj __report__out \
+    '.agent_id' "$__report__get_3" \
+    '.run_id'   "$__report__get_4" \
+    '.status'   "$2" \
+    '.url'      "$__report__get_5" \
+    '.reviews'  "$__report__get_7" \
+    '.result'   "$__report__get_8"
+  println "$__report__out"
+}
+
+: <<'FUN'
+Comments on every review the run opened with the run's reply, and requests
+the reviewer's review, so nothing an automation authored lands on a standing
+approval. Skipped, and said so, without the hand-back flag, without a forge
+token, or when the run opened nothing.
+FUN
+hand_back() {
+  if ! @is_true "$ARG_HAND_BACK"; then
+    return 0
+  fi
+  @arr __hand_back__arr_9
+  @get __hand_back__reviews "$3" '.reviews' "$__hand_back__arr_9"
+  if @len __hand_back__len_10 "$__hand_back__reviews"; [ "$__hand_back__len_10" -eq 0 ]; then
+    return 0
+  fi
+  if ! @defined "${FORGE_ADMIN_TOKEN:-}"; then
+    @len __hand_back__len_11 "$__hand_back__reviews"
+    warn "agents: hand-back skipped, FORGE_ADMIN_TOKEN is not set; the run opened $__hand_back__len_11 review(s)"
+    return 0
+  fi
+  __hand_back__body="$(hand_back_body "$2" "$3")"
+  @foreach hand_back_one "$__hand_back__reviews" "$__hand_back__body"
+}
+
+: <<'FUN'
+Prints the hand-back comment for the run that started as $1 and ended as the
+record $2: which run, where to see it, and its final reply.
+FUN
+hand_back_body() {
+  @get __hand_back_body__get_12 "$1" '.run_id'
+  @get __hand_back_body__get_13 "$1" '.agent_id'
+  @get __hand_back_body__get_14 "$1" '.url' ''
+  @get __hand_back_body__get_15 "$2" '.result' ''
+  printf 'Opened by an automation: run %s on agent %s (%s).\n\n%s\n\nA human reads this before it lands; approve again once you have.\n' \
+    "$__hand_back_body__get_12" "$__hand_back_body__get_13" "$__hand_back_body__get_14" "$__hand_back_body__get_15"
+}
+
+: <<'FUN'
+Comments the body $2 on the review at the wrapped URL $1 and requests
+the reviewer's review on it, through the active forge. The review number is
+the URL's last segment.
+FUN
+hand_back_one() {
+  @unwrap __hand_back_one__url "$1"
+  __hand_back_one__number="${__hand_back_one__url##*/}"
+  @set __hand_back_one__options "$(forge__new_review_options)" \
+    '.review_number' "$__hand_back_one__number" \
+    '.reviewer'      "$ARG_REVIEWER" \
+    '.token'         "$FORGE_ADMIN_TOKEN"
+  forge__create_review_comment "$__hand_back_one__options" "$2" >/dev/null || warn "agents: could not comment on $__hand_back_one__url"
+  if @defined "$ARG_REVIEWER"; then
+    forge__request_review "$__hand_back_one__options" >/dev/null || warn "agents: could not request review on $__hand_back_one__url"
+  else
+    warn "agents: no --reviewer, so $__hand_back_one__url carries the comment but no review request"
+  fi
+  log "agents: handed back $__hand_back_one__url"
+}
+
+: <<'FUN'
+Prints the incident's title: the one given, else "<name>: cannot run" over the
+agent's name or the word agent.
+FUN
+incident_title() {
+  if @defined "$ARG_INCIDENT_TITLE"; then
+    println "$ARG_INCIDENT_TITLE"
+  else
+    printf '%s: cannot run\n' "${ARG_NAME:-agent}"
+  fi
+}
+
+: <<'FUN'
+Opens the incident with the reason $1 when a team is named; otherwise says
+nothing.
+FUN
+incident_open() {
+  if ! @defined "$ARG_INCIDENT_TEAM"; then
+    return 0
+  fi
+  agents__incident_open "$ARG_INCIDENT_TEAM" "$(incident_title)" "$1" "$(linear_options)" >/dev/null || warn "agents: could not open the incident ticket"
+}
+
+: <<'FUN'
+Closes the incident when a team is named and one is open.
+FUN
+incident_close() {
+  if ! @defined "$ARG_INCIDENT_TEAM"; then
+    return 0
+  fi
+  agents__incident_close "$ARG_INCIDENT_TEAM" "$(incident_title)" "$(linear_options)" >/dev/null || warn "agents: could not close the incident ticket"
+}
+
+: <<'FUN'
+Prints the Linear options carrying LINEAR_API_KEY.
+FUN
+linear_options() {
+  @set __linear_options__out "$(linear__new_linear_options)" '.token' "${LINEAR_API_KEY:-}"
+  println "$__linear_options__out"
+}
+
+validate_args() {
+  if ! @defined "$ARG_PROMPT_FILE" && ! @defined "$ARG_TEXT"; then
+    error "a prompt is required: --prompt <file> or --text <prompt>"
+    log "$USAGE"
+    exit 1
+  fi
+  if @defined "$ARG_PROMPT_FILE" && [ ! -f "$ARG_PROMPT_FILE" ]; then
+    error "no prompt file at $ARG_PROMPT_FILE"
+    exit 1
+  fi
+  if @defined "$ARG_INCIDENT_TEAM" && ! @defined "${LINEAR_API_KEY:-}"; then
+    error "--incident-team needs LINEAR_API_KEY"
+    exit 1
+  fi
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      --prompt) ARG_PROMPT_FILE="$2"; shift ;;
+      --text) ARG_TEXT="$2"; shift ;;
+      --repo) ARG_REPO="$2"; shift ;;
+      --ref) ARG_REF="$2"; shift ;;
+      --model) ARG_MODEL="$2"; shift ;;
+      --provider) ARG_PROVIDER="$2"; shift ;;
+      --env) ARG_ENV="$2"; shift ;;
+      --name) ARG_NAME="$2"; shift ;;
+      --open-review) @true __parse_args__true_16; ARG_OPEN_REVIEW="$__parse_args__true_16" ;;
+      --budget) ARG_BUDGET="$2"; shift ;;
+      --max-running) ARG_MAX_RUNNING="$2"; shift ;;
+      --no-hand-back) @false __parse_args__false_17; ARG_HAND_BACK="$__parse_args__false_17" ;;
+      --reviewer) ARG_REVIEWER="$2"; shift ;;
+      --incident-team) ARG_INCIDENT_TEAM="$2"; shift ;;
+      --incident-title) ARG_INCIDENT_TITLE="$2"; shift ;;
+      *)
+        error "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  */agents/run) main "$@" ;;
+esac

@@ -1,0 +1,34 @@
+class {{class_name}} < Formula
+  desc "{{description}}"
+  homepage "{{homepage}}"
+  version "{{version}}"
+  license "{{license}}"
+
+  on_macos do
+    if Hardware::CPU.arm?
+      url "{{darwin_arm_url}}"
+      sha256 "{{darwin_arm_sha}}"
+    else
+      url "{{darwin_x86_url}}"
+      sha256 "{{darwin_x86_sha}}"
+    end
+  end
+
+  on_linux do
+    if Hardware::CPU.arm?
+      url "{{linux_arm_url}}"
+      sha256 "{{linux_arm_sha}}"
+    else
+      url "{{linux_x86_url}}"
+      sha256 "{{linux_x86_sha}}"
+    end
+  end
+
+  def install
+    bin.install "{{bin_name}}"
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/{{bin_name}} --version")
+  end
+end

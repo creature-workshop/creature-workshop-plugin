@@ -1,0 +1,24 @@
+query($projectPath: ID!, $iid: String!) {
+  project(fullPath: $projectPath) {
+    mergeRequest(iid: $iid) {
+      iid
+      targetBranch
+      headPipeline {
+        id
+        status
+        jobs(first: 100) {
+          nodes {
+            id
+            name
+            status
+            artifacts {
+              nodes {
+                fileType
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

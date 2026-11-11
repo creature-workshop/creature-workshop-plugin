@@ -1,0 +1,25 @@
+# The most each command may cost under each profiler (ADR 000049). The
+# profile job fails a merge request whose head goes past a ceiling, and the
+# merge request that lowers a cost lowers its ceiling here. install --check
+# and lint are the trunk's measurement in the landing run of shellops!614
+# (pipeline 8945, 2026-10-01), rounded up. The trunk's test plan costs more
+# than half as much again at 0.66.0-dev.134 as it did in that run, and only
+# a landing run measures it, so its ceiling is that run's figure raised by
+# the same share, rounded up. install --check came down with shellops!616
+# (OPS-1460): the check records nothing in the lock, and the host's package
+# managers are detected once per run rather than once per probe, so its
+# ceiling is that merge request's measurement, rounded up. Every channel
+# plugin costs the check about 125 forks and 35 starts to load and register,
+# whatever the declaration names, so the eighth channel (flatpak, shellops!666:
+# 4083 forks, 1119 starts) raises the ceiling by one channel's share. The
+# per-channel cost itself comes down with the structs work on SHOP-27.
+forks:
+  test plan:
+    forks: 11000
+    starts: 3000
+  install --check:
+    forks: 4150
+    starts: 1150
+  lint:
+    forks: 17000
+    starts: 2600

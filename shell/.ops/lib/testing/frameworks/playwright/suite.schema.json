@@ -1,0 +1,35 @@
+{
+  "type": "object",
+  "description": "Playwright suite: browser or component tests run by file through the project's own playwright. Tests are discovered by filename glob, either as siblings under the area's own paths or under a central root whose filename stem matches a changed source file; the whole suite runs as the playwright config defines it.",
+  "required": ["runner"],
+  "properties": {
+    "runner": { "const": "playwright" },
+    "project_dir": {
+      "type": "string",
+      "description": "$PROJ-relative directory holding package.json and node_modules, for repos whose app lives below the repo root. The runner resolves its binary and runs from here. Defaults to \".\"."
+    },
+    "config": {
+      "type": "string",
+      "description": "The playwright config file, relative to project_dir, passed as --config. Empty by default, so playwright finds its own."
+    },
+    "root": {
+      "type": "string",
+      "description": "Directory under which the \"filename\" strategy looks for centralized tests. Defaults to \"tests\"."
+    },
+    "glob": {
+      "description": "Filename glob(s) identifying this suite's test files: a single pattern or an array of patterns whose matches are unioned. Defaults to \"*.spec.ts\"; a component suite names \"*.ct.jsx\" or \"*.ct.tsx\".",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      ]
+    },
+    "exclude": {
+      "description": "Filename glob(s) to drop from the matched test files: a single pattern or an array of patterns.",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,398 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2119  # bare @arr is the structs empty constructor
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+USAGE="$(cat <<'HELP'
+Moves a Linear issue to Done once every code review attached to it has
+merged, and leaves a dated recordkeeper comment on the issue that names the
+merged code reviews. It reads the issues that are In Progress, In Review or
+Landing and link to a code review of the repository the run is in, and
+judges each over every code review attached to it on this forge, so a ticket
+with work in two repositories closes from whichever landing finds the last
+of them merged. A ticket whose reviews are all another repository's is that
+repository's to close.
+
+The links among an issue's attachments decide what happens to it. If one
+link is still open, the work is in flight and the issue is left alone
+without a word. If every link has merged, the work has landed. If no link is
+open but one was closed without merging, or the forge does not answer for
+one, a person has to look: the issue is left as it is and printed. An issue
+in any other state is never read, because a code review that only mentions
+an issue is attached to it too.
+
+A second run finds the moved issues closed and changes nothing.
+
+Usage: action linear close-merged-issues [-h,--help] [-n,--dry-run]
+
+Flags:
+  -n, --dry-run   Print what would move, and write nothing.
+  -h, --help      Show this help text.
+
+Environment:
+  LINEAR_API_KEY      Required. Reads the board and writes the moves.
+  FORGE_ADMIN_TOKEN   Required. Reads the code reviews.
+  SHELLOPS_FORGE      The forge the links point at: gitlab, the default, or
+                      forgejo. Its adaptor reads the instance's URL from its
+                      own variable, GITLAB_API_BASE or FORGEJO_API_BASE, and
+                      GitLab CI sets the first through CI_SERVER_URL.
+HELP
+)"
+
+import \
+  "$SHELLOPS_DIR/lib/linear/api.sh" \
+  "$SHELLOPS_DIR/lib/linear/reviews.sh" \
+  "$SHELLOPS_DIR/lib/forge/api.sh"
+
+: <<'CONST'
+The Linear states that mean work on the issue is in progress, by Linear's own
+names. An issue in any other state is never read.
+CONST
+@enum __close_merged__STATE IN_PROGRESS="In Progress" IN_REVIEW="In Review" LANDING="Landing"
+
+# CONST: Whether the run prints the moves in place of writing them; --dry-run sets it.
+@false ARG_DRY_RUN
+
+main() {
+  parse_args "$@"
+  if ! @is_true "$(keys_present)"; then
+    return 0
+  fi
+
+  @obj __main__linear_options '.token' "$LINEAR_API_KEY"
+  @obj __main__forge_options '.token' "$FORGE_ADMIN_TOKEN"
+  __main__teams="$(linear__list_teams "$__main__linear_options")" || {
+    error "Linear rejected LINEAR_API_KEY (HTTP status above)."
+    return 1
+  }
+
+  __main__issues="$(issues_in_flight "$__main__linear_options")" || return 1
+  __main__ours="$(issues_of_this_repository "$__main__issues")" || return 1
+  @map __main__judged judge_issue "$__main__ours" "$__main__forge_options"
+
+  report_and_move "$__main__judged" "$__main__teams" "$__main__linear_options"
+}
+
+: <<'FUN'
+Prints true when both keys the run needs are set, and false, saying which is
+missing, otherwise. A run without them is a skip, not a failure.
+FUN
+keys_present() {
+  if [ -z "${LINEAR_API_KEY:-}" ]; then
+    log "LINEAR_API_KEY not set, skipping."
+    @false __keys_present__out
+    println "$__keys_present__out"
+    return 0
+  fi
+  if [ -z "${FORGE_ADMIN_TOKEN:-}" ]; then
+    log "FORGE_ADMIN_TOKEN not set, skipping."
+    @false __keys_present__out
+    println "$__keys_present__out"
+    return 0
+  fi
+
+  @true __keys_present__out
+  println "$__keys_present__out"
+}
+
+: <<'FUN'
+Prints the issues with work in progress that link to a code review on this
+forge, read from Linear with the options $1, and logs how many against which
+forge.
+
+Usage: issues_in_flight "$linear_options"
+FUN
+issues_in_flight() {
+  __issues_in_flight__base="$(forge__api_base)"
+  __issues_in_flight__filter="$(issue_filter "$__issues_in_flight__base")"
+  @set __issues_in_flight__listing "$1" '.filter' "$__issues_in_flight__filter"
+  __issues_in_flight__issues="$(linear__list_issues "$__issues_in_flight__listing")" || return 1
+  @len __issues_in_flight__len_1 "$__issues_in_flight__issues"
+  log "Read $__issues_in_flight__len_1 issues with a link to $__issues_in_flight__base."
+
+  println "$__issues_in_flight__issues"
+}
+
+: <<'FUN'
+Prints the issues among $1 that link to a code review of the repository the
+run is in, and logs how many, against the repository. An issue that links
+only to other repositories' reviews is theirs to close: it is never judged
+here, however its reviews stand.
+
+Usage: issues_of_this_repository "$issues"
+FUN
+issues_of_this_repository() {
+  __issues_of_this_repository__repository="$(forge__repository)" || return 1
+  __issues_of_this_repository__path="$(repository_path "$__issues_of_this_repository__repository")"
+  @arr __issues_of_this_repository__arr_2
+  @reduce __issues_of_this_repository__ours keep_issue_of "$1" "$__issues_of_this_repository__arr_2" "$__issues_of_this_repository__path"
+  @len __issues_of_this_repository__len_3 "$__issues_of_this_repository__ours"
+  log "$__issues_of_this_repository__len_3 of them link to a code review of $__issues_of_this_repository__path."
+
+  println "$__issues_of_this_repository__ours"
+}
+
+: <<'FUN'
+Prints the repository $1, {owner, repo}, as the path <owner>/<repo>.
+FUN
+repository_path() {
+  @let "$1" __repository_path__ owner repo
+  __repository_path__path="$__repository_path__owner/$__repository_path__repo"
+  @unlet __repository_path__ owner repo
+
+  println "$__repository_path__path"
+}
+
+: <<'FUN'
+A predicate for @filter: answers true in the variable $1 when the code
+review link $3 is to the repository at the path $4, and false otherwise.
+
+  link_is_to_repository yes 0 '{"owner":"org","repo":"tool"}' org/tool  ->  yes=true
+FUN
+link_is_to_repository() {
+  @get __link_is_to_repository__owner "$3" '.owner' ''
+  @get __link_is_to_repository__repo "$3" '.repo' ''
+
+  @equals "$1" "$__link_is_to_repository__owner/$__link_is_to_repository__repo" "$4"
+}
+
+: <<'FUN'
+@reduce callback: adds the issue $2 to the array $1 when one of its links is
+a code review of the repository at the path $3, and leaves the array as it
+is otherwise.
+FUN
+keep_issue_of() {
+  @get __keep_issue_of__attachments "$2" '.attachments.nodes'
+  __keep_issue_of__links="$(linear__reviews__links "$__keep_issue_of__attachments")"
+  @filter __keep_issue_of__ours "$__keep_issue_of__links" link_is_to_repository "$3"
+  if @empty "$__keep_issue_of__ours"; then
+    println "$1"
+    return 0
+  fi
+
+  @push __keep_issue_of__out "$1" "$2"
+  println "$__keep_issue_of__out"
+}
+
+: <<'FUN'
+Prints the judged issues $1 that a person has to look at, moves the finished
+ones to Done, or says what it would move under --dry-run, and sums the run up.
+
+Usage: report_and_move "$judged" "$teams" "$linear_options"
+FUN
+report_and_move() {
+  __report_and_move__for_a_person="$(with_status "$1" "$linear__reviews__STATUS_CLOSED")"
+  __report_and_move__finished="$(with_status "$1" "$linear__reviews__STATUS_MERGED")"
+
+  @foreach report_for_a_person "$__report_and_move__for_a_person"
+  move_finished "$__report_and_move__finished" "$2" "$3"
+  @len __report_and_move__len_4 "$__report_and_move__finished"
+  @len __report_and_move__len_5 "$__report_and_move__for_a_person"
+  log "Finished: $__report_and_move__len_4. Left for a person: $__report_and_move__len_5."
+}
+
+: <<'FUN'
+Moves the finished issues $1 to Done, or says what it would move when the run
+is a dry one.
+
+Usage: move_finished "$finished" "$teams" "$linear_options"
+FUN
+move_finished() {
+  if @is_true "$ARG_DRY_RUN"; then
+    @foreach announce_move "$1"
+    return 0
+  fi
+
+  @foreach move_to_done "$1" "$2" "$3"
+}
+
+: <<'FUN'
+Reads the flags: --dry-run sets ARG_DRY_RUN, --help prints the usage, and
+anything else is refused.
+FUN
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -n|--dry-run) @true __parse_args__true_6; ARG_DRY_RUN="$__parse_args__true_6" ;;
+      -h|--help) log "$USAGE"; exit 0 ;;
+      *)
+        error "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+: <<'FUN'
+Prints the Linear filter for the issues this action judges: the issues in one
+of the states that mean work is in progress, with an attachment whose URL is
+on the forge at $1.
+
+  issue_filter https://gitlab.example.com
+    -> {"state": {"name": {"in": ["In Progress", "In Review", "Landing"]}},
+        "attachments": {"url": {"contains": "https://gitlab.example.com"}}}
+
+Usage: issue_filter "$base"
+FUN
+issue_filter() {
+  @enum_values __issue_filter__states __close_merged__STATE
+  @obj __issue_filter__names '.in' "$__issue_filter__states"
+  @obj __issue_filter__state '.name' "$__issue_filter__names"
+  @obj __issue_filter__url '.contains' "$1"
+  @obj __issue_filter__attachments '.url' "$__issue_filter__url"
+
+  @obj __issue_filter__out \
+    '.state' "$__issue_filter__state" \
+    '.attachments' "$__issue_filter__attachments"
+  println "$__issue_filter__out"
+}
+
+: <<'FUN'
+@map callback: judges the issue $1 by the code reviews its attachments link
+to on this forge, and prints the issue with its status, the refs of its
+merged code reviews and the state of each of the others.
+
+  judge_issue "$issue" "$forge_options"
+    -> {"status": "closed", "merged": ["org/tool!7"],
+        "unmerged": [{"ref": "org/tool!5", "state": "closed"}],
+        "identifier": "OPS-12", "id": "...", "team": "OPS"}
+
+Usage: judge_issue "$issue" "$forge_options"
+FUN
+judge_issue() {
+  @let "$1" __judge_issue__ id identifier team.key attachments.nodes
+  __judge_issue__judgement="$(linear__reviews__judgement "$__judge_issue__attachments_nodes" "$2")"
+
+  @set __judge_issue__out "$__judge_issue__judgement" \
+    '.identifier' "$__judge_issue__identifier" \
+    '.id' "$__judge_issue__id" \
+    '.team' "$__judge_issue__team_key"
+  println "$__judge_issue__out"
+  @unlet __judge_issue__ id identifier team.key attachments.nodes
+}
+
+: <<'FUN'
+Prints the judged issues $1 whose status is $2, as a struct array.
+
+Usage: with_status "$judged" "$status"
+FUN
+with_status() {
+  @filter __with_status__out "$1" silt__text_is .status "$2"
+  println "$__with_status__out"
+}
+
+: <<'FUN'
+@foreach callback: prints the judged issue $1 for a person to read, with each
+code review that is not merged and its state, then the merged ones.
+
+  Left for a person: OPS-12. Not merged: org/tool!5 closed. Merged: org/tool!7.
+FUN
+report_for_a_person() {
+  @let "$1" __report_for_a_person__ identifier merged unmerged
+  log "Left for a person: ${__report_for_a_person__identifier}. Not merged: $(refs_with_states "$__report_for_a_person__unmerged"). Merged: $(refs_or_none "$__report_for_a_person__merged")."
+  @unlet __report_for_a_person__ identifier merged unmerged
+}
+
+: <<'FUN'
+Prints the code reviews $1, each as its ref and its state, in one line.
+
+  refs_with_states '[{"ref": "org/tool!5", "state": "closed"}]'  ->  org/tool!5 closed
+FUN
+refs_with_states() {
+  @map __refs_with_states__map_7 ref_with_state "$1"
+  @join __refs_with_states__out "$__refs_with_states__map_7" ", "
+  println "$__refs_with_states__out"
+}
+
+: <<'FUN'
+@map callback: prints the code review $1 as its ref and its state in one
+word pair, wrapped for the array it joins.
+FUN
+ref_with_state() {
+  @get __ref_with_state__get_8 "$1" '.ref'
+  @get __ref_with_state__get_9 "$1" '.state'
+  @wrap __ref_with_state__out "$__ref_with_state__get_8 $__ref_with_state__get_9"
+  println "$__ref_with_state__out"
+}
+
+: <<'FUN'
+Prints the refs $1 in one line, or the word none when there are none.
+FUN
+refs_or_none() {
+  if @empty "$1"; then
+    println "none"
+    return 0
+  fi
+
+  @join __refs_or_none__out "$1" ", "
+  println "$__refs_or_none__out"
+}
+
+: <<'FUN'
+@foreach callback: says what a run without --dry-run would do with the
+finished issue $1.
+FUN
+announce_move() {
+  @get __announce_move__get_10 "$1" '.identifier'
+  @get __announce_move__get_11 "$1" '.merged'
+  @join __announce_move__join_12 "$__announce_move__get_11" ", "
+  log "Would move $__announce_move__get_10 to Done: $__announce_move__join_12."
+}
+
+: <<'FUN'
+@foreach callback: moves the finished issue $1 to its team's Done state, then
+comments on it naming the merged code reviews. The state moves first, so a
+run that fails between the two writes leaves a Done issue without its note
+and never a second note for the next run to add to. A team with no Done state
+leaves its issue as it is, and says so.
+
+Usage: move_to_done "$judged_issue" "$teams" "$linear_options"
+FUN
+move_to_done() {
+  @get __move_to_done__identifier "$1" '.identifier'
+  @get __move_to_done__team "$1" '.team'
+  __move_to_done__done_state="$(linear__find_done_state "$2" "$__move_to_done__team")"
+  if ! @defined "$__move_to_done__done_state"; then
+    log "Left as it is: ${__move_to_done__identifier}. Team ${__move_to_done__team} has no Done state."
+    return 0
+  fi
+
+  @get __move_to_done__id "$1" '.id'
+  @get __move_to_done__merged "$1" '.merged'
+  linear__update_issue_state "$__move_to_done__id" "$__move_to_done__done_state" "$3" || return 1
+  linear__add_comment "$__move_to_done__id" "$(comment_body "$__move_to_done__merged")" "$3" || return 1
+  @join __move_to_done__join_13 "$__move_to_done__merged" ", "
+  log "Moved ${__move_to_done__identifier} to Done: $__move_to_done__join_13."
+}
+
+: <<'FUN'
+Prints the recordkeeper's dated comment for an issue whose code reviews $1
+have all merged. Each ref is in backticks so Linear shows it as written. The
+line stays within a Linear comment's prose budget for any number of code
+reviews an issue carries.
+
+  comment_body '["org/tool!7"]'
+    -> recordkeeper, 2026-10-23: every code review on this ticket is merged: `org/tool!7`. Done.
+
+Usage: comment_body "$merged_refs"
+FUN
+comment_body() {
+  @map __comment_body__map_14 quoted_ref "$1"
+  @join __comment_body__join_15 "$__comment_body__map_14" ", "
+  println "recordkeeper, $(date -u +%Y-%m-%d): every code review on this ticket is merged: $__comment_body__join_15. Done."
+}
+
+: <<'FUN'
+@map callback: wraps the ref $1 in backticks.
+FUN
+quoted_ref() {
+  @unwrap __quoted_ref__unwrap_16 "$1"
+  @wrap __quoted_ref__out "\`$__quoted_ref__unwrap_16\`"
+  println "$__quoted_ref__out"
+}
+
+case "$0" in
+  *close-merged-issues) main "$@" ;;
+esac

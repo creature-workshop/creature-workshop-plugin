@@ -1,0 +1,9 @@
+query($key: String!) {
+  teams(filter: { key: { eq: $key } }) {
+    nodes {
+      id
+      key
+      states { nodes { id name type position } }
+    }
+  }
+}

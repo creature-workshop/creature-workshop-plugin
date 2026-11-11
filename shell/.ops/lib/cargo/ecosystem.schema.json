@@ -1,0 +1,17 @@
+{
+  "type": "object",
+  "description": "Cargo ecosystem: a Rust crate or workspace whose version follows the release.",
+  "properties": {
+    "path": {
+      "type": ["string", "null"],
+      "default": "Cargo.toml",
+      "description": "The Cargo.toml the release syncs, relative to the repository root."
+    },
+    "workspace": {
+      "type": ["boolean", "null"],
+      "default": true,
+      "description": "Whether [workspace.package] carries the version; false for a single crate."
+    }
+  },
+  "additionalProperties": false
+}

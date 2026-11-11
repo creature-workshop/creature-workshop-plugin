@@ -1,0 +1,11 @@
+{
+  "include": [
+    "shell/golden/api.sh",
+    "shell/golden/bats.sh",
+    "test/verbs.sh",
+    "test/verbs-transcript.sh"
+  ],
+  "exclude": [
+    "shell/.ops"
+  ]
+}

@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+import \
+  "$SHELLOPS_DIR/lib/git/api.sh" \
+  "$SHELLOPS_DIR/lib/releases/_attempt.sh" \
+  "$SHELLOPS_DIR/lib/tags/api.sh"
+
+USAGE="$(cat <<HELP
+Runs the certification attempt a dev tag starts (ADR.3@global, ADR 000044):
+the tag's commit is the candidate, and the attempt earns every tier
+auto-promote-until lets it, each proved at its sites and recorded off the
+trunk, the top one carrying certified. Each tier's tag is promoted before
+the next tier starts. A tag above dev is a record's, and starts no
+attempt. Red when a tier is red, a promotion fails, or another attempt
+took a name on another candidate.
+
+Usage: action certify <tag>
+       action certify -h|--help
+
+Environment:
+  FORGE_ADMIN_TOKEN  Required. Bot token for the pushes of the records.
+  <token_env>        Required for each forge with a host at a forges site:
+                     the variable that forge names on the ladder holds the
+                     token the proofs and the pushes to that forge carry.
+HELP
+)"
+
+main() {
+  parse_args "$@"
+  if ! @is_true "$(tag_is_dev "$1")"; then
+    log "certify: ${1} is a record's tag, not a dev tag, so it starts no attempt."
+    return 0
+  fi
+  releases__attempt__run "$(git__commit_of "$1")"
+}
+
+: <<'FUN'
+Parses the arguments, exactly a tag; --help prints the usage.
+FUN
+parse_args() {
+  case "${1:-}" in
+    -h|--help) print_usage ;;
+  esac
+
+  if [ "$#" -ne 1 ]; then
+    refuse_usage "certify: expected <tag>, got $# argument(s)."
+  fi
+}
+
+: <<'FUN'
+Prints true when <tag> names a version on dev, the tier a landing earns,
+false for any other tier or a name that is no version.
+FUN
+tag_is_dev() {
+  if ! __tag_is_dev__tag="$(@tag "$1" 2>/dev/null)"; then
+    @false __tag_is_dev__out
+    println "$__tag_is_dev__out"
+    return 0
+  fi
+  tags__on_tier "$__tag_is_dev__tag" dev
+}
+
+print_usage() {
+  log "$USAGE"
+  exit 0
+}
+
+: <<'FUN'
+Reports <message> against the usage text and stops.
+FUN
+refuse_usage() {
+  error "$1"
+  log "$USAGE"
+  exit 1
+}
+
+: <<'DOC'
+Runs main only when the file is executed. Sourcing it, as the tests do,
+defines the functions and runs nothing.
+DOC
+case "$0" in
+  */certify|certify) main "$@" ;;
+esac

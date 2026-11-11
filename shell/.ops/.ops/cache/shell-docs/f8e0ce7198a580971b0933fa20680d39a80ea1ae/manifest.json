@@ -1,0 +1,14 @@
+{
+  "name": "shell-docs",
+  "description": "The doc extractor for shell sources: the doc-block model, the tree lowering and the reference renderers, in POSIX awk and jq.",
+  "linear-team": "OPS",
+  "org": "creature-workshop",
+  "repo": "shell-docs",
+  "latest": "0.1.0-dev.2",
+  "stable": "0.0.0",
+  "naming": {
+    "major": "",
+    "minor": "",
+    "patch": ""
+  }
+}

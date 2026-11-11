@@ -1,0 +1,310 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+USAGE="$(cat <<HELP
+Creates a release for the latest tag marked in the project manifest.
+
+Usage: ops publish-release [-h,--help] [-g,--github] [--artifacts <file>] [artifact...]
+
+Arguments:
+  artifact        Optional artifact files to attach to the release.
+
+Flags:
+  --artifacts <f> Load artifact paths from a JSON array file (e.g. artifacts.json).
+  -d, --dry-run   Puts together a dry run of a release for review.
+  -g, --github    Publish to GitHub instead of the selected forge: the release
+                  on the mirror, as lib/releases/github.sh describes it.
+  -h, --help      Show this help text.
+
+Environment:
+  SHELLOPS_FORGE      Selects the active forge: "forgejo" (default) or "gitlab".
+                      The -g/--github flag overrides this and publishes to GitHub.
+  FORGE_ADMIN_TOKEN   Required (Forgejo and GitLab modes). API token for release creation.
+  GITHUB_TOKEN        Required (GitHub mode). API token for GitHub release creation.
+
+HELP
+)"
+
+# CONST: Struct array of artifact paths (POSIX sh has no arrays).
+@arr ARG_ARTIFACTS
+
+# CONST: Whether --dry-run was given: the release is described and not created.
+@false FLAG_DRY_RUN
+
+# CONST: Whether --github was given: the release is created on GitHub.
+@false FLAG_GITHUB
+
+# CONST: The JSON file --artifacts names, which lists the artifacts to attach.
+FLAG_ARTIFACTS_FILE=""
+
+import \
+  "$SHELLOPS_DIR/lib/manifest/api.sh" \
+  "$SHELLOPS_DIR/lib/versions/api.sh" \
+  "$SHELLOPS_DIR/lib/forge/api.sh" \
+  "$SHELLOPS_DIR/lib/github/api.sh" \
+  "$SHELLOPS_DIR/lib/markdown/api.sh" \
+  "$SHELLOPS_DIR/lib/releases/api.sh" \
+  "$SHELLOPS_DIR/lib/releases/github.sh" \
+  "$SHELLOPS_DIR/lib/releases/notes.sh" \
+  "$SHELLOPS_DIR/lib/releases/prepare.sh" \
+  "$SHELLOPS_DIR/lib/tarball/api.sh" \
+  "$SHELLOPS_DIR/lib/time/api.sh"
+
+main() {
+  parse_args "$@"
+  require_token
+
+  __main__tag="$(releases__release_recorded_tag)" || exit 1
+  __main__version="$(versions__parse_version "$__main__tag")"
+
+  @get __main__pre_type "$__main__version" '.pre_type' ''
+
+  @false __main__prerelease
+  if @defined "$__main__pre_type"; then
+    @true __main__prerelease
+  fi
+
+  __main__title="$(build_title "$__main__tag")"
+
+  if @is_true "$FLAG_GITHUB"; then
+    __main__body="$(build_github_body "$__main__tag")"
+  else
+    __main__body="$(build_body "$__main__tag")"
+  fi
+
+  if @is_true "$FLAG_DRY_RUN"; then
+    print_dry_run "$__main__tag" "$__main__title" "$__main__body" "$__main__prerelease"
+    exit 0
+  fi
+
+  if @is_true "$FLAG_GITHUB"; then
+    publish_github "$__main__tag" "$__main__body"
+    return
+  fi
+
+  generate_checksums
+
+  case "$(forge__selected)" in
+    gitlab) publish_gitlab "$__main__tag" "$__main__title" "$__main__body" "$__main__prerelease" ;;
+    *)      publish "$__main__tag" "$__main__title" "$__main__body" "$__main__prerelease" ;;
+  esac
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --artifacts) FLAG_ARTIFACTS_FILE="$2"; shift ;;
+      -d|--dry-run) @true __parse_args__true_1; FLAG_DRY_RUN="$__parse_args__true_1" ;;
+      -g|--github) @true __parse_args__true_2; FLAG_GITHUB="$__parse_args__true_2" ;;
+      -h|--help) log "$USAGE" && exit 0 ;;
+      -*) log "Unknown option: $1" && log "$USAGE" && exit 1 ;;
+      *) @wrap __parse_args__wrap_3 "$1"; @push __parse_args__push_4 "$ARG_ARTIFACTS" "$__parse_args__wrap_3"; ARG_ARTIFACTS="$__parse_args__push_4" ;;
+    esac
+    shift
+  done
+
+  if [ -n "$FLAG_ARTIFACTS_FILE" ]; then
+    load_artifacts_from_json "$FLAG_ARTIFACTS_FILE"
+  fi
+}
+
+load_artifacts_from_json() {
+  __load_artifacts_from_json__paths="$(tarball__load_artifacts "$1")" || exit 1
+
+  @split __load_artifacts_from_json__split_5 "$__load_artifacts_from_json__paths"
+  @concat ARG_ARTIFACTS "$ARG_ARTIFACTS" "$__load_artifacts_from_json__split_5"
+}
+
+require_token() {
+  if @is_true "$FLAG_GITHUB"; then
+    if [ -z "${GITHUB_TOKEN:-}" ]; then
+      error "GITHUB_TOKEN is not set. Cannot create GitHub release."
+      exit 1
+    fi
+    return
+  fi
+
+  if [ -z "${FORGE_ADMIN_TOKEN:-}" ]; then
+    error "FORGE_ADMIN_TOKEN is not set. Cannot create release (SHELLOPS_FORGE=$(forge__selected))."
+    exit 1
+  fi
+}
+
+build_title() {
+  case "$(versions__get_release_type "$1")" in
+    patch) echo "$1: $(get_commit_subject "$1")" ;;
+    minor) titled "$1" "$(manifest__get minor_name)" ;;
+    major) titled "$1" "$(manifest__get major_name)" ;;
+    *) echo "$1" ;;
+  esac
+}
+
+: <<'FUN'
+Prints the version <version> followed by the name <name> of its line, and
+the version alone when the manifest names none.
+FUN
+titled() {
+  if @defined "$2"; then
+    echo "$1: $2"
+  else
+    echo "$1"
+  fi
+}
+
+get_commit_subject() {
+  __get_commit_subject__prev_tag="$(versions__get_relevant_baseline_tag "$1")"
+  if ! @defined "$__get_commit_subject__prev_tag"; then
+    __get_commit_subject__prev_tag="$(versions__initial_commit)"
+  fi
+  git log --no-merges --invert-grep --grep='^.\?chore' \
+    -1 --format='%s' "${__get_commit_subject__prev_tag}..${1}" 2>/dev/null || echo ""
+}
+
+build_body() {
+  __build_body__prev_tag="$(versions__get_relevant_baseline_tag "$1")"
+  if ! @defined "$__build_body__prev_tag"; then
+    __build_body__prev_tag="$(versions__initial_commit)"
+  fi
+
+  releases__release_notes_between "$__build_body__prev_tag" "$1" "$FORGE_ADMIN_TOKEN"
+}
+
+build_github_body() {
+  __build_github_body__org="$(manifest__get org)"
+  __build_github_body__repo="$(manifest__get repo)"
+
+  # GitHub releases point back at the canonical forge for full notes.
+  # During the GitLab cutover the canonical URL flips from FORGEJO to
+  # GITLAB; honor SHELLOPS_FORGE here so the GitHub mirror link stays
+  # accurate in both worlds.
+  case "$(forge__selected)" in
+    gitlab) __build_github_body__canonical_base="${GITLAB_API_BASE:-${CI_SERVER_URL:-https://forge.creature-workshop.com}}" ;;
+    *)      __build_github_body__canonical_base="${FORGEJO_API_BASE:-https://creature-workshop.kernelle-soft.com}" ;;
+  esac
+
+  echo "See full release notes at ${__build_github_body__canonical_base}/${__build_github_body__org}/${__build_github_body__repo}/releases/tag/${1}"
+}
+
+publish_github() {
+  @patch __publish_github__patch_6 "$(releases__release_github_options)" \
+    '.tag'       "$1" \
+    '.body'      "$2" \
+    '.artifacts' "$ARG_ARTIFACTS" \
+    '.token'     "$GITHUB_TOKEN"
+  releases__release_publish_github "$__publish_github__patch_6"
+}
+
+publish() {
+  @set __publish__release_args "$(forge__new_release_options)" \
+    '.tag_name' "$1" \
+    '.name'     "$2" \
+    '.body'     "$3" \
+    '.prerelease' "$4" \
+    '.token'    "$FORGE_ADMIN_TOKEN"
+
+  __publish__release_result="$(forge__create_release "$__publish__release_args")"
+  @get __publish__release_id "$__publish__release_result" '.id'
+
+  if ! @defined "$__publish__release_id"; then
+    error "Failed to create release. Response:"
+    @dump __publish__dump_7 "$__publish__release_result"
+    error "$__publish__dump_7"
+    exit 1
+  fi
+
+  log "Created release $1 (id: $__publish__release_id)"
+  upload_artifacts "$__publish__release_id"
+}
+
+upload_artifacts() {
+  @foreach __upload_one_artifact "$ARG_ARTIFACTS" "$1"
+}
+
+__upload_one_artifact() {
+  @unwrap __upload_one_artifact__artifact "$1"
+  __upload_one_artifact__filename="${__upload_one_artifact__artifact##*/}"
+  @set __upload_one_artifact__upload_args "$(forge__new_upload_options)" \
+    '.release_id' "$2" \
+    '.filename'   "$__upload_one_artifact__filename" \
+    '.filepath'   "$__upload_one_artifact__artifact" \
+    '.token'      "$FORGE_ADMIN_TOKEN"
+
+  log "Uploading $__upload_one_artifact__filename..."
+  forge__upload_artifact "$__upload_one_artifact__upload_args"
+}
+
+publish_gitlab() {
+  # GitLab does not natively support "prerelease". We still pass it
+  # through forge__new_release_options for shape parity, but the GitLab API
+  # client silently drops it. See lib/gitlab/api.sh gitlab_create_release.
+  @set __publish_gitlab__release_args "$(forge__new_release_options)" \
+    '.tag_name'   "$1" \
+    '.name'       "$2" \
+    '.body'       "$3" \
+    '.prerelease' "$4" \
+    '.token'      "$FORGE_ADMIN_TOKEN"
+
+  __publish_gitlab__release_result="$(forge__create_release "$__publish_gitlab__release_args")"
+  @get __publish_gitlab__release_id "$__publish_gitlab__release_result" '.id'
+
+  if ! @defined "$__publish_gitlab__release_id"; then
+    error "Failed to create GitLab release. Response:"
+    @dump __publish_gitlab__dump_8 "$__publish_gitlab__release_result"
+    error "$__publish_gitlab__dump_8"
+    exit 1
+  fi
+
+  info "Created GitLab release $1 (id: $__publish_gitlab__release_id)"
+  upload_artifacts_gitlab "$1"
+}
+
+upload_artifacts_gitlab() {
+  @foreach __upload_one_gitlab_artifact "$ARG_ARTIFACTS" "$1"
+}
+
+__upload_one_gitlab_artifact() {
+  @unwrap __upload_one_gitlab_artifact__artifact "$1"
+  __upload_one_gitlab_artifact__filename="${__upload_one_gitlab_artifact__artifact##*/}"
+  @set __upload_one_gitlab_artifact__upload_args "$(forge__new_upload_options)" \
+    '.tag_name' "$2" \
+    '.filename' "$__upload_one_gitlab_artifact__filename" \
+    '.filepath' "$__upload_one_gitlab_artifact__artifact" \
+    '.token'    "$FORGE_ADMIN_TOKEN"
+
+  log "Uploading $__upload_one_gitlab_artifact__filename to GitLab..."
+  forge__upload_artifact "$__upload_one_gitlab_artifact__upload_args"
+}
+
+generate_checksums() {
+  ARG_ARTIFACTS="$(tarball__with_checksums . "$ARG_ARTIFACTS")"
+}
+
+print_dry_run() {
+  banner "Dry-Run: $1"
+  log "  Title:      $2"
+  log "  Prerelease: $4"
+  log ""
+  log "--- Release Notes ---"
+  log "$3"
+  log "--- End Notes ---"
+  log ""
+
+  if @len __print_dry_run__len_9 "$ARG_ARTIFACTS"; [ "$__print_dry_run__len_9" -gt 0 ]; then
+    log "Artifacts:"
+    @foreach __print_dry_run_artifact "$ARG_ARTIFACTS"
+  fi
+}
+
+__print_dry_run_artifact() {
+  @unwrap __print_dry_run_artifact__unwrap_10 "$1"
+  log "  $__print_dry_run_artifact__unwrap_10"
+}
+
+: <<'DOC'
+main runs only when the file is executed. Sourced, as bats does to reach
+the functions, the file defines them and stops.
+DOC
+case "$0" in
+  *publish-release) main "$@" ;;
+esac

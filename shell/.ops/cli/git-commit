@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+USAGE="$(cat <<HELP
+Handler for CI/CD git operations. Not generally for manual use.
+
+Usage: ops git-commit [flags...] [-- <path>...]
+
+Flags:
+  -a, --all      Commit all changed files, including added and deleted files.
+  -m, --message  Supply a custom git message.
+
+Paths after -- are staged and committed on their own: the commit holds exactly
+those paths, whatever else the caller had already staged. Prefer this over --all
+whenever the set of files is known: --all runs 'git add -A', which also sweeps up
+anything untracked the job happens to have left in the tree (build output, tool
+caches) and puts it in the commit.
+
+With neither --all nor paths, whatever is already staged is committed. Exits 0
+without committing when there is nothing to commit.
+HELP
+)"
+
+@false FLAG_ALL
+
+# CONST: Struct array of pathspecs (POSIX sh has no arrays).
+@arr ARG_PATHS
+
+# CONST: The message committed when -m gives none.
+STR_COMMIT_MSG="$(cat <<EOF
+chore: automated commit [skip ci]
+
+This commit was made automatically via Github Actions.
+EOF
+)"
+
+main() {
+  parse_args "$@"
+
+  if @is_true "$FLAG_ALL" && ! @empty "$ARG_PATHS"; then
+    error "--all and explicit paths are mutually exclusive"
+    exit 1
+  fi
+
+  if @empty "$ARG_PATHS"; then
+    commit_index
+  else
+    commit_paths
+  fi
+}
+
+: <<'FUN'
+Stages the paths collected from the argv tail and commits exactly those paths.
+
+They are staged in one git call so an unmatched path fails before any of the
+others are staged, rather than leaving a half-staged index behind. The status is
+checked rather than left to set -e: a staging failure otherwise falls through to
+the nothing-to-commit check and reports "Nothing to commit" with a zero exit,
+turning a real error into a silent no-op.
+
+The pathspec is handed to git commit as well as to git add, so content the
+caller staged outside these paths stays in the index instead of riding along in
+the commit. Both checks are likewise scoped to the paths: a caller with an
+unrelated file staged and nothing to say about its own paths gets the same clean
+no-op it would get in an otherwise empty index.
+
+Usage: commit_paths
+FUN
+commit_paths() {
+  if ! @apply git add -- "$ARG_PATHS"; then
+    error "failed to stage the requested paths"
+    exit 1
+  fi
+
+  if @apply git diff --cached --quiet -- "$ARG_PATHS"; then
+    log "Nothing to commit"
+    exit 0
+  fi
+
+  @apply git commit -m "$STR_COMMIT_MSG" -- "$ARG_PATHS"
+}
+
+: <<'FUN'
+Commits the index: everything --all sweeps in, or whatever the caller staged.
+
+Usage: commit_index
+FUN
+commit_index() {
+  set --
+  if @is_true "$FLAG_ALL"; then
+    set -- -a
+    git add -A
+  fi
+
+  if git diff --cached --quiet; then
+    log "Nothing to commit"
+    exit 0
+  fi
+
+  git commit "$@" -m "$STR_COMMIT_MSG"
+}
+
+: <<'FUN'
+  Parses CLI flags.
+  See USAGE for flag descriptions.
+FUN
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -a|--all)
+        @true FLAG_ALL
+        ;;
+      -m|--message)
+        shift # discard actual flag.
+        STR_COMMIT_MSG="$1"
+        ;;
+      -h|--help)
+        log "$USAGE" && exit 0
+        ;;
+      --)
+        shift
+        collect_paths "$@"
+        return 0
+        ;;
+      *)
+        log "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+
+    shift
+  done
+}
+
+: <<'FUN'
+Collects the pathspecs following -- into ARG_PATHS.
+
+Usage: collect_paths <path>...
+FUN
+collect_paths() {
+  @arr ARG_PATHS "$@"
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *git-commit) main "$@" ;;
+esac

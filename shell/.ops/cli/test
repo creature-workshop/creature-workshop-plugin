@@ -1,0 +1,899 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source "$SHELLOPS_DIR/.envrc"
+
+PROJ="${PROJ:-$SHELLOPS_DIR}"
+export PROJ
+
+import \
+  "$SHELLOPS_DIR/lib/testing/dispatch.sh" \
+  "$SHELLOPS_DIR/lib/testing/trace/api.sh" \
+  "$SHELLOPS_DIR/lib/testing/scorecard/summary.sh" \
+  "$SHELLOPS_DIR/lib/testing/scorecard/gate.sh" \
+  "$SHELLOPS_DIR/lib/areas/at_ref.sh" \
+  "$SHELLOPS_DIR/lib/git/api.sh" \
+  "$SHELLOPS_DIR/lib/git/remotes.sh" \
+  "$SHELLOPS_DIR/lib/testing/frameworks.sh" \
+  "$SHELLOPS_DIR/lib/testing/shard.sh" \
+  "$SHELLOPS_DIR/lib/args/api.sh" \
+  "$SHELLOPS_DIR/lib/time/api.sh"
+
+USAGE="$(cat <<HELP
+The front door for everything a human or pipeline does with tests.
+
+Usage: ops test [verb] [args...]
+
+Verbs:
+  (none)               Context-aware run. In a code review with a testing
+                       config: resolve the review's live area/* labels and run
+                       the impacted tests. Anywhere else, or with no testing
+                       config: the full suite.
+  all                  The full suite, explicitly: every suite in the testing
+                       config, or every registered framework without one.
+  area [--own] <name>...
+                       Run the named areas' tests per the manifest: theirs and
+                       their importers', as a review of those areas would; with
+                       --own, theirs alone, as a site running an adaptor's
+                       floor asks.
+  suite <name> [path...]
+                       Run one configured suite through its runner: in full,
+                       as a dedicated full-suite job does, or the given test
+                       files alone; writes no metrics record.
+  site [--floor] <area>
+                       What a site of the promotion path runs: every suite
+                       in full, or the floor, the named area's own tests,
+                       when --floor is given or the run is on a tag. A tag
+                       lands on the SHA a branch just ran, so the floor keeps
+                       a site from running the suites twice on one commit.
+  files <path>...      Run what selection would pick if these paths had
+                       changed, through the same resolver chain a review uses.
+  shard-of <path>...   Print this job's share of the given test files, one
+                       per line: every file when the job is not one of
+                       several, and the files the runners would deal to this
+                       shard, from CI_NODE_INDEX and CI_NODE_TOTAL, when it
+                       is. For a job that runs a framework by hand and still
+                       wants the sharding the runners do.
+  plan [path...]       Dry-run: print the selection (areas -> suites -> files)
+                       and run nothing. With paths, plans as if they had
+                       changed; without, plans the context-aware run.
+  scorecard [--json|--check|--markdown [--findings]] [--clean-streak-goal <n>]
+                       The readiness report: mapping health (unmapped paths,
+                       missing area paths, dead test entries, orphan tests),
+                       per-area rows with the tests each area's importers
+                       bring, and the rollout numbers aggregated from the
+                       metrics records test runs leave behind. --json emits
+                       the machine-readable form CI and the promotion gates
+                       consume. --check renders the report and exits 1 when
+                       the mapping is incomplete, for use as a CI gate, and 2
+                       when it is complete but carries advisory findings, for
+                       a job to show as passed with warnings. --markdown
+                       emits the short summary a comment carries; with
+                       --findings, the findings behind its counts follow.
+  trace [--budget <duration>]
+                       Run every file-keyed suite one test file at a time
+                       under strace and record the trace map the scorecard
+                       audits against and the trace selector selects by: as a
+                       file in the map directory, and as a note on the commit
+                       it ran at under refs/notes/testing-trace, for the
+                       caller to push. Starts from the newest map and traces
+                       only the files whose entries no longer hold; keeps the
+                       map after every file, so a run cut short leaves what it
+                       traced. With --budget, stops between two files once
+                       that long has passed (2h30m, 45m, or a count of
+                       seconds), keeps the map it has, and succeeds, so a job
+                       ends on its own before its timeout and the next run
+                       carries on. Needs a host that permits ptrace.
+
+Environment:
+  FORGE_REVIEW_IID     Code review identifier (falls back to CI_MERGE_REQUEST_IID)
+  FORGE_API_URL        Forge REST API base URL (falls back to CI_API_V4_URL)
+  FORGE_PROJECT_ID     Forge project id (falls back to CI_PROJECT_ID)
+  FORGE_TOKEN          Read-scoped auth token (falls back to GITLAB_TOKEN,
+                       FORGE_PR_TOKEN, CI_JOB_TOKEN)
+  TESTING_FULL_SUITE   Set to force the full suite, bypassing selection
+  TESTING_METRICS_DIR  Where per-run metrics records are read from and written
+                       to (default .ops/testing-metrics under the project root).
+  TESTING_TRACE_DIR    Where trace maps are written to, and read from when no
+                       note on the head's history holds one (default
+                       .ops/testing-trace under the project root).
+HELP
+)"
+
+main() {
+  case "${1:-}" in
+    '')
+      cmd_context
+      ;;
+    all)
+      shift
+      cmd_all "$@"
+      ;;
+    area)
+      shift
+      cmd_area "$@"
+      ;;
+    suite)
+      shift
+      cmd_suite "$@"
+      ;;
+    site)
+      shift
+      cmd_site "$@"
+      ;;
+    files)
+      shift
+      cmd_files "$@"
+      ;;
+    shard-of)
+      shift
+      cmd_shard_of "$@"
+      ;;
+    plan)
+      shift
+      cmd_plan "$@"
+      ;;
+    scorecard)
+      shift
+      cmd_scorecard "$@"
+      ;;
+    trace)
+      shift
+      cmd_trace "$@"
+      ;;
+    -h|--help)
+      log "$USAGE"
+      ;;
+    *)
+      log "ops test: unknown verb '$1'"
+      log "$USAGE"
+      exit 1
+      ;;
+  esac
+}
+
+:<<'FUN'
+The context-aware run: read the review's live area/* labels and run the tests
+they select. Outside a code review the label set is empty and selection widens
+to the full suite; a repo with no testing config runs its full suite outright.
+FUN
+cmd_context() {
+  # Without a testing config there are no area/* labels to resolve, so skip the
+  # forge read and hand the dispatcher an empty area set.
+  if @is_false "$(areas__has_areas_config)"; then
+    @arr __cmd_context__arr_1
+    testing__run_impacted "$__cmd_context__arr_1"
+    return
+  fi
+
+  fetch_trace_in_ci
+  log "ops test: reading the review's labels from the forge..."
+  __cmd_context__labels="$(testing__review_labels)" || return 1
+  __cmd_context__options="$(options_for_review "$__cmd_context__labels")"
+
+  __cmd_context__areas="$(testing__areas_from_labels "$__cmd_context__labels")"
+  log "ops test: impacted areas from review: $__cmd_context__areas"
+
+  testing__run_impacted "$__cmd_context__areas" \
+    "$(changed_paths_from_diff)" \
+    "$(added_paths_from_diff)" \
+    "$__cmd_context__options"
+}
+
+:<<'FUN'
+The full suite, explicitly: every suite in the testing config runs in full, and
+a repo with no config runs every registered framework.
+FUN
+cmd_all() {
+  if [ "$#" -gt 0 ]; then
+    log "ops test all: unexpected argument '$1'"
+    log "$USAGE"
+    exit 1
+  fi
+
+  @arr __cmd_all__arr_2
+  @arr __cmd_all__arr_3
+  @arr __cmd_all__arr_4
+  @true __cmd_all__true_5
+  @obj __cmd_all__obj_6 '.force_full' "$__cmd_all__true_5"
+  testing__run_impacted \
+    "$__cmd_all__arr_2" \
+    "$__cmd_all__arr_3" \
+    "$__cmd_all__arr_4" \
+    "$__cmd_all__obj_6"
+}
+
+:<<'FUN'
+Run the named areas' tests, as if the review carried exactly their area/*
+labels; with --own, the areas' own tests and none of their importers'. Names
+are bare area names from the manifest (e.g. "lib" "cli").
+FUN
+cmd_area() {
+  @obj __cmd_area__options
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --own) @true __cmd_area__true_7; @obj __cmd_area__obj_8 '.own' "$__cmd_area__true_7"; __cmd_area__options="$__cmd_area__obj_8"; shift ;;
+      *) break ;;
+    esac
+  done
+
+  if @is_zero "$#"; then
+    log "ops test area: at least one area name is required"
+    log "$USAGE"
+    exit 1
+  fi
+
+  @arr __cmd_area__names "$@"
+  @unique __cmd_area__unique_9 "$__cmd_area__names"
+  @arr __cmd_area__arr_10
+  @arr __cmd_area__arr_11
+  testing__run_impacted \
+    "$__cmd_area__unique_9" \
+    "$__cmd_area__arr_10" \
+    "$__cmd_area__arr_11" \
+    "$__cmd_area__options"
+}
+
+:<<'FUN'
+Run one configured suite, by the name the testing config gives it: in full,
+or the given test files alone.
+FUN
+cmd_suite() {
+  if @is_zero "$#"; then
+    log "ops test suite: a suite name is required"
+    log "$USAGE"
+    exit 1
+  fi
+
+  testing__run_suite "$@"
+}
+
+:<<'FUN'
+Run what a site of the promotion path runs: every suite in full, or the
+floor, the named area's own tests, when --floor is given or the run is on a
+tag. The site's job calls this and nothing else, so which of the two a run
+is lives here and not in each forge's pipeline file, and the area is the
+job's to name, so nothing here knows how a repository lays its areas out.
+FUN
+cmd_site() {
+  @false __cmd_site__floor
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --floor) @true __cmd_site__true_12; __cmd_site__floor="$__cmd_site__true_12"; shift ;;
+      *) break ;;
+    esac
+  done
+
+  if @is_zero "$#"; then
+    log "ops test site: the area the site's floor runs is required"
+    log "$USAGE"
+    exit 1
+  fi
+
+  if @is_true "$(site_runs_floor "$__cmd_site__floor")"; then
+    log "ops test site: the floor, the own tests of $1"
+    cmd_area --own "$1"
+    return
+  fi
+  log "ops test site: every suite in full"
+  cmd_all
+}
+
+:<<'FUN'
+Prints true when a site's run is the floor: the caller asked for it, or the
+run is on a tag. Prints false when the run is the whole unit suite.
+  $1  Whether --floor was given (true/false)
+FUN
+site_runs_floor() {
+  if @is_true "$1"; then
+    @true __site_runs_floor__out
+    println "$__site_runs_floor__out"
+    return 0
+  fi
+  site_run_is_tag
+}
+
+:<<'FUN'
+Prints true when the pipeline this runs in is a tag's run, false otherwise.
+GitLab says so in CI_COMMIT_TAG; GitHub and Forgejo in GITHUB_REF, which
+names the tag under refs/tags/.
+FUN
+site_run_is_tag() {
+  if [ -n "${CI_COMMIT_TAG:-}" ]; then
+    @true __site_run_is_tag__out
+    println "$__site_run_is_tag__out"
+    return 0
+  fi
+  case "${GITHUB_REF:-}" in
+    refs/tags/*) @true __site_run_is_tag__out; println "$__site_run_is_tag__out" ;;
+    *)           @false __site_run_is_tag__out; println "$__site_run_is_tag__out" ;;
+  esac
+}
+
+:<<'FUN'
+Run what selection would pick had the given paths changed: map them to areas
+through the resolver and dispatch those areas' tests, treating every path as an
+edit. A path no area maps is mapping drift, so it widens the run to the full
+suite -- the same judgement a review gets.
+FUN
+cmd_files() {
+  if @is_zero "$#"; then
+    log "ops test files: at least one path is required"
+    log "$USAGE"
+    exit 1
+  fi
+
+  @arr __cmd_files__paths "$@"
+  __cmd_files__names="$(names_for_paths "$__cmd_files__paths")" || return 1
+  log "ops test: impacted areas for the given paths: $__cmd_files__names"
+
+  testing__run_impacted "$__cmd_files__names" "$__cmd_files__paths"
+}
+
+:<<'FUN'
+Print this job's share of the given test files, one per line, dealt the way
+the runners deal a suite to the shards of a parallel job.
+FUN
+cmd_shard_of() {
+  if @is_zero "$#"; then
+    log "ops test shard-of: at least one path is required"
+    log "$USAGE"
+    exit 1
+  fi
+  testing__shard__files "$(printf '%s\n' "$@")"
+}
+
+:<<'FUN'
+Print the selection without running it. With paths, the plan as if those paths
+had changed; without, the plan for the current context (the review's labels, or
+the full-suite fallback outside one).
+FUN
+cmd_plan() {
+  if [ "$#" -gt 0 ]; then
+    plan_for_paths "$@"
+    return
+  fi
+
+  plan_for_context
+}
+
+:<<'FUN'
+The plan as if the given paths had changed, rendered.
+FUN
+plan_for_paths() {
+  @arr __plan_for_paths__paths "$@"
+  __plan_for_paths__names="$(names_for_paths "$__plan_for_paths__paths")" || return 1
+
+  __plan_for_paths__plan="$(testing__plan \
+    "$__plan_for_paths__names" \
+    "$__plan_for_paths__paths"
+  )" || return 1
+
+  render_plan "$__plan_for_paths__plan" "$__plan_for_paths__names"
+}
+
+:<<'FUN'
+The plan for the current context, rendered: the review's area/* labels when one
+is in scope, the full-suite fallback otherwise. In CI it fetches the trace
+notes and history first, as the run does, so it selects by the same map.
+FUN
+plan_for_context() {
+  if @is_false "$(areas__has_areas_config)"; then
+    @arr __plan_for_context__arr_13
+    __plan_for_context__plan="$(testing__plan "$__plan_for_context__arr_13")" || return 1
+    @arr __plan_for_context__arr_14
+    render_plan "$__plan_for_context__plan" "$__plan_for_context__arr_14"
+    return
+  fi
+
+  fetch_trace_in_ci
+  __plan_for_context__labels="$(testing__review_labels)" || return 1
+  __plan_for_context__options="$(options_for_review "$__plan_for_context__labels")"
+  __plan_for_context__names="$(testing__areas_from_labels "$__plan_for_context__labels")"
+
+  __plan_for_context__plan="$(testing__plan \
+    "$__plan_for_context__names" \
+    "$(changed_paths_from_diff)" \
+    "$(added_paths_from_diff)" \
+    "$__plan_for_context__options"
+  )" || return 1
+
+  render_plan "$__plan_for_context__plan" "$__plan_for_context__names"
+}
+
+:<<'FUN'
+The dispatch options for the review in context: what its labels ask for
+(options_from_labels), and the testing config at its diff base when one is
+known, so the dispatcher can tell an edit that only added areas from one that
+remapped them. The base is fetched first when the clone is too shallow to
+hold it, so a base that exists is never read as unknown.
+
+  $1 labels (struct array)
+FUN
+options_for_review() {
+  __options_for_review__options="$(options_from_labels "$1")"
+  __options_for_review__base="$(review_diff_base)"
+  if ! @defined "$__options_for_review__base"; then
+    printf '%s\n' "$__options_for_review__options"
+    return 0
+  fi
+
+  git__remotes__ensure_refs_for_diff "$__options_for_review__base" "$(review_diff_head)"
+  __options_for_review__config="$(areas__config_at_ref "$__options_for_review__base")"
+  if ! @defined "$__options_for_review__config"; then
+    printf '%s\n' "$__options_for_review__options"
+    return 0
+  fi
+  @set __options_for_review__out "$__options_for_review__options" '.base_config' "$__options_for_review__config"
+  println "$__options_for_review__out"
+}
+
+:<<'FUN'
+The dispatch options a review's label set asks for: force_full when the
+review carries the testing/full-suite label, empty otherwise.
+
+  $1 labels (struct array)
+FUN
+options_from_labels() {
+  if @is_true "$(testing__labels_force_full "$1")"; then
+    log "ops test: testing/full-suite label present -- forcing the full suite."
+    @true __options_from_labels__true_15
+    @obj __options_from_labels__out '.force_full' "$__options_from_labels__true_15"
+    println "$__options_from_labels__out"
+    return 0
+  fi
+
+  @obj __options_from_labels__out
+  println "$__options_from_labels__out"
+}
+
+:<<'FUN'
+The bare area names the resolver maps a set of paths to; empty when no path is
+mapped, and when the repo has no testing config.
+
+  $1 paths (struct array)
+FUN
+names_for_paths() {
+  if @is_false "$(areas__has_areas_config)"; then
+    @arr __names_for_paths__out
+    println "$__names_for_paths__out"
+    return 0
+  fi
+
+  __names_for_paths__config="$(areas__load_areas_config)"
+  __names_for_paths__areas="$(areas__compute_areas "$__names_for_paths__config")" || return 1
+
+  testing__areas_for_paths "$__names_for_paths__areas" "$1"
+}
+
+:<<'FUN'
+Render a plan for a human: the decision line, the areas selection started from,
+and what would run.
+
+  $1 plan   $2 area names
+FUN
+render_plan() {
+  __render_plan__plan="$1"
+  __render_plan__names="$2"
+  @let "$__render_plan__plan" __render_plan__ mode reason run
+
+  printf 'plan: %s (%s)\n' \
+    "$__render_plan__mode" \
+    "$__render_plan__reason"
+  render_plan_areas "$__render_plan__names"
+  render_plan_widened "$__render_plan__plan"
+
+  case "$__render_plan__run" in
+    none|'')
+      render_plan_none
+      ;;
+    all_frameworks)
+      render_plan_frameworks
+      ;;
+    full_suites)
+      render_plan_full_suites "$__render_plan__plan"
+      ;;
+    selected)
+      render_plan_selected "$__render_plan__plan"
+      ;;
+  esac
+  @unlet __render_plan__ mode reason run
+}
+
+:<<'FUN'
+The areas line: the names selection started from, or none.
+
+  $1 area names
+FUN
+render_plan_areas() {
+  if @len __render_plan_areas__count "$1"; [ "$__render_plan_areas__count" -eq 0 ]; then
+    printf 'areas: (none)\n'
+    return
+  fi
+
+  @join __render_plan_areas__names "$1" " "
+  printf 'areas: %s\n' "$__render_plan_areas__names"
+}
+
+:<<'FUN'
+The culprit lines of a plan widened by full_suite areas: one per area, with the
+changed files that reached it. Nothing for a plan that was not.
+
+  $1 plan
+FUN
+render_plan_widened() {
+  @get __render_plan_widened__by "$1" '.widened_by'
+  @defined "$__render_plan_widened__by" || return 0
+  @foreach render_plan_widened_area "$__render_plan_widened__by"
+}
+
+:<<'FUN'
+@foreach callback: one widened area and the files that reached it.
+
+  $1 {area, files}
+FUN
+render_plan_widened_area() {
+  @let "$1" __render_plan_widened_area__ area files
+  @join __render_plan_widened_area__join_18 "$__render_plan_widened_area__files" " "
+  printf 'widened by: %s (%s)\n' \
+    "$__render_plan_widened_area__area" \
+    "$__render_plan_widened_area__join_18"
+  @unlet __render_plan_widened_area__ area files
+}
+
+:<<'FUN'
+The no-op plan: selection resolved to nothing.
+FUN
+render_plan_none() {
+  printf 'nothing to run.\n'
+}
+
+:<<'FUN'
+The widest plan: every registered framework in full.
+FUN
+render_plan_frameworks() {
+  __render_plan_frameworks__ids="$(testing__adapter_ids)"
+
+  @join __render_plan_frameworks__join_19 "$__render_plan_frameworks__ids" " "
+  printf 'frameworks (in full): %s\n' "$__render_plan_frameworks__join_19"
+}
+
+:<<'FUN'
+A full-suite plan: every suite in the testing config, in full.
+
+  $1 plan
+FUN
+render_plan_full_suites() {
+  @get __render_plan_full_suites__suites "$1" '.suites'
+  @keys __render_plan_full_suites__names "$__render_plan_full_suites__suites"
+
+  @join __render_plan_full_suites__join_20 "$__render_plan_full_suites__names" " "
+  printf 'suites (in full): %s\n' "$__render_plan_full_suites__join_20"
+}
+
+:<<'FUN'
+A narrowed plan: each selected suite with the test files it would run.
+
+  $1 plan
+FUN
+render_plan_selected() {
+  @get __render_plan_selected__selected "$1" '.selected'
+
+  @entries __render_plan_selected__entries_21 "$__render_plan_selected__selected"
+  @foreach render_plan_suite "$__render_plan_selected__entries_21"
+}
+
+:<<'FUN'
+@foreach callback: one selected suite's heading and test files, one file per
+line.
+
+  $1 suite entry ({key: <suite>, value: [files]})
+FUN
+render_plan_suite() {
+  @let "$1" __render_plan_suite__ key value
+  __render_plan_suite__files="$__render_plan_suite__value"
+
+  @len __render_plan_suite__len_22 "$__render_plan_suite__files"
+  printf 'suite %s (%s file(s)):\n' \
+    "$__render_plan_suite__key" \
+    "$__render_plan_suite__len_22"
+  @unlet __render_plan_suite__ key value
+  render_plan_files "$__render_plan_suite__files"
+}
+
+:<<'FUN'
+One suite's selected test files, one per line, indented under the suite's
+heading. One call prints them all, so a plan of three hundred files costs
+no more to print than a plan of one.
+
+  $1 files (struct array)
+FUN
+render_plan_files() {
+  @println "$1" | sed 's/^/  /'
+}
+
+:<<'DOC'
+Records the trace map for the testing config's suites: writes it to the map
+directory, printing the file, and notes it on the commit it ran at, so a
+push of the notes ref carries it to every clone. The run starts from the
+newest map there is, in CI fetched off the notes ref first, and traces only
+the files whose entries no longer hold; it keeps the map in both places
+after every file, so a run cut short leaves what it traced for the next run
+to carry on from. A map recorded off any commit is written and not noted.
+Each test file runs in a fresh process, `ops test suite <name> <file>`, from
+the project root, where every runner runs a suite from. With --budget, the
+run stops between two files once the budget is spent, keeps what it has and
+succeeds, so a job on a timeout ends on its own, pushes its map, and the
+next run carries on. Refuses a repo with no testing config, since there is
+no suite to trace.
+DOC
+cmd_trace() {
+  __cmd_trace__budget=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --budget)
+        args__require_value "$@" || exit 1
+        __cmd_trace__budget="$(@duration "$2")" || refuse_budget
+        shift
+        ;;
+      *)
+        log "ops test trace: unexpected argument '$1'"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+
+  __cmd_trace__config="$(areas__load_areas_config)"
+  if ! @defined "$__cmd_trace__config"; then
+    log "ops test trace: no testing config in manifest.json -- nothing to trace."
+    exit 1
+  fi
+
+  @obj __cmd_trace__obj_23
+  @get __cmd_trace__suites "$__cmd_trace__config" '.suites' "$__cmd_trace__obj_23"
+  if ! testing__validate_suites "$__cmd_trace__suites"; then
+    error "ops test trace: invalid testing.suites config (see schema errors above)."
+    exit 1
+  fi
+  __cmd_trace__suites="$(testing__effective_suites "$__cmd_trace__suites")"
+
+  cd "$PROJ" || exit 1
+  export SHELLOPS_DIR PROJ
+  fetch_trace_in_ci
+  __cmd_trace__prior="$(testing__trace__latest_map)" || exit 1
+  __cmd_trace__map="$(testing__trace__map \
+    "$__cmd_trace__suites" \
+    "$__cmd_trace__prior" \
+    "$__cmd_trace__budget" \
+    "$SHELLOPS_DIR/cli/test" \
+    suite
+  )" || exit 1
+  testing__trace__map_emit "$__cmd_trace__map" || exit 1
+  note_map "$__cmd_trace__map"
+}
+
+:<<'FUN'
+Refuses a --budget that is not a duration, saying how one is written.
+FUN
+refuse_budget() {
+  log "ops test trace: --budget takes a duration such as 2h30m, or a count of seconds."
+  exit 1
+}
+
+:<<'DOC'
+Notes the map on the commit it was recorded at; a map that names no commit
+is left as the file alone, and said so.
+
+  $1  The map
+DOC
+note_map() {
+  if @get __note_map__get_24 "$1" '.commit' ''; ! @defined "$__note_map__get_24"; then
+    log "ops test trace: the map names no commit, so it is not noted in git; the file stands."
+    return 0
+  fi
+  testing__trace__note_emit "$1" > /dev/null || exit 1
+}
+
+:<<'DOC'
+In CI, fetches what the trace selection needs from origin: the notes ref
+the trace maps live under, so the selection and the scorecard read the
+newest map main carries, and the history back to the map's age limit, so
+a shallow clone can reach that map. Off CI, or in a tree with no origin to
+fetch from, the clone stands as it is. A fetch that fails is a run without
+the map, not a failed run.
+DOC
+fetch_trace_in_ci() {
+  if ! @defined "${CI:-}"; then
+    return 0
+  fi
+  if ! git__remotes__host origin >/dev/null 2>&1; then
+    return 0
+  fi
+  if ! testing__trace__notes_fetch; then
+    warn "ops test: could not fetch $(testing__trace__notes_ref); selecting without the trace map."
+  fi
+  testing__trace__history_fetch
+}
+
+cmd_scorecard() {
+  fetch_trace_in_ci
+  __cmd_scorecard__mode=""
+  @false __cmd_scorecard__findings
+  @obj __cmd_scorecard__options
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --json|--check|--markdown)
+        __cmd_scorecard__mode="$(cmd_scorecard_mode "$__cmd_scorecard__mode" "$1")" || exit 1
+        ;;
+      --findings) @true __cmd_scorecard__true_25; __cmd_scorecard__findings="$__cmd_scorecard__true_25" ;;
+      --clean-streak-goal)
+        __cmd_scorecard__options="$(cmd_scorecard_with_goal "$__cmd_scorecard__options" "${2:-}")" || exit 1
+        shift
+        ;;
+      *) cmd_scorecard_refuse "unknown option '$1'" ;;
+    esac
+    shift
+  done
+  __cmd_scorecard__mode="$(cmd_scorecard_mode_for_findings "$__cmd_scorecard__mode" "$__cmd_scorecard__findings")" || exit 1
+  @equals __cmd_scorecard__json "$__cmd_scorecard__mode" --json
+  @equals __cmd_scorecard__check "$__cmd_scorecard__mode" --check
+  @equals __cmd_scorecard__markdown "$__cmd_scorecard__mode" --markdown
+
+  __cmd_scorecard__report="$(testing__scorecard__scorecard "$__cmd_scorecard__options")" || exit 1
+
+  if @is_true "$__cmd_scorecard__json"; then
+    @dump __cmd_scorecard__out "$__cmd_scorecard__report"
+    println "$__cmd_scorecard__out"
+    return 0
+  fi
+
+  if @is_true "$__cmd_scorecard__markdown"; then
+    testing__scorecard__summary "$__cmd_scorecard__report"
+    if @is_true "$__cmd_scorecard__findings"; then
+      testing__scorecard__findings_section "$__cmd_scorecard__report"
+    fi
+    return 0
+  fi
+
+  testing__scorecard__render "$__cmd_scorecard__report"
+
+  if @is_true "$__cmd_scorecard__check"; then
+    cmd_scorecard_gate "$__cmd_scorecard__report"
+  fi
+}
+
+:<<'FUN'
+The scorecard's mode once <flag> is read: <flag> when no mode was chosen yet,
+a refusal when one was, since the report has one form per run.
+
+  $1  The mode chosen so far ("" when none)   $2  The mode flag just read
+FUN
+cmd_scorecard_mode() {
+  if @defined "$1"; then
+    cmd_scorecard_refuse "unexpected argument '$2'; one of --json, --check or --markdown"
+  fi
+  printf '%s\n' "$2"
+}
+
+:<<'FUN'
+The scorecard options with the clean streak goal <value> set, or a refusal
+when the value is not a whole number of runs.
+
+  $1  The options so far   $2  The flag's value ("" when it had none)
+FUN
+cmd_scorecard_with_goal() {
+  case "$2" in
+    ''|*[!0-9]*) cmd_scorecard_refuse "--clean-streak-goal takes a whole number of runs" ;;
+  esac
+  @set __cmd_scorecard_with_goal__out "$1" '.clean_streak_goal' "$2"
+  println "$__cmd_scorecard_with_goal__out"
+}
+
+:<<'FUN'
+The mode the findings flag settles on: --findings alone means the markdown
+summary, since that is the one form the findings are added to; with --json
+or --check it is a refusal, since neither carries them.
+
+  $1  The mode chosen ("" when none)   $2  Whether --findings was given
+FUN
+cmd_scorecard_mode_for_findings() {
+  if ! @is_true "$2"; then
+    printf '%s\n' "$1"
+    return 0
+  fi
+  if @defined "$1" && [ "$1" != --markdown ]; then
+    cmd_scorecard_refuse "--findings goes with --markdown"
+  fi
+  printf -- '--markdown\n'
+}
+
+:<<'FUN'
+Refuses the scorecard invocation: logs why, then the usage, and exits 1.
+
+  $1  The reason
+FUN
+cmd_scorecard_refuse() {
+  log "ops test scorecard: $1"
+  log "$USAGE"
+  exit 1
+}
+
+:<<'FUN'
+The --check gate: exits with the status the scorecard's verdict carries when
+it is not clean (blocked fails, advisory warns); the report has already been
+rendered, so the gaps are in the log above.
+
+  $1  The scorecard report (from testing__scorecard__scorecard)
+FUN
+cmd_scorecard_gate() {
+  __cmd_scorecard_gate__verdict="$(testing__scorecard__verdict "$1")"
+  __cmd_scorecard_gate__status="$(testing__scorecard__exit_status "$__cmd_scorecard_gate__verdict")"
+  [ "$__cmd_scorecard_gate__status" -eq 0 ] || exit "$__cmd_scorecard_gate__status"
+}
+
+:<<'FUN'
+The review's diff base ref, or empty outside a code review.
+FUN
+review_diff_base() {
+  printf '%s' "${FORGE_REVIEW_BASE_SHA:-${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}}"
+}
+
+:<<'FUN'
+The review's diff head ref, defaulting to the checked-out commit.
+FUN
+review_diff_head() {
+  printf '%s' "${FORGE_REVIEW_HEAD_SHA:-${CI_COMMIT_SHA:-HEAD}}"
+}
+
+:<<'FUN'
+The code review's changed files as a struct array, empty outside a code review.
+FUN
+changed_paths_from_diff() {
+  __changed_paths_from_diff__base="$(review_diff_base)"
+  if ! @defined "$__changed_paths_from_diff__base"; then
+    @arr __changed_paths_from_diff__out
+    println "$__changed_paths_from_diff__out"
+    return 0
+  fi
+
+  __changed_paths_from_diff__head="$(review_diff_head)"
+  __changed_paths_from_diff__names="$(git__diff_name_only \
+    "$__changed_paths_from_diff__base" \
+    "$__changed_paths_from_diff__head" \
+    2>/dev/null \
+    || true
+  )"
+
+  @split __changed_paths_from_diff__out "$__changed_paths_from_diff__names"
+  println "$__changed_paths_from_diff__out"
+}
+
+:<<'FUN'
+The code review's added files (git status A) as a struct array, empty outside
+a review. Dispatch compares these against the unmapped changed files to tell
+net-new code from mapping drift; a rename or copy edits code the mapping may
+already track, so neither counts as added.
+FUN
+added_paths_from_diff() {
+  __added_paths_from_diff__base="$(review_diff_base)"
+  if ! @defined "$__added_paths_from_diff__base"; then
+    @arr __added_paths_from_diff__out
+    println "$__added_paths_from_diff__out"
+    return 0
+  fi
+
+  __added_paths_from_diff__head="$(review_diff_head)"
+  __added_paths_from_diff__names="$(git__diff_added_name_only \
+    "$__added_paths_from_diff__base" \
+    "$__added_paths_from_diff__head" \
+    2>/dev/null \
+    || true
+  )"
+
+  @split __added_paths_from_diff__out "$__added_paths_from_diff__names"
+  println "$__added_paths_from_diff__out"
+}
+
+main "$@"

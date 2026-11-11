@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+USAGE="$(cat <<HELP
+Runs the house-style lint over a repository. The lint is shell-lint, taken
+at the commit the lock pins under dependencies.tools.git and reached through
+SHELL_LINT_DIR, which .envrc exports from .ops/cache/pins.sh. Every argument
+goes to shell-lint's cli/lint, whose usage follows this one under --help.
+
+Usage: ops lint [arguments of shell-lint's cli/lint...]
+HELP
+)"
+
+main() {
+  require_shell_lint
+  case "${1:-}" in
+    -h|--help)
+      log "$USAGE"
+      log
+      ;;
+  esac
+  exec "$SHELL_LINT_DIR/cli/lint" "$@"
+}
+
+: <<'FUN'
+Exits, saying what to declare, when SHELL_LINT_DIR is unset: the lock the
+shell booted from names no shell-lint, so there is no lint to run.
+FUN
+require_shell_lint() {
+  if [ -n "${SHELL_LINT_DIR:-}" ]; then
+    return 0
+  fi
+  error "ops lint: SHELL_LINT_DIR is unset. Declare shell-lint in the git channel of .ops/config/tools.yaml and run ops install."
+  exit 1
+}
+
+main "$@"

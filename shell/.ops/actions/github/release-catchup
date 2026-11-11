@@ -1,0 +1,322 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+USAGE="$(cat <<HELP
+Finds v* tags on a GitHub repository that have no corresponding GitHub Release,
+then dispatches a release workflow for each one.
+
+Tags with >= N total failed attempts (across runs and retries) are skipped (default: 3).
+When a failed run exists for a tag, it is rerun rather than dispatching fresh.
+
+Usage: github/release-catchup [-h,--help] [-w,--workflow FILE] [-d,--dry-run] [-f,--max-failures N] [-n,--no-wait] <owner> <repo>
+
+Arguments:
+  owner           GitHub org or user (e.g. creature-workshop).
+  repo            GitHub repository name (e.g. shellops).
+
+Flags:
+  -w, --workflow FILE    Workflow to dispatch (default: release.yaml).
+  -d, --dry-run          List actionable tags without dispatching.
+  -f, --max-failures N   Skip tags with >= N failed attempts (default: 3).
+  -n, --no-wait          Dispatch without waiting for completion.
+  -h, --help             Show this help text.
+
+Environment:
+  GITHUB_TOKEN    Required. API token with actions:write scope.
+
+HELP
+)"
+
+import "$SHELLOPS_DIR/lib/github/api.sh"
+
+RUN_POLL_ATTEMPTS=10
+RUN_POLL_INTERVAL=5
+DISPATCH_DELAY=5
+
+ARG_OWNER=""
+ARG_REPO=""
+FLAG_WORKFLOW="release.yaml"
+@false FLAG_DRY_RUN
+FLAG_MAX_FAILURES=3
+@false FLAG_NO_WAIT
+
+SUMMARY_LINES=""
+
+main() {
+  parse_args "$@"
+  require_token
+
+  @set __main__repo_opts "$(github__new_github_repo_options)" \
+    '.owner' "$ARG_OWNER" \
+    '.repo'  "$ARG_REPO" \
+    '.token' "$GITHUB_TOKEN"
+
+  __main__missing="$(find_missing_releases "$__main__repo_opts")"
+
+  if ! @defined "$__main__missing"; then
+    log "All tags have releases."
+    exit 0
+  fi
+
+  log "Tags missing releases:"
+  echo "$__main__missing" >&2
+
+  if @is_true "$FLAG_DRY_RUN"; then
+    exit 0
+  fi
+
+  dispatch_eligible "$__main__missing"
+  print_summary
+}
+
+parse_args() {
+  # Flags are consumed in place; positionals are assigned to the ARG_*
+  # globals in order as they appear.
+  __parse_args__npos=0
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -w|--workflow)
+        FLAG_WORKFLOW="${2:?--workflow requires a value}"
+        shift
+        ;;
+      -d|--dry-run)
+        @true FLAG_DRY_RUN
+        ;;
+      -f|--max-failures)
+        FLAG_MAX_FAILURES="${2:?--max-failures requires a value}"
+        shift
+        ;;
+      -n|--no-wait)
+        @true FLAG_NO_WAIT
+        ;;
+      -h|--help)
+        log "$USAGE"
+        exit 0
+        ;;
+      -*)
+        error "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+      *)
+        __parse_args__npos=$((__parse_args__npos + 1))
+        case "$__parse_args__npos" in
+          1) ARG_OWNER="$1" ;;
+          2) ARG_REPO="$1" ;;
+        esac
+        ;;
+    esac
+    shift
+  done
+
+  if [ -z "$ARG_OWNER" ] || [ -z "$ARG_REPO" ]; then
+    error "<owner> and <repo> are required."
+    log "$USAGE"
+    exit 1
+  fi
+}
+
+require_token() {
+  if [ -z "${GITHUB_TOKEN:-}" ]; then
+    error "GITHUB_TOKEN is not set."
+    exit 1
+  fi
+}
+
+find_missing_releases() {
+  @split __find_missing_releases__all_tags \
+    "$(github__list_tags "$1")"
+
+  @split __find_missing_releases__released_tags \
+    "$(github__list_release_tags "$1")"
+
+  @difference __find_missing_releases__difference_1 "$__find_missing_releases__all_tags" "$__find_missing_releases__released_tags"
+  @join __find_missing_releases__out "$__find_missing_releases__difference_1" "\n"
+  println "$__find_missing_releases__out"
+}
+
+get_runs_for_tag() {
+  __get_runs_for_tag__runs_json="$(github__list_workflow_runs "$1")"
+  @get __get_runs_for_tag__out "$__get_runs_for_tag__runs_json" '.workflow_runs'
+  println "$__get_runs_for_tag__out"
+}
+
+count_total_failures() {
+  @pluck __count_total_failures__pluck_2 "$1" '.run_attempt'
+  @sum __count_total_failures__total_attempts "$__count_total_failures__pluck_2"
+  @filter __count_total_failures__filter_3 "$1" silt__text_is .conclusion success
+  @len __count_total_failures__successful_runs "$__count_total_failures__filter_3"
+
+  echo $(( __count_total_failures__total_attempts - __count_total_failures__successful_runs ))
+}
+
+: <<'FUN'
+A predicate for @filter: answers true in the variable $1 when the workflow
+run $3 failed or was cancelled, and false otherwise.
+FUN
+run_failed_or_was_cancelled() {
+  @get __run_failed_or_was_cancelled__conclusion "$3" '.conclusion' ''
+
+  case "$__run_failed_or_was_cancelled__conclusion" in
+    failure | cancelled) @true "$1" ;;
+    *) @false "$1" ;;
+  esac
+}
+
+most_recent_failed_run_id() {
+  @filter __most_recent_failed_run_id__failed "$1" run_failed_or_was_cancelled
+  @get __most_recent_failed_run_id__out "$__most_recent_failed_run_id__failed" '.[0].id' ''
+  println "$__most_recent_failed_run_id__out"
+}
+
+dispatch_eligible() {
+  # shellcheck disable=SC2086
+  for __dispatch_eligible__tag in $1; do
+    process_tag "$__dispatch_eligible__tag"
+    sleep "$DISPATCH_DELAY"
+  done
+}
+
+process_tag() {
+  @set __process_tag__dispatch_opts "$(github__new_github_dispatch_options)" \
+    '.owner'    "$ARG_OWNER" \
+    '.repo'     "$ARG_REPO" \
+    '.workflow' "$FLAG_WORKFLOW" \
+    '.ref'      "$1" \
+    '.token'    "$GITHUB_TOKEN"
+
+  __process_tag__runs="$(get_runs_for_tag "$__process_tag__dispatch_opts")"
+
+  if has_active_runs "$__process_tag__runs"; then
+    log "Skipping ${1} (run already in progress)"
+    add_summary "$1" "skipped (in progress)" ""
+    return 0
+  fi
+
+  __process_tag__failures="$(count_total_failures "$__process_tag__runs")"
+
+  if [ "$__process_tag__failures" -ge "$FLAG_MAX_FAILURES" ]; then
+    log "Skipping ${1} (${__process_tag__failures} total failed attempts, threshold: ${FLAG_MAX_FAILURES})"
+    add_summary "$1" "skipped (${__process_tag__failures} failures)" ""
+    return 0
+  fi
+
+  __process_tag__failed_run_id="$(most_recent_failed_run_id "$__process_tag__runs")"
+
+  if @defined "$__process_tag__failed_run_id"; then
+    rerun_tag "$1" "$__process_tag__failed_run_id"
+  else
+    dispatch_tag "$1" "$__process_tag__dispatch_opts"
+  fi
+}
+
+has_active_runs() {
+  @filter __has_active_runs__filter_4 "$1" silt__text_is_not .status completed
+  @len __has_active_runs__active "$__has_active_runs__filter_4"
+  [ "$__has_active_runs__active" -gt 0 ]
+}
+
+dispatch_tag() {
+  log "Dispatching ${FLAG_WORKFLOW} for ${1}..."
+  github__dispatch_workflow "$2"
+
+  if @is_true "$FLAG_NO_WAIT"; then
+    add_summary "$1" "dispatched" ""
+    return 0
+  fi
+
+  wait_and_record "$2" "$1"
+}
+
+rerun_tag() {
+  @set __rerun_tag__run_opts "$(github__new_github_run_options)" \
+    '.owner'  "$ARG_OWNER" \
+    '.repo'   "$ARG_REPO" \
+    '.run_id' "$2" \
+    '.token'  "$GITHUB_TOKEN"
+
+  log "Rerunning existing failed run ${2} for ${1}..."
+  github__rerun_workflow "$__rerun_tag__run_opts" || {
+    error "Failed to rerun ${2} for ${1}."
+    add_summary "$1" "rerun failed" ""
+    return 0
+  }
+
+  if @is_true "$FLAG_NO_WAIT"; then
+    add_summary "$1" "rerun triggered" ""
+    return 0
+  fi
+
+  @get __rerun_tag__run_url "$(github__get_run "$__rerun_tag__run_opts")" '.html_url'
+  log "Run for ${1}: ${__rerun_tag__run_url}"
+
+  __rerun_tag__conclusion="$(await_run "$__rerun_tag__run_opts" "$1")"
+  record_result "$1" "$__rerun_tag__conclusion" "$__rerun_tag__run_url"
+}
+
+wait_and_record() {
+  __wait_and_record__run_json="$(github__wait_for_run_start "$1" "$RUN_POLL_ATTEMPTS" "$RUN_POLL_INTERVAL")" || {
+    log "Could not locate run for ${2}. Check GitHub Actions manually."
+    add_summary "$2" "dispatched" "run not found"
+    return 0
+  }
+
+  @let "$__wait_and_record__run_json" __wait_and_record__ html_url id
+  log "Run for ${2}: ${__wait_and_record__html_url}"
+
+  @set __wait_and_record__run_opts "$(github__new_github_run_options)" \
+    '.owner'  "$ARG_OWNER" \
+    '.repo'   "$ARG_REPO" \
+    '.run_id' "$__wait_and_record__id" \
+    '.token'  "$GITHUB_TOKEN"
+
+  __wait_and_record__conclusion="$(await_run "$__wait_and_record__run_opts" "$2")"
+  record_result "$2" "$__wait_and_record__conclusion" "$__wait_and_record__html_url"
+  @unlet __wait_and_record__ html_url id
+}
+
+await_run() {
+  __await_run__final_json="$(github__wait_for_run_result "$1")" || {
+    log "Timed out waiting for ${2}. Cancelling..."
+    if github__cancel_run "$1"; then
+      log "Run cancelled."
+    else
+      error "Failed to cancel run."
+    fi
+    echo "cancelled (timeout)"
+    return 0
+  }
+
+  @get __await_run__out "$__await_run__final_json" '.conclusion'
+  println "$__await_run__out"
+}
+
+record_result() {
+  log "${1}: ${2}"
+  add_summary "$1" "$2" "$3"
+}
+
+add_summary() {
+  if [ -n "$3" ]; then
+    SUMMARY_LINES="${SUMMARY_LINES}  - ${1}: ${2}, url: ${3}\n"
+  else
+    SUMMARY_LINES="${SUMMARY_LINES}  - ${1}: ${2}\n"
+  fi
+}
+
+print_summary() {
+  if [ -z "$SUMMARY_LINES" ]; then
+    return 0
+  fi
+
+  log ""
+  log "=== Release Catchup Summary ==="
+  printf '%b' "$SUMMARY_LINES" >&2
+
+  if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+    printf '%b' "## Release Catchup\n\n${SUMMARY_LINES}" >> "$GITHUB_STEP_SUMMARY"
+  fi
+}
+
+main "$@"

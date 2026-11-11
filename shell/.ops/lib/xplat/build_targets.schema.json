@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/creature-workshop/shellops/lib/xplat/build_targets.schema.json",
+  "title": "Build Targets",
+  "description": "List of platform/architecture combinations to produce release binaries for.",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "required": ["os", "vendor", "archs"],
+    "properties": {
+      "os": {
+        "type": "string",
+        "description": "Operating system (e.g. darwin, linux)."
+      },
+      "vendor": {
+        "type": "string",
+        "description": "Vendor component of the target triple (e.g. apple, unknown)."
+      },
+      "abi": {
+        "type": "string",
+        "description": "Optional ABI suffix (e.g. gnu, musl). Omit for platforms that don't use one."
+      },
+      "archs": {
+        "type": "array",
+        "items": { "type": "string" },
+        "minItems": 1,
+        "description": "CPU architectures to build for this platform (e.g. x86_64, aarch64)."
+      }
+    },
+    "additionalProperties": false
+  }
+}

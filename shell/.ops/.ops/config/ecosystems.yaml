@@ -1,0 +1,5 @@
+# The ecosystems this repository declares, read by their adaptors (ADR 000008,
+# ADR 000049): the Rust workspace under engine/.
+cargo:
+  path: engine/Cargo.toml
+  workspace: true

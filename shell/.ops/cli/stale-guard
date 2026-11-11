@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2119  # bare @obj/@true/@false are the structs constructors
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/forge/api.sh" \
+  "$SHELLOPS_DIR/lib/forge/stale.sh" \
+  "$SHELLOPS_DIR/lib/process/api.sh" \
+  "$SHELLOPS_DIR/lib/time/api.sh"
+
+USAGE="$(cat <<HELP
+Cancels the pipeline this job belongs to once it is no longer worth finishing.
+
+Usage: ops stale-guard [-e,--every SECONDS] [-1,--once] [-h,--help]
+
+A run is stale once nothing will merge its commit: its merge request closed,
+a push moved the head, main moved under a rebased tree, or an older run of the
+same commit was already going. This asks the forge every SECONDS for as long
+as the job that started it lives, and on a hit cancels the whole pipeline,
+this job included, so the slot goes to the run that replaces it. Started in
+the background from a job's before_script, it watches that job whatever the
+job runs.
+
+The forge is asked, never trusted blindly: an ask it could not answer, a rate
+limit among them, is no verdict, and the job runs on; the next ask waits twice
+as long, up to ten times the interval, until one is answered. Outside a
+pipeline, or without a forge token, there is nothing to watch and this exits
+at once.
+
+Modes:
+  (default)            Watch until the pipeline is cancelled or the job ends.
+  -1, --once           Judge now and exit: 1 when the pipeline is stale, and
+                       cancelled when the forge let it be; 0 when it is worth
+                       finishing.
+
+Options:
+  -e, --every SECONDS  Seconds between judgements (default 60); 0 turns the
+                       guard off.
+
+Environment:
+  SHELLOPS_STALE_GUARD_EVERY
+                       The default for --every. Set on a pipeline, or in one
+                       job's variables, to slow the guard down there; 0 turns
+                       it off there.
+  FORGE_PR_TOKEN       Bot token for the forge, then FORGE_ADMIN_TOKEN.
+  SHELLOPS_FORGE       The forge the run is on ("gitlab" or "forgejo").
+HELP
+)"
+
+ARG_EVERY="${SHELLOPS_STALE_GUARD_EVERY:-60}"
+@false ARG_ONCE
+
+# CONST: How far an unanswered ask stretches the wait, as a multiple of the interval.
+__stale_guard__BACKOFF_CAP=10
+
+__stale_guard__OPTIONS=""
+
+main() {
+  parse_args "$@"
+  require_interval
+
+  if ! guarding; then
+    return 0
+  fi
+
+  if @is_true "$ARG_ONCE"; then
+    judge_once
+    return
+  fi
+
+  watch "$PPID"
+}
+
+: <<'FUN'
+Exits with the usage when the interval, from the flag or the environment, is
+not a whole number of seconds.
+
+Usage: require_interval
+FUN
+require_interval() {
+  if @is_int "$ARG_EVERY" && [ "$ARG_EVERY" -ge 0 ]; then
+    return 0
+  fi
+  log "stale-guard: not a number of seconds: '$ARG_EVERY' (--every, or SHELLOPS_STALE_GUARD_EVERY)"
+  log "$USAGE"
+  exit 1
+}
+
+: <<'FUN'
+Succeeds when the guard is on, there is a pipeline to judge and a token to
+ask with, binding the forge options for every judgement; fails, with the
+reason logged, when there is nothing to watch.
+
+Usage: guarding
+FUN
+guarding() {
+  if [ "$ARG_EVERY" -eq 0 ]; then
+    log "stale-guard: turned off; nothing to watch."
+    return 1
+  fi
+
+  if ! @defined "${CI_PIPELINE_ID:-}"; then
+    log "stale-guard: not in a pipeline; nothing to watch."
+    return 1
+  fi
+
+  __guarding__token="$(forge__resolve_token)"
+  if ! @defined "$__guarding__token"; then
+    log "stale-guard: no forge token; nothing to watch."
+    return 1
+  fi
+
+  __guarding__options="$(forge__new_run_options)"
+  @set __stale_guard__OPTIONS "$__guarding__options" '.token' "$__guarding__token"
+}
+
+: <<'FUN'
+Judges the run once. Fails when it is stale, cancelling the pipeline when the
+forge lets it; succeeds when it is worth finishing, or when the forge could
+not say.
+
+Usage: judge_once
+FUN
+judge_once() {
+  __judge_once__reason="$(forge__stale__reason "$__stale_guard__OPTIONS")" || {
+    log "stale-guard: the forge could not be asked; carrying on."
+    return 0
+  }
+  @defined "$__judge_once__reason" || return 0
+
+  cancel_pipeline "$__judge_once__reason" || :
+  return 1
+}
+
+: <<'FUN'
+Judges the run now and again after every wait, for as long as the process
+that started this one lives. The wait is the interval after an answered ask
+and grows after an unanswered one. Returns once the pipeline is cancelled; a
+cancellation the forge refused is tried again at the next judgement.
+
+args:
+  $1  The pid of the process that started the watch
+FUN
+watch() {
+  log "stale-guard: watching pipeline $CI_PIPELINE_ID every ${ARG_EVERY}s."
+  __watch__wait="$ARG_EVERY"
+
+  while @is_true "$(process__alive "$1")"; do
+    if __watch__reason="$(forge__stale__reason "$__stale_guard__OPTIONS")"; then
+      __watch__wait="$ARG_EVERY"
+      if @defined "$__watch__reason" && cancel_pipeline "$__watch__reason"; then
+        return 0
+      fi
+    else
+      __watch__wait="$(wait_after_silence "$__watch__wait")"
+    fi
+    sleep "$__watch__wait"
+  done
+}
+
+: <<'FUN'
+Prints the wait before the next ask after one the forge could not answer,
+twice the wait before it up to ten times the interval, and says so.
+
+Usage: wait_after_silence 120   # -> 240, with the interval 60
+FUN
+wait_after_silence() {
+  __wait_after_silence__wait="$(time__backoff "$1" $((ARG_EVERY * __stale_guard__BACKOFF_CAP)))"
+  log "stale-guard: the forge could not be asked; asking again in ${__wait_after_silence__wait}s."
+  println "$__wait_after_silence__wait"
+}
+
+: <<'FUN'
+Cancels the pipeline, saying why; fails, with the failure logged, when the
+forge refused the cancellation, and the run then carries on as it would have
+unguarded.
+
+Usage: cancel_pipeline "$reason"
+FUN
+cancel_pipeline() {
+  log "stale-guard: pipeline $CI_PIPELINE_ID is stale ($(describe_reason "$1")); cancelling it."
+  forge__stale__cancel_current "$__stale_guard__OPTIONS" || {
+    log "stale-guard: the cancellation failed; the run carries on."
+    return 1
+  }
+}
+
+: <<'FUN'
+Spells a reason as a sentence.
+
+Usage: describe_reason "$forge__stale__REASON_SUPERSEDED"   # -> the merge request's head moved
+FUN
+describe_reason() {
+  case "$1" in
+    "$forge__stale__REASON_CLOSED") printf 'the merge request is closed\n' ;;
+    "$forge__stale__REASON_SUPERSEDED") printf "the merge request's head moved\n" ;;
+    "$forge__stale__REASON_BASE_MOVED") printf 'the target branch moved under the rebased tree\n' ;;
+    "$forge__stale__REASON_DUPLICATE") printf 'an older run of this commit is already going\n' ;;
+  esac
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE" && exit 0 ;;
+      -1|--once) @true __parse_args__true_1; ARG_ONCE="$__parse_args__true_1" ;;
+      -e|--every)
+        ARG_EVERY="${2:-}"
+        shift
+        ;;
+      *)
+        log "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *stale-guard) main "$@" ;;
+esac

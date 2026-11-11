@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/creature-workshop/shellops/schema/manifest.optional.schema.json",
+  "title": "Optional Manifest Properties",
+  "description": "Standardized optional properties that projects may include in manifest.json. Every one of them can be null. Null means the property is unset, as it is when it is left out, and a reader uses the property's default. A property with no default of its own has the empty default.",
+  "type": "object",
+  "properties": {
+    "command-name": {
+      "type": ["string", "null"],
+      "description": "CLI binary name for projects that ship an executable."
+    },
+    "default-channel": {
+      "type": ["string", "null"],
+      "enum": ["dev", "stable", null],
+      "default": "dev",
+      "description": "The channel a merge into the default branch plans when its labels name none. dev plans the next dev prerelease at the level the labels infer, so a clean version comes only from a promotion carrying meta/release; stable plans the clean version at that level, a release per merge. Absent means dev."
+    },
+    "auto-promote-until": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": ["false", "dev", "alpha", "beta", "rc", "stable"]
+        },
+        {
+          "type": "boolean",
+          "const": false
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": "stable",
+      "description": "The last rung the release pipeline mints by itself (ADR 000033): every rung up to it is proven and tagged with no hand on it, and the hop past it is a merge request a person approves. Absent means stable, so every rung is the pipeline's; rc keeps stable a person's; false opens a merge request for every hop."
+    },
+    "promotion": {
+      "type": ["string", "null"],
+      "description": "The promotion ladder this repository climbs, by the name of a promotion plugin: the sites a tag at each rung is put at, and the certifications a candidate for it must earn (ADR 000055). Absent means the repository climbs no ladder: a release puts its tag nowhere and proves no candidate."
+    },
+    "version-format": {
+      "type": ["string", "null"],
+      "enum": ["increment", "counter", null],
+      "default": "increment",
+      "description": "The format this repository's plans write a prerelease name in, by the name of a version format plugin (ADR.17@global): increment spells the tier then a count of its own, 1.2.0-rc.3; counter spells one counter per version then the tier, 1.2.0-3.rc, the tags handing out the counter and the trunk's manifest holding the tier alone, 1.2.0-dev. Every format's names are read whichever is declared. Absent means increment."
+    },
+    "linear-team": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Single Linear team key that owns this repo."
+        },
+        {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Multiple Linear team keys that co-own this repo."
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Linear team key(s) that own this repo (e.g. \"SHSH\" or [\"SHSH\", \"KTCH\"])."
+    },
+    "blizz": {
+      "type": ["object", "null"],
+      "description": "Blizz agent configuration. Controls which Blizz features are enabled for this repo.",
+      "properties": {
+        "triage": {
+          "type": "boolean",
+          "description": "When true, Blizz will include this repo in automated issue triage."
+        },
+        "review": {
+          "type": "boolean",
+          "description": "When true, Blizz will participate in PR reviews for this repo."
+        },
+        "development": {
+          "type": "boolean",
+          "description": "When true, Blizz can perform agentic development tasks in this repo."
+        }
+      },
+      "additionalProperties": false
+    },
+    "labels": {
+      "type": ["object", "null"],
+      "description": "Repo-specific label extensions merged with the org-wide base.",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Flat form: items only (extending a base category).",
+            "additionalProperties": { "type": "string" },
+            "minProperties": 1
+          },
+          {
+            "type": "object",
+            "description": "Full form: net-new category with required color.",
+            "required": ["color", "items"],
+            "properties": {
+              "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+              "items": {
+                "type": "object",
+                "additionalProperties": { "type": "string" },
+                "minProperties": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "testing": {
+      "description": "Test Impact Analysis (TIA) configuration. Either an inline testing block (see testmap.schema.json), or a repo-relative path to a JSON testmap file holding that block. Absent (with no sibling testmap.json) means the repo does not use TIA.",
+      "oneOf": [
+        { "$ref": "testmap.schema.json" },
+        {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repo-relative path to a JSON testmap file (e.g. \"testmap.json\"), resolved against the manifest's directory."
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "build-targets": {
+      "anyOf": [
+        { "$ref": "../lib/xplat/build_targets.schema.json" },
+        { "type": "null" }
+      ],
+      "description": "Override the default build target matrix for cross-compiled release binaries."
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+import "$SHELLOPS_DIR/lib/node/api.sh"
+
+USAGE="$(cat <<HELP
+Activates the pinned package manager and installs dependencies from the lockfile.
+
+Usage: action node install [-h,--help] [project-dir]
+
+Arguments:
+  project-dir    Directory containing package.json. Defaults to current directory.
+
+Flags:
+  -h, --help     Show this help text.
+HELP
+)"
+
+main() {
+  __main__project_dir="."
+
+  parse_args "$@"
+
+  node__assert_node
+  node__prepare_package_manager "$__main__project_dir"
+  node__install_deps "$__main__project_dir"
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      -*)
+        error "Unknown option: $1"
+        exit 1
+        ;;
+      *)
+        __main__project_dir="$1"
+        ;;
+    esac
+    shift
+  done
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *install) main "$@" ;;
+esac

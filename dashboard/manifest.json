@@ -1,0 +1,13 @@
+{
+  "name": "creature-workshop",
+  "label": "Creature Workshop Hermes Plugin",
+  "description": "Manage your project's development lifecycle all in one place: the project.",
+  "icon": "Wrench",
+  "version": "0.1.0-dev.24",
+  "tab": {
+    "path": "/creature-workshop",
+    "hidden": true
+  },
+  "entry": "dist/index.js",
+  "api": "plugin_api.py"
+}

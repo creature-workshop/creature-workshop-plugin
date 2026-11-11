@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "description": "What only the cursor adaptor understands: the options' cursor block, and the manifest's agents.providers.cursor entry that seeds it.",
+  "properties": {
+    "env": {
+      "type": "object",
+      "description": "Where a run executes: Cursor's own machines, or a pool or machine the repository's owner hosts.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["cloud", "pool", "machine"],
+          "default": "cloud"
+        },
+        "name": {
+          "type": "string",
+          "description": "The pool, machine or named environment; empty is Cursor's default."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

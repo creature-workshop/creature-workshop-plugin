@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/bump/api.sh" \
+  "$SHELLOPS_DIR/lib/forge/api.sh"
+
+USAGE="$(cat <<HELP
+Computes the next version and prints it to stdout. Writes nothing -- in
+particular it never touches manifest.json; pass the result to sync-manifest to
+record it.
+
+Usage: ops plan-version [--labels <csv>] [-h,--help]
+
+Serves both planning contexts, choosing its label source in this order:
+
+  1. --labels, when given.
+  2. The labels of the code review the CI run is building, so a review can
+     carry its own bump and the planned version lands in its own diff.
+  3. The union of labels across every code review merged since the last tag,
+     which is the release-time view on the default branch.
+
+manifest.json holds the intended version, so a .latest already outranking the
+newest tag is taken verbatim: that cycle was planned on an earlier run, and
+re-planning must neither lower it nor bump it a second time.
+
+The labels pick the level. On a clean version, manifest.json's default-channel
+picks the track: dev, the default, plans the next dev prerelease, so a clean
+version comes only from a merge carrying meta/release; stable plans the clean
+version, a release per merge.
+
+manifest.json's auto-promote-until names the last rung the release pipeline
+mints by itself (ADR 000033). The planned version is the same either way, so
+the planner only reads the key and logs it beside the channel, and refuses a
+value no repository may declare.
+
+Prints nothing and exits 0 when no labels are in play, so there is nothing to
+bump. Exits 1 on contradictory channel labels, a hard, release-blocking error.
+
+Flags:
+  --labels <csv>  Plan from these labels instead of discovering them.
+  -h, --help      Show this help text.
+
+Environment:
+  FORGE_ADMIN_TOKEN   Forge admin token for the merged-code-review query.
+HELP
+)"
+
+FLAG_LABELS=""
+
+main() {
+  parse_args "$@"
+
+  if __main__base_version="$(bump__use_project_manifest)"; then
+    log "manifest.json already plans $__main__base_version; keeping it."
+    echo "$__main__base_version"
+    exit 0
+  fi
+
+  __main__labels="$(resolve_labels)"
+
+  if @len __main__len_1 "$__main__labels"; [ "$__main__len_1" -eq 0 ]; then
+    log "No labels to plan from; nothing to bump."
+    exit 0
+  fi
+
+  if ! bump__validate_meta_labels "$__main__labels"; then
+    error "$(format_conflict_message "$__main__labels")"
+    exit 1
+  fi
+
+  __main__channel="$(bump__default_channel)" || exit 1
+  __main__until="$(bump__auto_promote_until)" || exit 1
+  __main__next_version="$(bump__compute_next_version "$__main__base_version" "$__main__labels" "$__main__channel")" || exit 1
+
+  @join __main__join_2 "$__main__labels" ","
+  log "Planned version: $__main__base_version -> $__main__next_version (labels: $__main__join_2; default channel: $__main__channel; auto-promote-until: $__main__until)"
+  echo "$__main__next_version"
+}
+
+: <<'FUN'
+The labels to plan from, in precedence order: the ones supplied explicitly, then
+those of the code review the CI run is building, then the union across every code
+review merged since the last tag.
+
+A review carrying no labels is a legitimate answer -- plan nothing -- so the
+review branch is chosen by whether the run names a review, not by whether any
+labels came back.
+FUN
+resolve_labels() {
+  if [ -n "$FLAG_LABELS" ]; then
+    @split __resolve_labels__split_3 "$FLAG_LABELS" ","
+    @unique __resolve_labels__out "$__resolve_labels__split_3"
+    println "$__resolve_labels__out"
+    return
+  fi
+
+  __resolve_labels__review="$(forge__current_review)"
+  if @defined "$__resolve_labels__review"; then
+    forge__review_labels
+    return
+  fi
+
+  bump__aggregate_code_review_labels "$(forge__merged_reviews_since "$(versions__nearest_tag_date)" "$(forge__default_branch)")"
+}
+
+format_conflict_message() {
+  @join __format_conflict_message__labels "$1" ","
+  cat <<MSG
+**Version Planning Failed: Contradictory Labels**
+
+The labels in play carry multiple version-transition labels: \`${__format_conflict_message__labels}\`
+
+Only one of these is allowed across a release line:
+- \`meta/experimental\` — Start a prerelease dev series
+- \`meta/promote\` — Graduate one channel up (dev→alpha→beta→rc→stable)
+- \`meta/release\` — Promote any prerelease directly to stable
+
+Resolve the conflicting labels on the contributing code reviews and re-run the release.
+MSG
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE" && exit 0 ;;
+      --labels) FLAG_LABELS="${2-}"; shift ;;
+      -*)
+        log "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *plan-version) main "$@" ;;
+esac

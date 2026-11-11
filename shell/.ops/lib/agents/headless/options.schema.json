@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "description": "What every headless adaptor understands, whichever CLI it drives: the executable to run, the directory to run it in, and where a run's state is kept. This is a partial and closes nothing: an adaptor's own lib/agents/<id>/options.schema.json names these three by $ref, adds what only its CLI takes, and refuses everything else.",
+  "properties": {
+    "command": {
+      "type": "string",
+      "description": "The CLI executable, on the PATH or by path."
+    },
+    "workspace": {
+      "type": "string",
+      "description": "The directory the run works in; empty takes the options' repo when it is a directory, else the working directory."
+    },
+    "state_dir": {
+      "type": "string",
+      "description": "Where a run keeps its prompt, output, pid and exit code; empty is .ops/cache/agents/<adaptor id> under the project."
+    }
+  }
+}

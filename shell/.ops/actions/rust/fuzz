@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+import "$SHELLOPS_DIR/lib/testing/frameworks/fuzz/commands.sh"
+
+USAGE="$(cat <<HELP
+Runs cargo-fuzz checks.
+
+Usage: action rust fuzz [-h,--help] <check|replay|explore|explore-minutes> [project-dir] [target] [duration]
+
+Arguments:
+  mode           Fuzz mode: check, replay, explore, or explore-minutes.
+  project-dir    Directory containing the fuzz package. Defaults to engine/parser.
+  target         Fuzz target name. Defaults to lexer.
+  duration       Exploration duration. Seconds for explore, minutes for explore-minutes. Defaults to 300.
+
+Flags:
+  -h, --help     Show this help text.
+HELP
+)"
+
+main() {
+  __main__mode=""
+  __main__project_dir="engine/parser"
+  __main__target="lexer"
+  __main__seconds="300"
+
+  parse_args "$@"
+
+  case "$__main__mode" in
+    check) testing__frameworks__fuzz__check "$__main__project_dir" "$__main__target" ;;
+    replay) testing__frameworks__fuzz__replay "$__main__project_dir" "$__main__target" ;;
+    explore) testing__frameworks__fuzz__explore "$__main__project_dir" "$__main__target" "$__main__seconds" ;;
+    explore-minutes) testing__frameworks__fuzz__explore_minutes_nonblocking "$__main__project_dir" "$__main__target" "$__main__seconds" ;;
+    *)
+      error "Unknown fuzz mode: $__main__mode"
+      log "$USAGE"
+      exit 1
+      ;;
+  esac
+}
+
+parse_args() {
+  if [ "$#" -eq 0 ]; then
+    log "$USAGE"
+    exit 1
+  fi
+
+  if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    log "$USAGE"
+    exit 0
+  fi
+
+  __main__mode="$1"
+  shift
+
+  if [ "$#" -gt 0 ]; then __main__project_dir="$1"; shift; fi
+  if [ "$#" -gt 0 ]; then __main__target="$1"; shift; fi
+  if [ "$#" -gt 0 ]; then __main__seconds="$1"; shift; fi
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      *)
+        error "Unknown argument: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+  done
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *fuzz) main "$@" ;;
+esac

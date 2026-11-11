@@ -1,0 +1,14 @@
+{
+  "name": "shell-lint",
+  "description": "The house-style lint for shell, awk, jq, markdown and yaml sources: the registry, discovery and runner, and every check, as a shellops consumer.",
+  "linear-team": "OPS",
+  "org": "creature-workshop",
+  "repo": "shell-lint",
+  "latest": "0.1.0-dev.1",
+  "stable": "0.0.0",
+  "naming": {
+    "major": "",
+    "minor": "",
+    "patch": ""
+  }
+}

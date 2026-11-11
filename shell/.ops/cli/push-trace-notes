@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/args/api.sh" \
+  "$SHELLOPS_DIR/lib/testing/trace/api.sh"
+
+USAGE="$(cat <<HELP
+Pushes the trace map's notes ref to the remote, so the map a traced run noted
+on its commit, whole or cut short, reaches every clone. A clone that holds no
+notes has nothing to push and succeeds; a remote that refuses the push fails.
+
+Usage: ops push-trace-notes [-r,--remote NAME] [-h,--help]
+
+Options:
+  -r, --remote NAME  Push to NAME instead of origin.
+  -h, --help         Show this help text
+HELP
+)"
+
+main() {
+  parse_args "$@"
+  testing__trace__notes_push "$REMOTE"
+}
+
+: <<'FUN'
+Collects the flags: REMOTE is the remote pushed to.
+FUN
+parse_args() {
+  REMOTE=origin
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help)
+        log "$USAGE"
+        exit 0
+        ;;
+      -r|--remote)
+        args__require_value "$@" || exit 1
+        REMOTE="$2"
+        shift
+        ;;
+      --remote=*)
+        REMOTE="${1#--remote=}"
+        ;;
+      *)
+        error "Unknown option: $1"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+main "$@"

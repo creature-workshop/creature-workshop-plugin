@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/creature-workshop/shellops/schema/shellops.schema.json",
+  "title": "ops.lock",
+  "description": "Shellshock tool lockfile. Channels at the root, each containing tool entries keyed by tool name.",
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "description": "Tools installed via this channel, a *.channel.sh plugin of the same name. Keys are tool names.",
+    "additionalProperties": {
+      "$ref": "#/$defs/toolEntry"
+    }
+  },
+  "$defs": {
+    "toolEntry": {
+      "type": "object",
+      "required": ["version"],
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Version to install."
+        },
+        "needs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tools that must be installed first."
+        },
+        "args": {
+          "type": "string",
+          "description": "Extra arguments passed to the install command."
+        },
+        "crate": {
+          "type": "string",
+          "description": "Crate name when it differs from the binary name (cargo channels)."
+        },
+        "musl": {
+          "type": "boolean",
+          "description": "Prefer the statically linked musl build on Linux, for crates whose default build needs a newer glibc than the host has (cargo-binstall channel)."
+        },
+        "toolchain": {
+          "type": "string",
+          "description": "Rust toolchain to install and select (rustup channel)."
+        },
+        "components": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "rustup components to add (rustup channel)."
+        },
+        "pkg": {
+          "type": "string",
+          "description": "The package when it differs from the tool name: the full Go module path (required for go-install channel), or the npm package name (npm channel)."
+        },
+        "bin": {
+          "type": "string",
+          "description": "Script inside the package that the tool's executable runs, relative to the package root (npm channel); a shim of the tool's name goes onto PATH. A library leaves it out."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

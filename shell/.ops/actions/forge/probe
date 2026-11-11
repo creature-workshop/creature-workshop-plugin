@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import "$SHELLOPS_DIR/lib/forge/api.sh"
+
+USAGE="$(cat <<HELP
+Asks a forge what the promotion path asks a site, through the same adaptor
+every other action uses, and prints the answers as JSON: the default branch,
+whether the forge carries a commit, and what its run on that commit says. A
+site of the promotion ladder runs this as its proof that the adaptor speaks to
+the host it is on with the token it has: the adaptor suite runs against a mock,
+and this does not. Fails when any answer cannot be had.
+
+Usage: action forge probe --sha <sha> [--forge <name>] [--owner <o>] [--repo <r>]
+                          [--token-env <NAME>]
+
+Flags:
+  --sha <sha>         Required. The commit to ask about, this pipeline's.
+  --forge <name>      gitlab, forgejo or github. Defaults to the active forge.
+                      A GitHub site names github here, since a run is never on
+                      GitHub as far as SHELLOPS_FORGE is concerned.
+  --owner <o>         Repository owner on the forge. Defaults to the manifest's org.
+  --repo <r>          Repository name on the forge. Defaults to the manifest's repo.
+  --token-env <NAME>  Environment variable holding the token to ask with.
+                      Defaults to the name the forge answers to: the stable
+                      forge token for the forge this run is on, and the name
+                      the adaptor declares for a forge asked by name.
+  -h, --help          Show this help text.
+HELP
+)"
+
+ARG_SHA=""
+ARG_FORGE=""
+ARG_OWNER=""
+ARG_REPO=""
+ARG_TOKEN_ENV=""
+
+main() {
+  parse_args "$@"
+  validate_args
+
+  __main__forge="$(forge_asked)"
+  __main__options="$(run_options "$__main__forge")"
+  __main__branch="$(forge__default_branch "$__main__options")" || return 1
+  __main__status="$(forge__run_status "$__main__options")" || return 1
+  @let "$__main__status" __main__ carried state url
+
+  log "$__main__forge answers: default branch ${__main__branch}, ${ARG_SHA} carried=${__main__carried} state=${__main__state}."
+  @obj __main__out \
+    '.forge'          "$__main__forge" \
+    '.default_branch' "$__main__branch" \
+    '.carried'        "$__main__carried" \
+    '.state'          "$__main__state" \
+    '.url'            "$__main__url"
+  println "$__main__out"
+  @unlet __main__ carried state url
+}
+
+validate_args() {
+  if ! @defined "$ARG_SHA"; then
+    error "--sha is required"
+    log "$USAGE"
+    exit 1
+  fi
+}
+
+: <<'FUN'
+Prints the forge to ask: the one --forge names, or the forge this run is on.
+FUN
+forge_asked() {
+  if @defined "$ARG_FORGE"; then
+    println "$ARG_FORGE"
+    return 0
+  fi
+
+  forge__selected
+}
+
+: <<'FUN'
+Builds the run options from the flags for the commit asked about, addressed to
+forge $1 and carrying the token to ask it with, the manifest filling what the
+flags leave unset.
+FUN
+run_options() {
+  @patch __run_options__out "$(forge__new_run_options)" \
+    '.forge' "$1" \
+    '.owner' "$ARG_OWNER" \
+    '.repo'  "$ARG_REPO" \
+    '.sha'   "$ARG_SHA" \
+    '.token' "$(forge__token_for "$1" "$ARG_TOKEN_ENV")"
+  println "$__run_options__out"
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      --sha) ARG_SHA="${2:?--sha requires a value}"; shift ;;
+      --forge) ARG_FORGE="${2:?--forge requires a value}"; shift ;;
+      --owner) ARG_OWNER="${2:?--owner requires a value}"; shift ;;
+      --repo) ARG_REPO="${2:?--repo requires a value}"; shift ;;
+      --token-env) ARG_TOKEN_ENV="${2:?--token-env requires a value}"; shift ;;
+      *)
+        error "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  */forge/probe) main "$@" ;;
+esac

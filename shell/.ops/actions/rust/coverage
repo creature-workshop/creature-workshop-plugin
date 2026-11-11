@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+import \
+  "$SHELLOPS_DIR/lib/testing/api.sh" \
+  "$SHELLOPS_DIR/lib/testing/frameworks.sh" \
+  "$SHELLOPS_DIR/lib/coverage/api.sh"
+
+USAGE="$(cat <<HELP
+Measures a Rust workspace's coverage over its whole test suite and enforces a
+minimum threshold. The one-runner driver for repos without a testing config:
+the chosen coverage runner runs the suite, its report is normalized, and the
+threshold is applied to the metric that runner measures.
+
+Usage: action rust coverage [-h,--help] [-t,--threshold PERCENT] [-e,--engine ENGINE] [-H,--harness HARNESS] [-i,--ignore PATTERN] [project-dir]
+
+Arguments:
+  project-dir    Directory containing the Cargo workspace. Defaults to current directory.
+
+Flags:
+  -t, --threshold    Minimum coverage percent (default: 90).
+  -e, --engine       tarpaulin for line coverage (default), or llvm-cov for region coverage.
+  -H, --harness      The test runner llvm-cov drives: cargo (cargo test, the default) or
+                     nextest, whose run also leaves the JUnit report the escape join reads.
+                     llvm-cov only; tarpaulin has no nextest path.
+  -i, --ignore       Files to leave out of the measurement, in the engine's own pattern
+                     form: a file glob for tarpaulin, a filename regex for llvm-cov.
+  -h, --help         Show this help text.
+HELP
+)"
+
+main() {
+  __main__project_dir="."
+  __main__engine="tarpaulin"
+  __main__harness=""
+  __main__threshold="90"
+  __main__ignore=""
+
+  parse_args "$@"
+  cd "$__main__project_dir"
+  export PROJ="$PWD"
+
+  __main__runner="$(runner_for_engine "$__main__engine")"
+  __main__config="$(suite_config "$__main__runner" "$__main__ignore" "$__main__harness")"
+
+  testing__run "$__main__runner" "$__main__config"
+  __main__report="$(testing__coverage_summary "$__main__runner" "$__main__config")"
+  coverage__gate "$__main__report" "$(thresholds_for "$__main__report" "$__main__threshold")"
+}
+
+: <<'FUN'
+Prints the registered runner id an --engine value names: the id with hyphens as
+underscores, so `llvm-cov` selects the llvm_cov runner. Exits naming the engines
+this action knows when the value matches no registered runner.
+FUN
+runner_for_engine() {
+  __runner_for_engine__id="$(printf '%s' "$1" | tr '-' '_')"
+  if @is_false "$(testing__adapter_registered "$__runner_for_engine__id")"; then
+    error "Unknown coverage engine '$1'. Expected tarpaulin or llvm-cov."
+    exit 1
+  fi
+  println "$__runner_for_engine__id"
+}
+
+: <<'FUN'
+Prints the runner's default suite config, with the ignore pattern and the
+harness overlaid when given.
+
+args:
+  $1  The runner id
+  $2  The ignore pattern, or ""
+  $3  The harness, or ""
+FUN
+suite_config() {
+  __suite_config__cfg="$(testing__suite_defaults "$1")"
+  if @defined "$2"; then
+    @set __suite_config__cfg "$__suite_config__cfg" '.ignore' "$2"
+  fi
+  if @defined "${3:-}"; then
+    @set __suite_config__cfg "$__suite_config__cfg" '.harness' "$3"
+  fi
+  println "$__suite_config__cfg"
+}
+
+: <<'FUN'
+Prints a thresholds struct gating the report's own metric at the given percent.
+FUN
+thresholds_for() {
+  @obj __thresholds_for__out ".\"$(coverage__metric "$1")\"" "$2"
+  println "$__thresholds_for__out"
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      -t|--threshold)
+        __main__threshold="${2:?--threshold requires a value}"
+        shift
+        ;;
+      -e|--engine)
+        __main__engine="${2:?--engine requires a value}"
+        shift
+        ;;
+      -H|--harness)
+        __main__harness="${2:?--harness requires a value}"
+        shift
+        ;;
+      -i|--ignore)
+        __main__ignore="${2:?--ignore requires a value}"
+        shift
+        ;;
+      -*)
+        error "Unknown option: $1"
+        exit 1
+        ;;
+      *)
+        __main__project_dir="$1"
+        ;;
+    esac
+    shift
+  done
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *coverage) main "$@" ;;
+esac

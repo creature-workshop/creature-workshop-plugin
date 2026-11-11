@@ -1,0 +1,359 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/agents/incident.sh" \
+  "$SHELLOPS_DIR/lib/forge/api.sh" \
+  "$SHELLOPS_DIR/lib/linear/api.sh"
+
+USAGE="$(cat <<HELP
+Waits for one forge to finish running a commit and records what it answered
+as a commit status on the active forge's copy of that commit, so the result
+of a run across the street is read where the commit itself is read. A run
+that came back red also opens a fix-it ticket on Linear.
+
+The status is named <site>/<forge>, the deployment site the run was at and
+the forge that ran it, or <forge> alone when no site is given; --workflow
+adds a third segment for a forge that runs more than one workflow on a
+commit. The status links the run and says what the run answered: green for
+a pass, red for a failure, and, for a commit the forge ran nothing on, the
+word that forge has for a run it never evaluated.
+
+Usage: action forge report-run --forge <name> --sha <sha>
+                               [--site <name>] [--workflow <name>] [--owner <o>] [--repo <r>] [--host <url>]
+                               [--timeout <s>] [--interval <s>] [--grace <s>]
+                               [--token-env <NAME>]
+                               [--ticket-team <KEY>] [--ticket-label <name>]
+
+Flags:
+  --forge <name>        Required. The forge whose run is reported: gitlab,
+                        forgejo or github.
+  --workflow <name>     The workflow that forge ran, for a forge that runs
+                        more than one on a commit; it ends the status's
+                        name. Left out, the forge's name ends it.
+  --sha <sha>           Required. The commit, on both forges.
+  --site <name>         The deployment site the forge ran the commit at,
+                        which leads the status's name: a promotion reports
+                        one run per site and forge, and two forges of one
+                        kind at two sites are two statuses.
+  --owner <o>           The repository's owner on the forge being asked.
+                        Defaults to the manifest's org.
+  --repo <r>            The repository's name there. Defaults to the
+                        manifest's repo.
+  --host <url>          The server the repository is on, for a forge like
+                        GitLab CE that can have many instances. Defaults to
+                        the forge's own base.
+  --timeout <s>         Seconds the whole wait may take (default 1800).
+  --interval <s>        Seconds between two looks (default 15).
+  --grace <s>           Seconds a carried commit may show no run before that
+                        is the answer (default 120).
+  --token-env <NAME>    Environment variable holding the token to ask the
+                        reported forge with. Defaults to the name that forge
+                        answers to; an unset one asks unauthenticated, which
+                        a public repository allows.
+  An empty value for --owner, --repo, --host or --token-env is the default
+  too, so a caller may pass a flag it has no value for.
+  --ticket-team <KEY>   Linear team to file the red-run ticket on, e.g. OPS.
+                        Without it a red run is recorded and no ticket filed.
+  --ticket-label <name> Label the red-run ticket carries, e.g. ktlo.
+  -h, --help            Show this help text.
+
+Environment:
+  FORGE_ADMIN_TOKEN  Required. Writes the status on the active forge.
+  LINEAR_API_KEY     Required with --ticket-team. Files the red-run ticket.
+HELP
+)"
+
+ARG_FORGE=""
+ARG_WORKFLOW=""
+ARG_SHA=""
+ARG_SITE=""
+ARG_OWNER=""
+ARG_REPO=""
+ARG_HOST=""
+ARG_TIMEOUT=""
+ARG_INTERVAL=""
+ARG_GRACE=""
+ARG_TOKEN_ENV=""
+ARG_TICKET_TEAM=""
+ARG_TICKET_LABEL=""
+
+@obj __at1 \
+  ".$forge__OUTCOME_SUCCESS" 'passed' \
+  ".$forge__OUTCOME_FAILURE" 'failed' \
+  ".$forge__OUTCOME_NONE"    'has no run'
+
+: <<'CONST'
+What a status says under its name, by the outcome the run reached: one
+entry per forge__OUTCOME word, since those are what forge__wait_for_run
+answers with and so the outcomes there is a status to record at all.
+CONST
+__report_run__OUTCOMES="$__at1"
+
+# CONST: The red-run ticket's prose, which the render fills.
+__report_run__TICKET_TEMPLATE="$SHELLOPS_DIR/actions/forge/report-run.ticket.json"
+
+# CONST: The program that puts this run's values into the ticket's prose.
+__report_run__TICKET_RENDER="$SHELLOPS_DIR/actions/forge/report-run.ticket.awk"
+
+main() {
+  parse_args "$@"
+  validate_args
+
+  __main__outcome="$(forge__wait_for_run "$(run_options)")" || return 1
+  record_status "$__main__outcome"
+  file_ticket "$__main__outcome"
+
+  println "$__main__outcome"
+}
+
+validate_args() {
+  if ! @defined "$ARG_FORGE"; then
+    error "--forge is required"
+    log "$USAGE"
+    exit 1
+  fi
+
+  if ! @defined "$ARG_SHA"; then
+    error "--sha is required"
+    log "$USAGE"
+    exit 1
+  fi
+
+  if @defined "$ARG_TICKET_TEAM" && ! @defined "${LINEAR_API_KEY:-}"; then
+    error "--ticket-team $ARG_TICKET_TEAM needs LINEAR_API_KEY to file the ticket"
+    exit 1
+  fi
+}
+
+:<<'FUN'
+The options the wait is made with, leaving every unset flag at the default
+forge__new_run_options gives it.
+FUN
+run_options() {
+  @patch __run_options__out "$(forge__new_run_options)" \
+    '.forge'    "$ARG_FORGE" \
+    '.owner'    "$ARG_OWNER" \
+    '.repo'     "$ARG_REPO" \
+    '.host'     "$ARG_HOST" \
+    '.sha'      "$ARG_SHA" \
+    '.timeout_seconds'  "$ARG_TIMEOUT" \
+    '.interval_seconds' "$ARG_INTERVAL" \
+    '.grace_seconds'    "$ARG_GRACE" \
+    '.token'    "$(forge__token_for "$ARG_FORGE" "$ARG_TOKEN_ENV")"
+  println "$__run_options__out"
+}
+
+:<<'FUN'
+Records the outcome $1 of the reported forge's run as a commit status on the
+active forge, the one this run is on. A commit the forge ran nothing on is
+an outcome like the other two, and is recorded in the active forge's own
+word for it. An answer that is no outcome at all records nothing, and the
+log says so.
+
+  $1 the outcome ({state, url})
+FUN
+record_status() {
+  @get __record_status__state "$1" '.state' ''
+
+  if @get __record_status__get_1 "$__report_run__OUTCOMES" ".$__record_status__state" ''; ! @defined "$__record_status__get_1"; then
+    log "$ARG_FORGE reached no outcome on $ARG_SHA ($__record_status__state), so no status is recorded."
+    return 0
+  fi
+
+  @get __record_status__get_2 "$1" '.url' ''
+  @patch __record_status__options "$(forge__new_commit_status_options)" \
+    '.sha'         "$ARG_SHA" \
+    '.name'        "$(status_name)" \
+    '.state'       "$__record_status__state" \
+    '.url'         "$__record_status__get_2" \
+    '.description' "$(status_description "$__record_status__state")" \
+    '.token'       "$(status_token)"
+
+  log "Recording $(status_name) as $__record_status__state on $ARG_SHA..."
+  forge__create_commit_status "$__record_status__options" >/dev/null
+}
+
+:<<'FUN'
+Prints the name the status is recorded under: the deployment site the run
+was at, when one was named, then the forge, then the workflow, when one was
+named.
+
+  status_name  ->  internal/forgejo       (with --site internal)
+  status_name  ->  forgejo                (with neither)
+  status_name  ->  staging/github/checks  (with --site staging --workflow checks)
+FUN
+status_name() {
+  __status_name__name="$ARG_FORGE"
+
+  if @defined "$ARG_SITE"; then
+    __status_name__name="${ARG_SITE}/${__status_name__name}"
+  fi
+  if @defined "$ARG_WORKFLOW"; then
+    __status_name__name="${__status_name__name}/${ARG_WORKFLOW}"
+  fi
+
+  println "$__status_name__name"
+}
+
+:<<'FUN'
+Prints the sentence a reader sees under the status, for the outcome $1.
+
+  status_description failure  ->  forgejo failed.
+  status_description none     ->  forgejo has no run.
+FUN
+status_description() {
+  @get __status_description__get_3 "$__report_run__OUTCOMES" ".$1"
+  printf '%s %s.\n' "$ARG_FORGE" "$__status_description__get_3"
+}
+
+:<<'FUN'
+Prints the token the status is written with: the one the active forge, the
+forge this run is on, answers to.
+FUN
+status_token() {
+  forge__token_for "$(forge__selected)" ""
+}
+
+:<<'FUN'
+Opens the fix-it ticket for a red run, and does nothing for any other
+outcome. One ticket stands per status name: while it is open a further
+red run finds it and files none.
+
+  $1 the outcome ({state, url})
+FUN
+file_ticket() {
+  if @get __file_ticket__get_4 "$1" '.state' ''; [ "$__file_ticket__get_4" != "$forge__OUTCOME_FAILURE" ]; then
+    return 0
+  fi
+
+  if ! @defined "$ARG_TICKET_TEAM"; then
+    log "No --ticket-team, so the red run is recorded and no ticket is filed."
+    return 0
+  fi
+
+  __file_ticket__ticket="$(ticket "$1")" || return 1
+  @get __file_ticket__get_5 "$__file_ticket__ticket" '.title'
+  @get __file_ticket__get_6 "$__file_ticket__ticket" '.body'
+  __file_ticket__issue="$(agents__incident_open \
+    "$ARG_TICKET_TEAM" \
+    "$__file_ticket__get_5" \
+    "$__file_ticket__get_6" \
+    "$(linear_options)"
+  )" || return 1
+
+  @get __file_ticket__get_7 "$__file_ticket__issue" '.id'
+  label_ticket "$__file_ticket__get_7"
+}
+
+:<<'FUN'
+Prints the red-run ticket, its prose read from the template beside this action
+and this run's values put in place of the placeholders. The title carries the
+status's name and nothing else, so the ticket already open for that
+pair is the one a later red run finds.
+
+  ticket  ->  {"title": "Red run on forgejo/site", "body": "forgejo failed ..."}
+
+  $1 the outcome ({state, url})
+FUN
+ticket() {
+  __ticket__template="$(cat "$__report_run__TICKET_TEMPLATE")" || return 1
+
+  @get __ticket__get_8 "$1" '.url' '(the forge reported no run page)'
+  @run_awk __ticket__out "$__report_run__TICKET_RENDER" "$__ticket__template" \
+    --arg names 'forge sha url status_name' \
+    --arg forge "$ARG_FORGE" \
+    --arg sha "$ARG_SHA" \
+    --arg url "$__ticket__get_8" \
+    --arg status_name "$(status_name)" || return 1
+  println "$__ticket__out"
+}
+
+:<<'FUN'
+Gives the ticket $1 the label the caller named, and leaves it unlabelled when
+no label was named. Adding a label the ticket already carries changes
+nothing, so a red run that found an open ticket is free to ask again.
+
+  $1 the Linear issue id
+FUN
+label_ticket() {
+  if ! @defined "$ARG_TICKET_LABEL"; then
+    return 0
+  fi
+
+  __label_ticket__id="$(ticket_label_id)" || return 1
+  if ! @defined "$__label_ticket__id"; then
+    warn "Linear has no label '$ARG_TICKET_LABEL', so the ticket carries none."
+    return 0
+  fi
+
+  @arr __label_ticket__arr_9 "$__label_ticket__id"
+  linear__add_labels "$1" "$__label_ticket__arr_9" "$(linear_options)" >/dev/null
+}
+
+:<<'FUN'
+Prints the id of the workspace label named by --ticket-label, and nothing
+when the workspace has no such label.
+FUN
+ticket_label_id() {
+  __ticket_label_id__labels="$(linear__list_labels "$(linear_options)")" || return 1
+  @find __ticket_label_id__match label_is_named "$__ticket_label_id__labels" "$ARG_TICKET_LABEL"
+
+  if ! @defined "$__ticket_label_id__match"; then
+    return 0
+  fi
+
+  @get __ticket_label_id__out "$__ticket_label_id__match" '.id'
+  println "$__ticket_label_id__out"
+}
+
+:<<'FUN'
+@find callback: whether one label carries the name $2.
+
+  $1 label   $2 name
+FUN
+label_is_named() {
+  @get __label_is_named__get_10 "$1" '.name' ''
+  [ "$__label_is_named__get_10" = "$2" ]
+}
+
+:<<'FUN'
+Prints the Linear options carrying LINEAR_API_KEY.
+FUN
+linear_options() {
+  @set __linear_options__out "$(linear__new_linear_options)" '.token' "${LINEAR_API_KEY:-}"
+  println "$__linear_options__out"
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      --forge) ARG_FORGE="${2:?--forge requires a value}"; shift ;;
+      --workflow) ARG_WORKFLOW="${2:?--workflow requires a value}"; shift ;;
+      --sha) ARG_SHA="${2:?--sha requires a value}"; shift ;;
+      --site) ARG_SITE="${2:?--site requires a value}"; shift ;;
+      --owner) ARG_OWNER="${2?--owner requires a value}"; shift ;;
+      --repo) ARG_REPO="${2?--repo requires a value}"; shift ;;
+      --host) ARG_HOST="${2?--host requires a value}"; shift ;;
+      --timeout) ARG_TIMEOUT="${2:?--timeout requires a value}"; shift ;;
+      --interval) ARG_INTERVAL="${2:?--interval requires a value}"; shift ;;
+      --grace) ARG_GRACE="${2:?--grace requires a value}"; shift ;;
+      --token-env) ARG_TOKEN_ENV="${2?--token-env requires a value}"; shift ;;
+      --ticket-team) ARG_TICKET_TEAM="${2:?--ticket-team requires a value}"; shift ;;
+      --ticket-label) ARG_TICKET_LABEL="${2:?--ticket-label requires a value}"; shift ;;
+      *)
+        error "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  */forge/report-run) main "$@" ;;
+esac

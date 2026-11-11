@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+. "$SHELLOPS_DIR/.envrc"
+
+@true __at1
+
+: <<'CONST'
+Reporting is this CLI's job, so a module declares into it rather than
+reporting as it is sourced.
+CONST
+# shellcheck disable=SC2034  # read by lib/fingerprint/api.sh, imported below
+FINGERPRINT_DEFER="$__at1"
+
+import \
+  "$SHELLOPS_DIR/lib/fingerprint/api.sh" \
+  "$SHELLOPS_DIR/lib/forge/api.sh"
+
+USAGE="$(cat <<HELP
+Prints a one-line fingerprint of every job input this run declares.
+
+A line names the variable and whether it is unset, empty, or set. A set one
+carries its length, and then what its kind allows: a secret the first twelve hex
+digits of its sha256 and its scheme prefix, which tell a missing value from a
+stale one -- compare the digest against the copy in the password manager --
+without a job log ever holding it; a non-secret input its value, there being
+nothing to protect.
+
+Usage: ops fingerprint-env [-h,--help]
+
+The module that reads an input is the one that declares it, so what this prints
+is the forge baseline every pipeline needs before it can run at all. A job's
+later steps report the inputs of the modules they load, as they load them, so
+nothing has to enumerate what a job will need.
+
+FINGERPRINT_VARS adds space-separated names, for an input no module claims; a
+word that does not spell a variable name is dropped with a warning. A name from
+there is read as a secret, since nothing here can tell whether it holds one.
+FINGERPRINT_OUT, when set, collects the job's every report into one file, which
+a pipeline can keep as an artifact.
+
+Only exported variables are visible, which every CI variable is.
+
+Example output:
+  A job whose forge token is set and whose PR token is not:
+
+    FORGE_ADMIN_TOKEN set len=23 sha256=21d9a5f1c685 scheme=glpat-
+    FORGE_PR_TOKEN unset
+
+  A non-secret input shows its value, and an unset one names the default its
+  reader goes on to use, so which forge a job talked to is on the record:
+
+    SHELLOPS_FORGE set len=7 value=forgejo
+    SHELLOPS_FORGE unset default=gitlab
+
+  A variable set to the empty string, which a CI setting does silently, is its
+  own state rather than a missing one:
+
+    FORGE_PR_TOKEN empty
+
+  A value carrying no scheme prefix says so, so a token pasted without one is
+  as visible as a token pasted with the wrong one:
+
+    CI_JOB_TOKEN set len=8 sha256=6db0716cfdbd scheme=none
+
+  A step loading a module that falls back through several names reports each,
+  marking the one the module resolved to:
+
+    GITLAB_TOKEN empty
+    FORGE_PR_TOKEN set len=9 sha256=875f38196452 scheme=glpat- used
+    CI_JOB_TOKEN set len=8 sha256=6db0716cfdbd scheme=none
+
+Flags:
+  -h, --help    Show this help text
+HELP
+)"
+
+main() {
+  parse_args "$@"
+  add_extra_names
+  fingerprint__report
+}
+
+: <<'FUN'
+The inputs are declared by the modules that read them, so the only argument this
+takes is --help; anything else is a mistake worth failing on.
+FUN
+parse_args() {
+  case "${1:-}" in
+    '')
+      return 0
+      ;;
+    -h|--help)
+      log "$USAGE"
+      exit 0
+      ;;
+    *)
+      error "Unknown option: $1"
+      exit 1
+      ;;
+  esac
+}
+
+: <<'FUN'
+Declares every name FINGERPRINT_VARS asks for. Padding between two names is not
+a word, so it goes quietly.
+FUN
+add_extra_names() {
+  # shellcheck disable=SC2086  # the names are space separated
+  for __add_extra_names__word in ${FINGERPRINT_VARS:-}; do
+    add_extra_name "$__add_extra_names__word"
+  done
+}
+
+: <<'FUN'
+Declares <word> as a secret of its own. A word that does not spell a variable
+name is a typo in FINGERPRINT_VARS and is worth saying out loud, since the name
+it meant to hold is the one nobody will see a line for.
+FUN
+add_extra_name() {
+  if @is_false "$(name_is_valid "$1")"; then
+    warn "not a variable name, skipping: $1"
+    return 0
+  fi
+
+  fingerprint__secret "$1"
+}
+
+: <<'FUN'
+Prints whether <word> spells an environment variable name: a capital or
+underscore, then capitals, digits, and underscores.
+FUN
+name_is_valid() {
+  @succeeds __name_is_valid__out name_matches_syntax "$1"
+  println "$__name_is_valid__out"
+}
+
+name_matches_syntax() {
+  println "$1" | grep -Eq '^[A-Z_][A-Z0-9_]*$'
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *fingerprint-env) main "$@" ;;
+esac

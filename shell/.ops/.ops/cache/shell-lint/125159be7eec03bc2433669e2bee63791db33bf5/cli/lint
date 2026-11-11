@@ -1,0 +1,230 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SHELL_LINT_DIR="${SHELL_LINT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+export SHELL_LINT_DIR
+export SHELLOPS_DIR="${SHELLOPS_DIR:-$SHELL_LINT_DIR/shell/.ops}"
+export SHELL_SCAN_DIR="${SHELL_SCAN_DIR:-$SHELL_LINT_DIR/shell/.scan}"
+
+# CONST: The tree this command runs. shellops' .envrc exports SHELL_LINT_DIR again, as the shell-lint its own lock pins.
+LINT_DIR="$SHELL_LINT_DIR"
+
+# CONST: The scanner this run was given. shellops' .envrc exports SHELL_SCAN_DIR again, as the shell-scan its own lock pins.
+SCAN_DIR="$SHELL_SCAN_DIR"
+
+. "$SHELLOPS_DIR/.envrc"
+export SHELL_LINT_DIR="$LINT_DIR"
+export SHELL_SCAN_DIR="$SCAN_DIR"
+
+import \
+  "$SHELLOPS_DIR/lib/args/api.sh" \
+  "$SHELLOPS_DIR/lib/git/api.sh" \
+  "$SHELL_LINT_DIR/shell/lint/run.sh"
+
+USAGE="$(cat <<HELP
+Runs the house-style lint checks over a repository's shell, awk, jq, markdown
+and yaml files.
+
+Every check runs over the files it reads. A file is shell by its .sh or .bats
+suffix or its shebang, awk, jq, markdown or yaml by suffix. Files under a test
+directory (test/ and tests/, or the names the lint declaration gives under
+"tests") go only to the checks that read tests. Every finding is printed
+before the verdict, as "<file>:<line>: <message>", followed by the check's
+rule and how to satisfy it. Text inside heredocs is never checked.
+
+Usage: lint [-h,--help] [--list] [--explain <name>] [--check <name>]... [--added-only | --added-since <ref>] [files...]
+
+With no files, checks every file git tracks under the project, minus the
+directories the lint declaration excludes. With no files and --added-since,
+checks only the files the branch changed. With files (as lefthook passes
+staged files), checks only those, tracked or not; a file no check reads is
+skipped.
+
+The lint declaration, .ops/config/lint.yaml, or \$PROJ/lint.json while the
+project has not converted, is optional. It sets the indent width, the test
+directory names, the directories no check looks in, under "checks" the
+directories the repository keeps its own checks under, under "added_only"
+the checks that run only with --added-only or --added-since (use that for a
+check the code does not pass yet, so new lines are held to it while a full
+sweep leaves it out), under "disabled" the checks that never run (use that
+for a check that polices an API the repository does not use), and under
+"templates" which yaml files are CI component templates and what the
+template checks need to know about the catalog.
+
+Flags:
+  --list          Print every check: its name, languages, scopes and rule.
+  --explain <name>
+                  Print the named check's rule and how to satisfy it, for a
+                  reader with one of its findings in hand.
+  --check <name>  Run only the named check; repeat to run several.
+  --added-only    Pre-commit mode: report only lines the staged diff added,
+                  and run the checks the lint declaration holds to new lines too.
+  --added-since <ref>
+                  Merge-request mode: report only lines the commits on HEAD
+                  added since HEAD forked from <ref>, and run the checks the
+                  lint declaration holds to new lines too. <ref> is a branch
+                  or a commit, as a pipeline has the target branch or the
+                  base commit of a merge request.
+  -h, --help      Show this help text
+HELP
+)"
+
+__cli__NL="
+"
+
+main() {
+  parse_args "$@"
+  CONFIG="$(lint__config__load)" || exit 1
+  lint__load_project_checks "$CONFIG" || exit 1
+
+  if @is_true "$LIST"; then
+    lint__describe_checks
+    exit 0
+  fi
+
+  reject_unknown_checks
+  reject_two_added_modes
+  reject_unresolved_ref
+
+  if @defined "$EXPLAIN"; then
+    lint__explain_check "$EXPLAIN"
+    exit 0
+  fi
+
+  __main__listing="$(listing)"
+  @defined "$__main__listing" || exit 0
+
+  @wrap __main__added_since "$ADDED_SINCE"
+  @obj __main__opts \
+    '.added_only' "$ADDED_ONLY" \
+    '.added_since' "$__main__added_since" \
+    '.config' "$CONFIG"
+  lint__run "$__main__opts" "$SELECTED" "$__main__listing" || exit 1
+}
+
+: <<'FUN'
+Collects the flags, and the file arguments into the INPUT_FILES
+newline-separated global (POSIX sh functions cannot write the caller's argv).
+A path carrying a newline or tab cannot travel that way, so one is refused
+outright rather than mis-filed or silently skipped.
+FUN
+parse_args() {
+  INPUT_FILES=""
+  @arr SELECTED
+  @false ADDED_ONLY
+  ADDED_SINCE=""
+  @false LIST
+  EXPLAIN=""
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help)
+        log "$USAGE"
+        exit 0
+        ;;
+      --list)
+        @true LIST
+        ;;
+      --check)
+        args__require_value "$@" || exit 1
+        @push SELECTED "$SELECTED" "$2"
+        shift
+        ;;
+      --explain)
+        args__require_value "$@" || exit 1
+        EXPLAIN="$2"
+        @push SELECTED "$SELECTED" "$2"
+        shift
+        ;;
+      --added-only)
+        @true ADDED_ONLY
+        ;;
+      --added-since)
+        args__require_value "$@" || exit 1
+        ADDED_SINCE="$2"
+        shift
+        ;;
+      -*)
+        error "Unknown option: $1"
+        exit 1
+        ;;
+      *)
+        require_plain_path "$1"
+        INPUT_FILES="$INPUT_FILES$1$__cli__NL"
+        ;;
+    esac
+    shift
+  done
+}
+
+: <<'FUN'
+Exits when <path> carries a newline or a tab, which the line-oriented listing
+cannot hold.
+FUN
+require_plain_path() {
+  @is_true "$(lint__is_plain_path "$1")" && return 0
+
+  error "Cannot lint a path containing a newline or tab; rename it first."
+  exit 1
+}
+
+: <<'FUN'
+Exits with the known names when any --check name has no registered check.
+FUN
+reject_unknown_checks() {
+  __reject_unknown_checks__unknown="$(lint__unknown_checks "$SELECTED")"
+  if @len __reject_unknown_checks__len_1 "$__reject_unknown_checks__unknown"; [ "$__reject_unknown_checks__len_1" -eq 0 ]; then
+    return 0
+  fi
+
+  @join __reject_unknown_checks__names "$__reject_unknown_checks__unknown" ', '
+  @join __reject_unknown_checks__known "$(lint__registry__names)" ' '
+  error "Unknown --check name: $__reject_unknown_checks__names"
+  hint "Expected one of: $__reject_unknown_checks__known"
+  exit 1
+}
+
+: <<'FUN'
+Exits when both --added-only and --added-since were given: a run reports
+the lines of one diff, the staged one or the branch's.
+FUN
+reject_two_added_modes() {
+  @is_true "$ADDED_ONLY" || return 0
+  @defined "$ADDED_SINCE" || return 0
+
+  error "Give --added-only or --added-since, not both."
+  exit 1
+}
+
+: <<'FUN'
+Exits when git cannot resolve the ref --added-since gave to a commit. A run
+that could not read the branch's diff would report nothing and pass.
+FUN
+reject_unresolved_ref() {
+  @defined "$ADDED_SINCE" || return 0
+  git__ref_exists "$ADDED_SINCE" && return 0
+
+  error "--added-since: git cannot resolve $ADDED_SINCE to a commit in this repository."
+  hint "A shallow clone may not have it. Fetch the branch, or the full history, first."
+  exit 1
+}
+
+: <<'FUN'
+Prints the listing of the files this run checks: the files named; else,
+under --added-since, the files the branch changed since it forked from that
+ref; else every tracked file.
+FUN
+listing() {
+  if @defined "$INPUT_FILES"; then
+    lint__select_named "$CONFIG" "$INPUT_FILES"
+  elif @defined "$ADDED_SINCE"; then
+    lint__discover_changed "$CONFIG" "$ADDED_SINCE"
+  else
+    lint__discover_tracked "$CONFIG"
+  fi
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  */lint|lint) main "$@" ;;
+esac

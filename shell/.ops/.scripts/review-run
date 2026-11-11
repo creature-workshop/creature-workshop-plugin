@@ -1,0 +1,256 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# CONST: The directory this script sits in, which the repository root is found from.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# CONST: The shellops tree this script belongs to, which the library is loaded from.
+export SHELLOPS_DIR="${SHELLOPS_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+
+# CONST: The repository root: the caller's PROJ, or the shellops tree itself.
+export PROJ="${PROJ:-$SHELLOPS_DIR}"
+
+source "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/forge/api.sh" \
+  "$SHELLOPS_DIR/lib/git/repository.sh"
+
+USAGE="$(cat <<HELP
+Asks a forge to run a review before it lands: pushes the review's head to a
+branch of that forge's copy of the repository, waits for the run the push
+starts, and prints the outcome as JSON: {"state": "success" | "failure" |
+"none", "url": ...}, where "none" means the forge ran nothing on it. Exits
+non-zero for a run that failed or never started, so a job that calls this
+goes red with the run, and for a push or a wait that could not be made.
+
+The branch is review/<review>, moved to the head on every call, so one
+review keeps one branch on the forge. The push goes as --user with the
+token in the variable the forge's adaptor names, which the caller's
+pipeline holds.
+
+Usage: .scripts/review-run --forge <name> --sha <sha> --user <name>
+                           [--review <id>] [--branch <name>]
+                           [--owner <o>] [--repo <r>] [--host <url>]
+                           [--token-env <NAME>]
+                           [--timeout <s>] [--interval <s>] [--grace <s>]
+
+Flags:
+  --forge <name>      Required. The forge asked to run the review: gitlab,
+                      forgejo or github.
+  --sha <sha>         Required. The review's head, a commit this clone holds.
+  --user <name>       Required. The user the push goes as, the token's owner.
+  --review <id>       The review the head belongs to. Defaults to the one
+                      this run is building.
+  --branch <name>     The branch the head is pushed to. Defaults to
+                      review/<review>.
+  --owner <o>         The repository's owner on the forge. Defaults to the
+                      manifest's org.
+  --repo <r>          The repository's name there. Defaults to the
+                      manifest's repo.
+  --host <url>        The server the push goes to. Defaults to the forge's
+                      API base, which on a Forgejo instance is the server
+                      the clones are on too; name it for a forge where the
+                      two differ.
+  --token-env <NAME>  Environment variable holding the token the push goes
+                      with and the run is asked with. Defaults to the name
+                      the forge answers to.
+  --timeout <s>       Seconds the wait may take (default 1800).
+  --interval <s>      Seconds between two looks (default 15).
+  --grace <s>         Seconds a carried commit may show no run before that
+                      is the answer (default 120).
+  -h, --help          Show this help text.
+HELP
+)"
+
+ARG_FORGE=""
+ARG_SHA=""
+ARG_USER=""
+ARG_REVIEW=""
+ARG_BRANCH=""
+ARG_OWNER=""
+ARG_REPO=""
+ARG_HOST=""
+ARG_TOKEN_ENV=""
+ARG_TIMEOUT=""
+ARG_INTERVAL=""
+ARG_GRACE=""
+
+main() {
+  parse_args "$@"
+  validate_args
+
+  __main__options="$(run_options)" || return 1
+  __main__repository="$(repository "$__main__options")" || return 1
+  __main__branch="$(branch_name)" || return 1
+
+  @get __main__get_1 "$__main__options" '.owner'
+  @get __main__get_2 "$__main__options" '.repo'
+  log "Pushing ${ARG_SHA} to ${__main__branch} on ${ARG_FORGE} ($__main__get_1/$__main__get_2)..."
+  git__repository__force "$__main__repository" "$__main__branch" "$ARG_SHA" || return 1
+  log "Waiting for ${ARG_FORGE} to run it..."
+  __main__outcome="$(forge__wait_for_run "$__main__options")" || return 1
+
+  println "$__main__outcome"
+  report "$__main__outcome"
+}
+
+validate_args() {
+  if ! @defined "$ARG_FORGE"; then
+    error "--forge is required"
+    log "$USAGE"
+    exit 1
+  fi
+  if ! @defined "$ARG_SHA"; then
+    error "--sha is required"
+    log "$USAGE"
+    exit 1
+  fi
+  if ! @defined "$ARG_USER"; then
+    error "--user is required"
+    log "$USAGE"
+    exit 1
+  fi
+}
+
+: <<'FUN'
+Builds the run options from the flags, leaving every unset one at the
+default forge__new_run_options gives it, and carrying the token the forge
+is asked with.
+FUN
+run_options() {
+  @patch __run_options__out "$(forge__new_run_options)" \
+    '.forge'            "$ARG_FORGE" \
+    '.owner'            "$ARG_OWNER" \
+    '.repo'             "$ARG_REPO" \
+    '.host'             "$ARG_HOST" \
+    '.sha'              "$ARG_SHA" \
+    '.timeout_seconds'  "$ARG_TIMEOUT" \
+    '.interval_seconds' "$ARG_INTERVAL" \
+    '.grace_seconds'    "$ARG_GRACE" \
+    '.token'            "$(forge__token_for "$ARG_FORGE" "$ARG_TOKEN_ENV")"
+  println "$__run_options__out"
+}
+
+: <<'FUN'
+Prints the forge's copy of the repository as lib/git/repository.sh reads
+it: a worktree repository on the forge, reached through a remote of its
+own, pushed to as --user with the token in the variable --token-env names.
+The owner and repository are the run options' $1, so the push and the wait
+name the same copy.
+
+  repository '{"forge": "forgejo", "owner": "org", "repo": "tool", ...}'
+    ->  {"kind": "worktree", "forge": "forgejo", "remote": "review-forgejo", "host": "https://forgejo.example", "owner": "org", "repo": "tool", "user": "bot", "token_env": "FORGEJO_TOKEN"}
+FUN
+repository() {
+  @get __repository__get_3 "$1" '.owner'
+  @get __repository__get_4 "$1" '.repo'
+  @obj __repository__out \
+    '.kind'      worktree \
+    '.forge'     "$ARG_FORGE" \
+    '.remote'    "review-${ARG_FORGE}" \
+    '.host'      "$(push_host)" \
+    '.owner'     "$__repository__get_3" \
+    '.repo'      "$__repository__get_4" \
+    '.user'      "$ARG_USER" \
+    '.token_env' "$(token_env)"
+  println "$__repository__out"
+}
+
+: <<'FUN'
+Prints the server the push goes to: --host, or the forge's API base.
+FUN
+push_host() {
+  if @defined "$ARG_HOST"; then
+    println "$ARG_HOST"
+    return 0
+  fi
+
+  @obj __push_host__obj_5 '.forge' "$ARG_FORGE"
+  forge__api_base "$__push_host__obj_5"
+}
+
+: <<'FUN'
+Prints the name of the variable the token is read from: --token-env, or the
+name the forge answers to.
+FUN
+token_env() {
+  if @defined "$ARG_TOKEN_ENV"; then
+    println "$ARG_TOKEN_ENV"
+    return 0
+  fi
+
+  forge__token_env_for "$ARG_FORGE"
+}
+
+: <<'FUN'
+Prints the branch the head is pushed to: --branch, or review/<review> for
+the review named or the one this run is building. Fails when no review is
+known and no branch was named.
+FUN
+branch_name() {
+  if @defined "$ARG_BRANCH"; then
+    println "$ARG_BRANCH"
+    return 0
+  fi
+
+  __branch_name__review="$ARG_REVIEW"
+  if ! @defined "$__branch_name__review"; then
+    __branch_name__review="$(forge__current_review)"
+  fi
+  if ! @defined "$__branch_name__review"; then
+    error "This run isn't from a review. Name one with --review, or the branch with --branch."
+    return 1
+  fi
+
+  println "review/${__branch_name__review}"
+}
+
+: <<'FUN'
+Says what the run answered and exits non-zero unless it passed: the state is
+data the caller acts on, and a job that asked for the run goes red with it.
+
+  $1 the outcome ({state, url})
+FUN
+report() {
+  @get __report__state "$1" '.state' ''
+  @get __report__url "$1" '.url' '(the forge reported no run page)'
+
+  if [ "$__report__state" = "$forge__OUTCOME_SUCCESS" ]; then
+    log "${ARG_FORGE} ran ${ARG_SHA} green: ${__report__url}"
+    return 0
+  fi
+
+  error "${ARG_FORGE} answered ${__report__state} for ${ARG_SHA}: ${__report__url}"
+  exit 1
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      --forge) ARG_FORGE="${2:?--forge requires a value}"; shift ;;
+      --sha) ARG_SHA="${2:?--sha requires a value}"; shift ;;
+      --user) ARG_USER="${2:?--user requires a value}"; shift ;;
+      --review) ARG_REVIEW="${2:?--review requires a value}"; shift ;;
+      --branch) ARG_BRANCH="${2:?--branch requires a value}"; shift ;;
+      --owner) ARG_OWNER="${2:?--owner requires a value}"; shift ;;
+      --repo) ARG_REPO="${2:?--repo requires a value}"; shift ;;
+      --host) ARG_HOST="${2:?--host requires a value}"; shift ;;
+      --token-env) ARG_TOKEN_ENV="${2:?--token-env requires a value}"; shift ;;
+      --timeout) ARG_TIMEOUT="${2:?--timeout requires a value}"; shift ;;
+      --interval) ARG_INTERVAL="${2:?--interval requires a value}"; shift ;;
+      --grace) ARG_GRACE="${2:?--grace requires a value}"; shift ;;
+      *)
+        error "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+case "$0" in
+  */.scripts/review-run) main "$@" ;;
+esac

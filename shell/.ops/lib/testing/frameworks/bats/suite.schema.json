@@ -1,0 +1,37 @@
+{
+  "type": "object",
+  "description": "Bats suite: file/glob-based test selection. Tests are discovered by filename glob, either as siblings under the area's own paths or under a central root whose filename stem matches a changed source file.",
+  "required": ["runner"],
+  "properties": {
+    "runner": { "const": "bats" },
+    "root": {
+      "type": "string",
+      "description": "Directory under which the \"filename\" strategy looks for centralized tests (e.g. \"test\"). Defaults to \"test\"."
+    },
+    "glob": {
+      "description": "Filename glob(s) identifying this suite's test files: a single pattern or an array of patterns whose matches are unioned. Defaults to \"*.bats\".",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      ]
+    },
+    "exclude": {
+      "description": "Filename glob(s) to drop from the matched test files: a single pattern or an array of patterns (e.g. \"*_generated.bats\").",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      ]
+    },
+    "jobs": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "How many tests to run at once. Defaults to 1, bats's serial path. Above 1 bats needs GNU parallel on PATH, and without it runs no tests and exits non-zero, so raise this only where the runner installs it. A suite whose tests share state stays at 1."
+    },
+    "test_timeout_secs": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "How many seconds one test may run before bats fails it as timed out. Defaults to 600. A test that hangs then fails by name, instead of holding the job until the job's own timeout ends it with nothing in the log to say which test it was."
+    }
+  },
+  "additionalProperties": false
+}

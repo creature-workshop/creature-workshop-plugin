@@ -1,0 +1,248 @@
+{
+  "seeds": {
+    "doc": 335499942,
+    "line": 2686094465
+  },
+  "dependencies": {
+    "imports": {
+      "strata": {
+        "commit": "2f73ac6d385b411144941791679262592cae1ea2"
+      },
+      "shell-goldens": {
+        "commit": "5cbd5bcfdd1e9c3b08ae51ae0e36ffc6ac5debe7",
+        "via": "strata",
+        "mount": "shell/.golden"
+      },
+      "shell-logs": {
+        "commit": "7f3dd9d59cd09d237c70e50bb68e795ebf56dc57",
+        "via": "strata",
+        "mount": "shell/.logs"
+      }
+    },
+    "tools": {
+      "system": {
+        "git": {
+          "version": "latest"
+        },
+        "ca-certificates": {
+          "version": "latest"
+        },
+        "curl": {
+          "version": "latest"
+        },
+        "sudo": {
+          "version": "latest"
+        },
+        "shellcheck": {
+          "version": "0.9.0"
+        },
+        "strace": {
+          "version": "5.16"
+        },
+        "direnv": {
+          "postinstall": ".scripts/shim_direnv.sh"
+        },
+        "build-essential": {
+          "version": "latest"
+        },
+        "openssh-client": {
+          "version": "latest"
+        },
+        "pkg-config": {
+          "version": "latest"
+        },
+        "libssl-dev": {
+          "version": "latest"
+        },
+        "unzip": {
+          "version": "latest"
+        },
+        "xz-utils": {
+          "version": "latest"
+        },
+        "pandoc": {
+          "version": "latest"
+        },
+        "openssl": {
+          "version": "latest"
+        },
+        "parallel": {
+          "version": "latest"
+        }
+      },
+      "script": {
+        "rustup": {
+          "version": "1.28.2",
+          "toolchain": "1.95.0",
+          "components": [
+            "rustfmt",
+            "clippy",
+            "llvm-tools"
+          ],
+          "needs": [
+            "build-essential",
+            "curl",
+            "ca-certificates"
+          ]
+        },
+        "cargo-binstall": {
+          "version": "1.18.0",
+          "needs": [
+            "rustup"
+          ]
+        },
+        "llvm-strip": {
+          "version": "14"
+        },
+        "zig": {
+          "version": "0.16.0",
+          "needs": [
+            "build-essential"
+          ]
+        },
+        "node": {
+          "version": "24.20.0",
+          "needs": [
+            "fnm"
+          ]
+        },
+        "fnm": {
+          "version": "1.39.0",
+          "needs": [
+            "curl",
+            "ca-certificates",
+            "unzip"
+          ]
+        },
+        "vercel": {
+          "version": "59.10.0",
+          "needs": [
+            "node"
+          ]
+        },
+        "tectonic": {
+          "version": "0.15.0",
+          "needs": [
+            "curl",
+            "ca-certificates"
+          ]
+        },
+        "terraform": {
+          "version": "1.16.4",
+          "needs": [
+            "curl",
+            "ca-certificates",
+            "unzip"
+          ]
+        },
+        "go": {
+          "version": "1.25.5"
+        }
+      },
+      "cargo-binstall": {
+        "cargo-audit": {
+          "version": "0.22.2",
+          "args": "--disable-strategies compile",
+          "musl": true,
+          "release": "https://github.com/rustsec/rustsec/releases/download/cargo-audit/v{ version }/cargo-audit-{ target }-v{ version }.tgz",
+          "needs": [
+            "cargo-binstall"
+          ]
+        },
+        "cargo-tarpaulin": {
+          "version": "0.35.4",
+          "args": "--disable-strategies compile",
+          "musl": true,
+          "release": "https://github.com/xd009642/tarpaulin/releases/download/{ version }/cargo-tarpaulin-{ target }.tar.gz",
+          "needs": [
+            "cargo-binstall"
+          ]
+        },
+        "cargo-llvm-cov": {
+          "version": "0.9.1",
+          "args": "--disable-strategies compile",
+          "musl": true,
+          "release": "https://github.com/taiki-e/cargo-llvm-cov/releases/download/v{ version }/cargo-llvm-cov-{ target }.tar.gz",
+          "needs": [
+            "cargo-binstall"
+          ]
+        },
+        "cargo-nextest": {
+          "version": "0.9.144",
+          "args": "--disable-strategies compile",
+          "musl": true,
+          "release": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-{ version }/cargo-nextest-{ version }-{ target }.tar.gz",
+          "needs": [
+            "cargo-binstall"
+          ]
+        },
+        "cargo-fuzz": {
+          "version": "0.13.2",
+          "args": "--disable-strategies compile",
+          "musl": true,
+          "release": "https://github.com/rust-fuzz/cargo-fuzz/releases/download/{ version }/cargo-fuzz-{ version }-{ target }.tar.gz",
+          "needs": [
+            "cargo-binstall"
+          ]
+        },
+        "cargo-zigbuild": {
+          "version": "0.22.1",
+          "args": "--disable-strategies compile",
+          "musl": true,
+          "release": "https://github.com/rust-cross/cargo-zigbuild/releases/download/v{ version }/cargo-zigbuild-{ target }.tar.xz",
+          "needs": [
+            "xz-utils",
+            "cargo-binstall"
+          ]
+        }
+      },
+      "go-install": {
+        "yq": {
+          "version": "4.53.6",
+          "pkg": "github.com/mikefarah/yq/v4",
+          "needs": [
+            "go"
+          ]
+        }
+      },
+      "git": {
+        "shell-scan": {
+          "version": "da3ddd31b8dd705898931470d675ca4c35aaf730",
+          "needs": [
+            "git"
+          ]
+        },
+        "shell-tree": {
+          "version": "0d2e619720c88827da18005539225a6bf3b0b16d",
+          "needs": [
+            "git"
+          ]
+        },
+        "shell-docs": {
+          "version": "f8e0ce7198a580971b0933fa20680d39a80ea1ae",
+          "needs": [
+            "git"
+          ]
+        },
+        "shell-goldens": {
+          "version": "0bed61d8fa953740366e1418591d355e05f6e87a",
+          "needs": [
+            "git"
+          ]
+        },
+        "shell-lint": {
+          "version": "125159be7eec03bc2433669e2bee63791db33bf5",
+          "needs": [
+            "git"
+          ]
+        }
+      }
+    }
+  },
+  "features": {},
+  "release": {
+    "latest": "0.66.0-dev.184",
+    "stable": "0.65.0",
+    "releases": 141
+  }
+}

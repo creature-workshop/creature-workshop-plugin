@@ -1,0 +1,19 @@
+query($title: String!, $teamKey: String!) {
+  issues(
+    first: 1
+    filter: {
+      title: { eq: $title }
+      team: { key: { eq: $teamKey } }
+      state: { type: { nin: ["completed", "canceled"] } }
+    }
+  ) {
+    nodes {
+      id
+      identifier
+      url
+      title
+      createdAt
+      team { id key }
+    }
+  }
+}

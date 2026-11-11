@@ -1,0 +1,858 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2119  # bare @arr/@obj are the structs empty constructors
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+import \
+  "$SHELLOPS_DIR/lib/self/config.sh" \
+  "$SHELLOPS_DIR/lib/self/dependencies/api.sh" \
+  "$SHELLOPS_DIR/lib/self/resolve.sh" \
+  "$SHELLOPS_DIR/lib/system_packages/api.sh" \
+  "$SHELLOPS_DIR/lib/shell_rc/api.sh" \
+  "$SHELLOPS_DIR/lib/toolchain/api.sh" \
+  "$SHELLOPS_DIR/lib/toolchain/tool.sh" \
+  "$SHELLOPS_DIR/lib/toolchain/channel.sh"
+
+
+: <<'CONST'
+One newline, for @join-ing a tool array into the line-per-tool form the
+check loop below consumes.
+CONST
+__tools_api__NL="
+"
+__tools_api__scripts_dir="${TOOLS_SCRIPTS_DIR:-$PROJ/shell/scripts}"
+
+: <<'VAR'
+Where a project's own tool plugins sit: <name>.tool.op.sh files beside the
+scripts directory, or wherever TOOLS_PLUGINS_DIR points.
+VAR
+__tools_api__plugins_dir="${TOOLS_PLUGINS_DIR:-$(dirname "$__tools_api__scripts_dir")/tools}"
+
+# CONST: The check table's status column width, shared by its header and its lines.
+__tools_api__COL_STATUS=10
+
+# CONST: The check table's tool column width.
+__tools_api__COL_TOOL=22
+
+# CONST: The check table's version column width.
+__tools_api__COL_VERSION=14
+
+@false __tools_api__FLAG_CHECK
+@false __tools_api__FLAG_FORCE
+@false __tools_api__FLAG_UNINSTALL
+
+main() {
+  @obj __main__obj_1
+  @arr __main__arr_2
+  @obj __main__obj_3
+  @arr __main__arr_4
+  @obj resolver \
+    '.registry' "$__main__obj_1" \
+    '.order'    "$__main__arr_2" \
+    '.channels' "$__main__obj_3" \
+    '.tools'    "$__main__arr_4"
+
+  __tools_api__load_channels
+  __tools_api__load_tool_plugins
+  __tools_api__parse_manifest
+  __tools_api__inject_channel_dependencies
+  __tools_api__register_script_paths
+
+  @get __main__registry "$resolver" '.registry'
+  __main__order=$(__tools_api__resolve_order "$__main__registry")
+  @set resolver "$resolver" '.order' "$__main__order"
+
+  __tools_api__parse_args "$@"
+  __tools_api__detect_host
+
+  if @is_true "$__tools_api__FLAG_UNINSTALL" && @is_true "$__tools_api__FLAG_CHECK"; then
+    error "--uninstall cannot be combined with --check"
+    return 1
+  fi
+
+  @get __main__targets "$resolver" '.tools'
+
+  if @is_true "$__tools_api__FLAG_CHECK"; then
+    tools_check "$__main__targets"
+    return 0
+  fi
+
+  if @is_false "$__tools_api__FLAG_UNINSTALL"; then
+    __tools_api__record_lock
+  fi
+
+  if @is_true "$__tools_api__FLAG_UNINSTALL"; then
+    tools_uninstall "$__main__targets"
+    log; log "Done."
+    return 0
+  fi
+
+  if @is_true "$__tools_api__FLAG_FORCE"; then
+    tools_uninstall "$__main__targets"
+  fi
+
+  tools_install "$__main__targets"
+  log; log "Done."
+}
+
+: <<'FUN'
+Detects the host's package managers once, in this shell, so that every
+probe of a system tool, which runs in a subshell of its own, inherits the
+answer instead of detecting again. A host with no supported manager is
+reported by the first tool that needs one, not here.
+FUN
+__tools_api__detect_host() {
+  system_packages__distro > /dev/null 2>&1 || true
+}
+
+: <<'FUN'
+Records what the resolver derived from the declarations in the project's
+lock (ADR 000049), keeping everything else the lock holds: the tools by
+channel under dependencies.tools, the git channel's trees among them, and
+the run-time trees, fetched and walked, under dependencies.imports
+(ADR 000050).
+FUN
+__tools_api__record_lock() {
+  @get __tools_api__record_lock__registry "$resolver" '.registry'
+  self__dependencies__set_tools "$(self__dependencies__tools_of_registry "$__tools_api__record_lock__registry")" "$PROJ"
+  __tools_api__record_lock__imports="$(self__resolve__imports "$PROJ")" || return 1
+  self__dependencies__set_imports "$__tools_api__record_lock__imports" "$PROJ"
+}
+
+tools_install() {
+  __tools_install__targets="$1"
+
+  if @len __tools_install__len_5 "$__tools_install__targets"; [ "$__tools_install__len_5" -gt 0 ]; then
+    __tools_install__targets=$(__tools_api__expand_deps "$__tools_install__targets")
+  else
+    @get __tools_install__targets "$resolver" '.order'
+  fi
+
+  @foreach __tools_api__install_tool "$__tools_install__targets"
+}
+
+tools_uninstall() {
+  __tools_uninstall__targets="$1"
+
+  if @len __tools_uninstall__len_6 "$__tools_uninstall__targets"; [ "$__tools_uninstall__len_6" -eq 0 ]; then
+    @get __tools_uninstall__targets "$resolver" '.order'
+  fi
+
+  @foreach __tools_api__uninstall_tool "$__tools_uninstall__targets"
+}
+
+__tools_api__install_tool() {
+  __tools_api__dispatch_tool "$1" \
+    toolchain__channel__install_tool \
+    install \
+    __tools_api__skip_installed \
+  || return 1
+
+  __tools_api__run_postinstall "$1"
+}
+
+: <<'FUN'
+Runs the postinstall script the tool's entry names, relative to the
+directory its lock was read from. A tool whose entry names none runs
+nothing; one naming a script that is not there fails.
+
+args:
+  $1  The tool, wrapped
+FUN
+__tools_api__run_postinstall() {
+  @unwrap __tools_api__run_postinstall__tool "$1"
+  @defined "$__tools_api__run_postinstall__tool" || return 0
+
+  @get __tools_api__run_postinstall__requirements "$resolver" ".registry.\"$__tools_api__run_postinstall__tool\""
+  @let "$__tools_api__run_postinstall__requirements" __tools_api__run_postinstall__ postinstall origin_dir
+
+  __tools_api__run_postinstall__script=""
+  if @defined "$__tools_api__run_postinstall__postinstall"; then
+    __tools_api__run_postinstall__script="${__tools_api__run_postinstall__origin_dir}/${__tools_api__run_postinstall__postinstall}"
+  fi
+
+  @unlet __tools_api__run_postinstall__ postinstall origin_dir
+
+  [ -n "$__tools_api__run_postinstall__script" ] || return 0
+
+  if [ ! -f "$__tools_api__run_postinstall__script" ]; then
+    error "postinstall script not found: $__tools_api__run_postinstall__script"
+    return 1
+  fi
+
+  . "$__tools_api__run_postinstall__script"
+}
+
+__tools_api__uninstall_tool() {
+  __tools_api__dispatch_tool "$1" \
+    toolchain__channel__uninstall_tool \
+    uninstall \
+    __tools_api__skip_not_installed
+}
+
+: <<'FUN'
+Runs one verb of a tool's channel over the tool, unless the skip predicate
+says the verb is a no-op for it. Fails, naming the channel, when the tool's
+lock entry names a channel no plugin is registered under, and, for an
+install, when the channel is not itself installed, saying what installs it.
+
+args:
+  $1  The tool, wrapped
+  $2  The channel function that runs the verb (toolchain__channel__install_tool)
+  $3  The verb, for the log (install)
+  $4  The skip predicate: prints true when the verb is a no-op for the tool
+FUN
+__tools_api__dispatch_tool() {
+  __tools_api__dispatch_tool__fn="$2"
+  __tools_api__dispatch_tool__verb="$3"
+  __tools_api__dispatch_tool__should_skip="$4"
+
+  case "$__tools_api__dispatch_tool__verb" in
+    install)   __tools_api__dispatch_tool__Verb="Install" ;;
+    uninstall) __tools_api__dispatch_tool__Verb="Uninstall" ;;
+    *)         __tools_api__dispatch_tool__Verb="$__tools_api__dispatch_tool__verb" ;;
+  esac
+
+  @unwrap __tools_api__dispatch_tool__tool "$1"
+  @defined "$__tools_api__dispatch_tool__tool" || return 0
+
+  if @is_true "$("$__tools_api__dispatch_tool__should_skip" "$__tools_api__dispatch_tool__tool")"; then
+    return 0
+  fi
+
+  @get __tools_api__dispatch_tool__requirements "$resolver" ".registry.\"$__tools_api__dispatch_tool__tool\""
+  @get __tools_api__dispatch_tool__channel "$__tools_api__dispatch_tool__requirements" '.channel'
+  log "  ${__tools_api__dispatch_tool__Verb}ing $__tools_api__dispatch_tool__tool (channel: $__tools_api__dispatch_tool__channel)..."
+
+  if ! @is_true "$(toolchain__channel__known "$__tools_api__dispatch_tool__channel")"; then
+    error "No channel registered as '$__tools_api__dispatch_tool__channel' for $__tools_api__dispatch_tool__tool"
+    return 1
+  fi
+
+  if [ "$__tools_api__dispatch_tool__verb" = install ]; then
+    toolchain__channel__assert_installed "$__tools_api__dispatch_tool__channel" || return 1
+  fi
+
+  if ! "$__tools_api__dispatch_tool__fn" \
+    "$__tools_api__dispatch_tool__channel" \
+    "$__tools_api__dispatch_tool__tool" \
+    "$__tools_api__dispatch_tool__requirements"
+  then
+    error "Failed to $__tools_api__dispatch_tool__verb $__tools_api__dispatch_tool__tool"
+    return 1
+  fi
+}
+
+: <<'FUN'
+Prints true when installing the tool is a no-op to skip: it is installed
+already, and neither --force nor a tool@variant override asks for the
+installer to run regardless. A skipped tool of a channel answering @activate
+is handed to that role first, so a checkout that never ran the installer
+still records the tool's environment.
+FUN
+__tools_api__skip_installed() {
+  if @is_true "$__tools_api__FLAG_FORCE"; then
+    @false __tools_api__skip_installed__out
+    println "$__tools_api__skip_installed__out"
+    return 0
+  fi
+
+  # An override (tool@variant) must always run the installer so the variant is
+  # applied, even when the base tool is already present.
+  if @get __tools_api__skip_installed__get_7 "$resolver" ".registry.\"$1\".override"; @defined "$__tools_api__skip_installed__get_7"; then
+    @false __tools_api__skip_installed__out
+    println "$__tools_api__skip_installed__out"
+    return 0
+  fi
+
+  __tools_api__skip_installed__installed="$(__tools_api__tool_installed "$1")"
+  if @is_true "$__tools_api__skip_installed__installed"; then
+    log "  $1: already installed, skipping"
+    __tools_api__activate_installed "$1" || return 1
+  fi
+  println "$__tools_api__skip_installed__installed"
+}
+
+: <<'FUN'
+Runs the channel's @activate for the installed tool, handing it the tool and
+its entry. A channel that leaves the role out runs nothing.
+FUN
+__tools_api__activate_installed() {
+  __tools_api__activate_installed__row=$(toolchain__row "$resolver" "$1")
+  @let "$__tools_api__activate_installed__row" __tools_api__activate_installed__ tool entry channel
+
+  if @is_true "$(toolchain__channel__answers "$__tools_api__activate_installed__channel" activate)"; then
+    toolchain__channel__activate \
+      "$__tools_api__activate_installed__channel" \
+      "$__tools_api__activate_installed__tool" \
+      "$__tools_api__activate_installed__entry"
+  fi
+
+  @unlet __tools_api__activate_installed__ tool entry channel
+}
+
+: <<'FUN'
+Prints true when uninstalling the tool is a no-op to skip: nothing of it is
+installed.
+FUN
+__tools_api__skip_not_installed() {
+  __tools_api__skip_not_installed__installed="$(__tools_api__tool_installed "$1")"
+
+  if @is_false "$__tools_api__skip_not_installed__installed"; then
+    log "  $1: not installed, skipping"
+  fi
+  @not __tools_api__skip_not_installed__out "$__tools_api__skip_not_installed__installed"
+  println "$__tools_api__skip_not_installed__out"
+}
+
+: <<'FUN'
+Prints true when a tool is installed, as its channel judges it.
+
+  __tools_api__tool_installed jq  ->  true
+FUN
+__tools_api__tool_installed() {
+  __tools_api__tool_installed__row=$(toolchain__row "$resolver" "$1")
+  __tools_api__row_installed "$__tools_api__tool_installed__row"
+}
+
+: <<'FUN'
+Prints true when the tool of <row> is installed, as its channel judges it.
+A channel answering @probe answers for its own tools -- system asks the
+host's package manager, npm reads the version under the tool's home -- and
+a tool of any other channel is installed when a command of its name is on
+PATH.
+
+  __tools_api__row_installed "$(toolchain__row "$resolver" jq)"  ->  true
+FUN
+__tools_api__row_installed() {
+  @let "$1" __tools_api__row_installed__ tool entry channel
+
+  if @is_true "$(toolchain__channel__answers "$__tools_api__row_installed__channel" probe)"; then
+    toolchain__channel__probe \
+      "$__tools_api__row_installed__channel" \
+      "$__tools_api__row_installed__tool" \
+      "$__tools_api__row_installed__entry"
+  else
+    @succeeds __tools_api__row_installed__out __tools_api__on_path "$__tools_api__row_installed__tool"
+    println "$__tools_api__row_installed__out"
+  fi
+
+  @unlet __tools_api__row_installed__ tool entry channel
+}
+
+: <<'FUN'
+Succeeds when a command of the name is on PATH, printing nothing either way.
+FUN
+__tools_api__on_path() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+tools_check() {
+  __tools_check__targets="$1"
+
+  if @len __tools_check__len_8 "$__tools_check__targets"; [ "$__tools_check__len_8" -eq 0 ]; then
+    @get __tools_check__targets "$resolver" '.order'
+  fi
+
+  printf "%-${__tools_api__COL_STATUS}s %-${__tools_api__COL_TOOL}s %-${__tools_api__COL_VERSION}s %s\n" \
+    "Status" "Tool" "Version" "Channel" >&2
+  println "$(printf '%*s' 60 '' | tr ' ' '-')" >&2
+
+  @join __tools_check__lines "$__tools_check__targets" "$__tools_api__NL"
+  while IFS= read -r __tools_check__tool; do
+    [ -z "$__tools_check__tool" ] && continue
+    __tools_api__check_line "$__tools_check__tool"
+  done <<EOF
+$__tools_check__lines
+EOF
+}
+
+: <<'FUN'
+Prints the check table's line for <tool>: whether its channel finds it
+installed, its name, the version the lock pins for it and the channel that
+installs it. The line goes to stderr, where the table it belongs to does.
+FUN
+__tools_api__check_line() {
+  __tools_api__check_line__row=$(toolchain__row "$resolver" "$1")
+  @let "$__tools_api__check_line__row" __tools_api__check_line__ channel version
+
+  printf "%-${__tools_api__COL_STATUS}s %-${__tools_api__COL_TOOL}s %-${__tools_api__COL_VERSION}s %s\n" \
+    "$(__tools_api__check_marker "$__tools_api__check_line__row")" \
+    "$1" \
+    "$__tools_api__check_line__version" \
+    "$__tools_api__check_line__channel" >&2
+
+  @unlet __tools_api__check_line__ channel version
+}
+
+: <<'FUN'
+The check table's mark for the tool of <row>: a tick when its channel finds
+it installed, a cross when it does not.
+FUN
+__tools_api__check_marker() {
+  if @is_true "$(__tools_api__row_installed "$1")"; then
+    println "  ✓"
+  else
+    println "  ✗"
+  fi
+}
+
+__tools_api__parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -c|--check)     @true __tools_api__parse_args__true_9; __tools_api__FLAG_CHECK="$__tools_api__parse_args__true_9" ;;
+      -f|--force)     @true __tools_api__parse_args__true_10; __tools_api__FLAG_FORCE="$__tools_api__parse_args__true_10" ;;
+      -u|--uninstall) @true __tools_api__parse_args__true_11; __tools_api__FLAG_UNINSTALL="$__tools_api__parse_args__true_11" ;;
+      -h|--help)      __tools_api__usage; exit 0 ;;
+      --needs)
+        __tools_api__add_needs "${2:?--needs takes a kind}" || exit 1
+        shift
+        ;;
+      -*)
+        error "Unknown option: $1"
+        __tools_api__usage
+        exit 1
+        ;;
+      *)
+        __tools_api__add_target "$1" || exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+: <<'FUN'
+The tool name from a `name@override` target arg — the whole arg when there is no
+`@` (e.g. `rustup@nightly` -> `rustup`, `cargo-audit` -> `cargo-audit`).
+FUN
+__tools_api__target_name() {
+  printf '%s' "${1%%@*}"
+}
+
+: <<'FUN'
+The override from a `name@override` target arg, empty when there is no `@`
+(e.g. `rustup@nightly` -> `nightly`, `rustup` -> ``).
+FUN
+__tools_api__target_override() {
+  case "$1" in
+    *@*) printf '%s' "${1#*@}" ;;
+  esac
+}
+
+: <<'FUN'
+Space-separated names of every tool registered in the resolver, for the
+"unknown tool" error and the usage text.
+FUN
+__tools_api__registered_tools() {
+  @get __tools_api__registered_tools__get_12 "$resolver" '.registry'
+  @keys __tools_api__registered_tools__keys_13 "$__tools_api__registered_tools__get_12"
+  @join __tools_api__registered_tools__out "$__tools_api__registered_tools__keys_13" " "
+  println "$__tools_api__registered_tools__out"
+}
+
+: <<'FUN'
+Registers the programs the plugins of kind <kind> that this repository
+declares run as install targets. The kind's module, lib/<kind>/api.sh,
+prints them as <kind>__declared_needs, a struct array of tool names; a
+program the tools declaration does not pin is an unknown tool, as it is on
+the command line.
+
+args:
+  $1  The kind, e.g. deployment
+FUN
+__tools_api__add_needs() {
+  import "$SHELLOPS_DIR/lib/$1/api.sh" || return 1
+  __tools_api__add_needs__list="$("${1}__declared_needs")" || return 1
+  @foreach __tools_api__add_wrapped_target "$__tools_api__add_needs__list"
+}
+
+: <<'FUN'
+@foreach callback: registers the wrapped <tool> as an install target.
+FUN
+__tools_api__add_wrapped_target() {
+  @unwrap __tools_api__add_wrapped_target__unwrap_14 "$1"
+  __tools_api__add_target "$__tools_api__add_wrapped_target__unwrap_14"
+}
+
+: <<'FUN'
+Registers a positional install target. A `tool@override` arg records `.override`
+on the tool so its channel installer can select a non-default variant (e.g.
+rustup@nightly picks a different toolchain).
+
+args:
+  $1  The tool name, optionally suffixed with @<override>
+FUN
+__tools_api__add_target() {
+  __tools_api__add_target__name="$(__tools_api__target_name "$1")"
+  __tools_api__add_target__override="$(__tools_api__target_override "$1")"
+
+  if @get __tools_api__add_target__get_15 "$resolver" ".registry.\"$__tools_api__add_target__name\""; ! @defined "$__tools_api__add_target__get_15"; then
+    error "Unknown tool: $__tools_api__add_target__name"
+    log "Registered tools: $(__tools_api__registered_tools)"
+    return 1
+  fi
+
+  if @defined "$__tools_api__add_target__override"; then
+    @set resolver "$resolver" ".registry.\"$__tools_api__add_target__name\".override" "$__tools_api__add_target__override"
+  fi
+
+  @push resolver "$resolver" '.tools' "\"$__tools_api__add_target__name\""
+}
+
+__tools_api__usage() {
+  __tools_api__usage__tools=$(__tools_api__registered_tools)
+
+  cat >&2 <<EOF
+Tool installer powered by shellops.
+
+Declarative: the tools declaration (.ops/config/tools.yaml, or ops.lock until the project converts) names the tools and their versions, and this installs
+whatever is missing in dependency order. In a consumer project shellops' own
+shellops' own declaration is read first as a base layer, and the project's entries win where the
+two name the same tool.
+
+Usage: ops install [flags...] [tools...]
+
+Arguments:
+  tools...          Install only the specified tools (all registered tools if
+                    omitted). Append @<variant> to a tool to select a non-default
+                    variant, e.g. rustup@nightly for a different toolchain.
+
+Flags:
+  --needs <kind>    Also install the programs the plugins of <kind> this
+                    repository declares run, as the kind's module prints them:
+                    --needs deployment installs what the targets of
+                    .ops/config/deployment.yaml run
+  -c, --check       Check install status without installing
+  -f, --force       Force re-installation (uninstall first)
+  -u, --uninstall   Uninstall specified tools
+  -h, --help        Show this help text
+
+The tools declaration:
+  {
+    "<channel>": {
+      "<tool-binary-name>": {
+        "version": "<version>",
+        "needs": ["<other-tool>"],   // optional
+        "args": "<extra-args>",      // optional, channel-specific
+        "crate": "<crate-name>",     // optional, cargo channels
+        "pkg": "<package>",          // go module path (required for go-install),
+                                     // npm package when it differs from the tool
+        "bin": "<script>"            // optional, npm: the script the tool's
+                                     // executable runs, shimmed onto PATH
+      }
+    }
+  }
+
+Channels:
+  A channel is a <name>.channel.op.sh plugin defining @channel.<name>, taken
+  from shellops' lib and then from the project's channels directory
+  (lib/toolchain/channel.sh). The "script" channel provisions a tool through its
+  <tool>.tool.op.sh plugin, one shellops ships under lib or one the project
+  keeps in its tools directory (TOOLS_PLUGINS_DIR, default shell/tools), when
+  the plugin answers @install, and otherwise runs its .installer.sh and
+  .uninstaller.sh pair from plugins/tools, project scripts first.
+  The "npm" channel installs a package under a home of its own with Node's
+  bundled npm and counts it installed by the version there, so a library with
+  nothing on PATH is a tool like any other.
+
+Registered tools:
+  $__tools_api__usage__tools
+EOF
+}
+
+: <<'FUN'
+Loads the project's channel plugins beside shellops' own, which loaded with
+the channel kind, and records on the resolver what every channel obliges
+its tools to. A project that is shellops itself has no channels directory
+of its own.
+FUN
+__tools_api__load_channels() {
+  __tools_api__load_channels__consumer_channels="$(dirname "$__tools_api__scripts_dir")/channels"
+
+  if [ "$SHELLOPS_DIR" != "$PROJ" ]; then
+    toolchain__channel__load_all "$__tools_api__load_channels__consumer_channels" || return 1
+  fi
+
+  @set resolver "$resolver" '.channels' "$(toolchain__channel__table)"
+}
+
+: <<'FUN'
+Loads the project's own tool plugins from its tools directory beside
+shellops' own, which loaded with the tool kind, so the script channel finds
+a project's installer by the tool's name. A project that is shellops itself
+has no tools directory of its own.
+FUN
+__tools_api__load_tool_plugins() {
+  if [ "$SHELLOPS_DIR" != "$PROJ" ]; then
+    toolchain__tool__load_all "$__tools_api__plugins_dir" || return 1
+  fi
+}
+
+__tools_api__parse_manifest() {
+  @false __tools_api__parse_manifest__found
+
+  if [ "$SHELLOPS_DIR" != "$PROJ" ] && @is_true "$(self__config__present tools "$SHELLOPS_DIR")"; then
+    __tools_api__layer_tools "$SHELLOPS_DIR"
+    @true __tools_api__parse_manifest__found
+  fi
+
+  if @is_true "$(self__config__present tools "$PROJ")"; then
+    __tools_api__layer_tools "$PROJ"
+    @true __tools_api__parse_manifest__found
+  fi
+
+  if @is_false "$__tools_api__parse_manifest__found"; then
+    error "No tools declaration found (checked $(self__config__path tools "$PROJ"))"
+    return 1
+  fi
+}
+
+: <<'FUN'
+Layers the tools declaration of the repository at <root> onto the registry:
+every channel and every tool it names is read in one call, and its tools
+win the ones the registry already holds. An empty declaration contributes
+nothing and is warned about.
+
+args:
+  $1  The repository's root, whose .ops/config/tools.yaml, or ops.lock
+      while it has not converted, is read
+FUN
+__tools_api__layer_tools() {
+  __tools_api__layer_tools__lock=$(self__config__load tools "$1")
+
+  if ! @defined "$__tools_api__layer_tools__lock"; then
+    warn "Empty tools declaration: $(self__config__path tools "$1")"
+    return 0
+  fi
+
+  __tools_api__layer_tools__origin_dir=$(cd "$1" && pwd)
+
+  resolver=$(toolchain__with_lock \
+    "$resolver" \
+    "$__tools_api__layer_tools__lock" \
+    "$__tools_api__layer_tools__origin_dir"
+  )
+}
+
+: <<'FUN'
+Records on every tool the installer and uninstaller script it runs, taken
+from shellops' own plugins/tools and then from the project's scripts
+directory, the project's winning. A tool a registered tool plugin
+provisions needs none. Fails, naming each one, when a tool of the script
+channel has neither a plugin nor its scripts or a script has no
+counterpart; the registry is left untouched then.
+FUN
+__tools_api__register_script_paths() {
+  __tools_api__register_script_paths__plugins=$(toolchain__tool__installers)
+  __tools_api__register_script_paths__installers=$(__tools_api__script_files '*.installer.sh')
+  __tools_api__register_script_paths__uninstallers=$(__tools_api__script_files '*.uninstaller.sh')
+
+  __tools_api__register_script_paths__answer=$(toolchain__with_scripts \
+    "$resolver" \
+    "$__tools_api__register_script_paths__plugins" \
+    "$__tools_api__register_script_paths__installers" \
+    "$__tools_api__register_script_paths__uninstallers" \
+    "$__tools_api__scripts_dir"
+  )
+
+  @let "$__tools_api__register_script_paths__answer" __tools_api__register_script_paths__ resolver errors
+
+  __tools_api__register_script_paths__status=0
+  if @empty "$__tools_api__register_script_paths__errors"; then
+    resolver="$__tools_api__register_script_paths__resolver"
+  else
+    @foreach __tools_api__report_script_error "$__tools_api__register_script_paths__errors"
+    __tools_api__register_script_paths__status=1
+  fi
+
+  @unlet __tools_api__register_script_paths__ resolver errors
+  return "$__tools_api__register_script_paths__status"
+}
+
+: <<'FUN'
+The paths of every script matching <glob>, from shellops' own plugins/tools
+and then from the project's scripts directory, one per line. The project's
+come last, which is what makes them win.
+FUN
+__tools_api__script_files() {
+  __tools_api__script_files__shellops_dir="$SHELLOPS_DIR/plugins/tools"
+
+  if [ -d "$__tools_api__script_files__shellops_dir" ]; then
+    find "$__tools_api__script_files__shellops_dir" -name "$1" -print 2>/dev/null
+  fi
+
+  if [ -d "$__tools_api__scripts_dir" ] && [ "$__tools_api__scripts_dir" != "$__tools_api__script_files__shellops_dir" ]; then
+    find "$__tools_api__scripts_dir" -name "$1" -print 2>/dev/null
+  fi
+}
+
+: <<'FUN'
+@foreach callback: reports one script complaint, wrapped.
+FUN
+__tools_api__report_script_error() {
+  @unwrap __tools_api__report_script_error__unwrap_16 "$1"
+  error "$__tools_api__report_script_error__unwrap_16"
+}
+
+: <<'FUN'
+Records on every tool whose channel needs another tool that it needs it,
+registering the needed tool from the channel's default when no lock named
+it. The channels are asked once what they oblige rather than tool by tool.
+FUN
+__tools_api__inject_channel_dependencies() {
+  __tools_api__inject_channel_dependencies__pairs=$(toolchain__channel_needs "$resolver")
+  @foreach __tools_api__inject_channel_dependency "$__tools_api__inject_channel_dependencies__pairs"
+}
+
+: <<'FUN'
+@foreach callback: registers the dependency <pair> names when nothing has,
+and records that its tool needs it.
+
+args:
+  $1  A {tool, dependency} pair
+FUN
+__tools_api__inject_channel_dependency() {
+  @let "$1" __tools_api__inject_channel_dependency__ tool dependency
+
+  __tools_api__ensure_channel_dependency "$__tools_api__inject_channel_dependency__dependency"
+  __tools_api__append_need \
+    "$__tools_api__inject_channel_dependency__tool" \
+    "$__tools_api__inject_channel_dependency__dependency"
+  __tools_api__inject_channel_dependency__status=$?
+
+  @unlet __tools_api__inject_channel_dependency__ tool dependency
+  return "$__tools_api__inject_channel_dependency__status"
+}
+
+__tools_api__ensure_channel_dependency() {
+  # Recursive: per-call state is positional only, so the dunder vars are
+  # reassigned per frame; nothing here is read after the recursive call.
+  if @get __tools_api__ensure_channel_dependency__get_17 "$resolver" ".registry.\"$1\""; ! @defined "$__tools_api__ensure_channel_dependency__get_17"; then
+    __tools_api__ensure_channel_dependency__default_json=$(__tools_api__find_dependency_default "$1")
+    if ! @defined "$__tools_api__ensure_channel_dependency__default_json"; then
+      error "No channel dependency default defined for '$1'"
+      return 1
+    fi
+    @set resolver "$resolver" ".registry.\"$1\"" "$__tools_api__ensure_channel_dependency__default_json"
+  fi
+
+  @get __tools_api__ensure_channel_dependency__channel "$resolver" ".registry.\"$1\".channel"
+  @get __tools_api__ensure_channel_dependency__parent "$resolver" ".channels.\"$__tools_api__ensure_channel_dependency__channel\".dependency" ''
+  if @defined "$__tools_api__ensure_channel_dependency__parent"; then
+    # Append before recursing: the recursion reuses this frame's dunder
+    # vars (POSIX sh has no locals), so the parent name must be consumed
+    # while it is still this frame's value.
+    __tools_api__append_need "$1" "$__tools_api__ensure_channel_dependency__parent"
+    __tools_api__ensure_channel_dependency "$__tools_api__ensure_channel_dependency__parent"
+  fi
+}
+
+__tools_api__find_dependency_default() {
+  @get __tools_api__find_dependency_default__get_18 "$resolver" '.channels'
+  @values __tools_api__find_dependency_default__channels "$__tools_api__find_dependency_default__get_18"
+  @find __tools_api__find_dependency_default__match __tools_api__channel_depends_on "$__tools_api__find_dependency_default__channels" "$1"
+  [ "$__tools_api__find_dependency_default__match" = "null" ] && return 0
+  @scalar __tools_api__find_dependency_default__out "$__tools_api__find_dependency_default__match" '.dependency_default'
+  println "$__tools_api__find_dependency_default__out"
+}
+
+__tools_api__channel_depends_on() {
+  @scalar __tools_api__channel_depends_on__scalar_19 "$1" '.dependency'
+  [ "$__tools_api__channel_depends_on__scalar_19" = "$2" ]
+}
+
+: <<'FUN'
+Records that <tool> needs <need>, leaving the registry as it is when the
+need is already there.
+FUN
+__tools_api__append_need() {
+  resolver=$(toolchain__with_need "$resolver" "$1" "$2")
+}
+
+: <<'FUN'
+Prints the tools of <registry> in the order they install in: every tool
+after the tools it needs. Fails, naming the tool it involves, on a circular
+dependency or a need nothing registered.
+
+  __tools_api__resolve_order '{"a":{"needs":["b"]},"b":{}}'  ->  ["b","a"]
+FUN
+__tools_api__resolve_order() {
+  __tools_api__resolve_order__answer=$(toolchain__order "$1") || return 1
+  @let "$__tools_api__resolve_order__answer" __tools_api__resolve_order__ error order
+
+  __tools_api__resolve_order__status=0
+  if @defined "$__tools_api__resolve_order__error"; then
+    error "$__tools_api__resolve_order__error"
+    __tools_api__resolve_order__status=1
+  else
+    println "$__tools_api__resolve_order__order"
+  fi
+
+  @unlet __tools_api__resolve_order__ error order
+  return "$__tools_api__resolve_order__status"
+}
+
+__tools_api__expand_deps() {
+  # Transitive closure of needs via a recursive @foreach mark (the
+  # accumulator lives in a shared global; @foreach callbacks run in the
+  # current shell), then an @reduce that keeps the order's needed tools.
+  @obj __tools_api__expand_deps__needed
+  @foreach __tools_api__mark_needed "$1"
+
+  @get __tools_api__expand_deps__get_20 "$resolver" '.order'
+  @arr __tools_api__expand_deps__arr_21
+  @reduce __tools_api__expand_deps__out __tools_api__collect_needed_in_order \
+    "$__tools_api__expand_deps__get_20" \
+    "$__tools_api__expand_deps__arr_21" \
+    "$__tools_api__expand_deps__needed"
+  println "$__tools_api__expand_deps__out"
+}
+
+: <<'FUN'
+Marks the tool $1 as needed, then marks everything it needs in turn, so that
+one call over a wrapped tool name reaches the whole transitive closure below
+it. A tool already marked is left alone, which is what keeps a cycle in the
+needs graph from recursing forever.
+
+args:
+  $1  The tool name, wrapped (an @foreach element)
+FUN
+__tools_api__mark_needed() {
+  @unwrap __tools_api__mark_needed__tool "$1"
+
+  if @get __tools_api__mark_needed__get_22 "$__tools_api__expand_deps__needed" ".\"$__tools_api__mark_needed__tool\""; @defined "$__tools_api__mark_needed__get_22"; then
+    return 0
+  fi
+
+  @true __tools_api__mark_needed__true_23
+  @set __tools_api__expand_deps__needed "$__tools_api__expand_deps__needed" ".\"$__tools_api__mark_needed__tool\"" "$__tools_api__mark_needed__true_23"
+
+  @get __tools_api__mark_needed__needs_json "$resolver" ".registry.\"$__tools_api__mark_needed__tool\".needs"
+
+  if @defined "$__tools_api__mark_needed__needs_json"; then
+    @foreach __tools_api__mark_needed "$__tools_api__mark_needed__needs_json"
+  fi
+}
+
+: <<'FUN'
+Echoes the accumulator $1 with the install-order entry $2 appended when the
+needed set $3 contains it, and unchanged when it does not, so an @reduce over
+the full order narrows it to the needed tools while keeping their order.
+
+args:
+  $1  The accumulator (an array of wrapped tool names)
+  $2  The tool name from the install order, wrapped
+  $3  The needed set ({<tool>: true})
+FUN
+__tools_api__collect_needed_in_order() {
+  if @unwrap __tools_api__collect_needed_in_order__unwrap_24 "$2"; @get __tools_api__collect_needed_in_order__get_25 "$3" ".\"$__tools_api__collect_needed_in_order__unwrap_24\""; @defined "$__tools_api__collect_needed_in_order__get_25"; then
+    @push __tools_api__collect_needed_in_order__out "$1" "$2"
+    println "$__tools_api__collect_needed_in_order__out"
+  else
+    echo "$1"
+  fi
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *install) main "$@" ;;
+esac

@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+USAGE="$(cat <<'HELP'
+Fails when a jq is on the PATH, and does nothing when none is.
+
+Usage: .scripts/jq-absent [-h,--help]
+
+shellops runs without jq, and so does everything it fetches. A CI job runs
+this after it installs its tools. With no jq in the job, a call of jq that
+someone adds fails the job that runs it, and no test passes because the
+image happened to have one.
+HELP
+)"
+
+# CONST: The directory this script sits in, which the repository root is found from.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# CONST: The shellops tree this script belongs to, which the library is loaded from.
+export SHELLOPS_DIR="${SHELLOPS_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+
+source "$SHELLOPS_DIR/shell/.logs/shell/log/api.sh"
+source "$SHELLOPS_DIR/lib/stdout/api.sh"
+
+main() {
+  case "${1:-}" in
+    -h|--help)
+      println "$USAGE"
+      exit 0
+      ;;
+  esac
+
+  if ! command -v jq >/dev/null 2>&1; then
+    return 0
+  fi
+
+  error "jq is installed at $(command -v jq). shellops runs without jq: take it out of this job's image or its install list."
+  exit 1
+}
+
+main "$@"

@@ -1,0 +1,6 @@
+mutation($id: String!, $input: EmailIntakeAddressUpdateInput!) {
+  emailIntakeAddressUpdate(id: $id, input: $input) {
+    success
+    emailIntakeAddress { id address }
+  }
+}

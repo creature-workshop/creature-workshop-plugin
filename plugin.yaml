@@ -1,0 +1,39 @@
+name: creature-workshop
+version: 0.1.0-dev.24
+manifest_version: 2
+api_version: 1
+description: "Manage your project's development lifecycle all in one place: the project."
+author: Jerrod
+license: MIT
+homepage: https://gitlab.creature-workshop.com/ksoft/hermes/creature-workshop-plugin
+tags: [devops, tools, desktop]
+requires_hermes: ">=0.23.0"
+python_dependencies:
+  - "PyYAML>=6.0,<7"
+provides_tools:
+  - workshop_project
+  - workshop_install
+  - workshop_test
+  - workshop_lint
+provides_hooks:
+  - pre_tool_call
+  - pre_llm_call
+  - post_compaction
+  - subagent_start
+config_schema:
+  ops_timeout_seconds:
+    type: int
+    default: 120
+    description: How long one shell/ops command may run before the tool reports a timeout.
+  pane_refresh_seconds:
+    type: int
+    default: 20
+    description: How often the Desktop pane re-runs install --check to refresh the toolchain.
+  ops_env_passthrough:
+    type: list
+    default: []
+    description: Names of more environment variables for every command the plugin runs, such as HTTPS_PROXY. A command gets PATH, HOME, the locale and the terminal without them.
+  approved_projects:
+    type: list
+    default: []
+    description: Absolute paths of the project roots the plugin may run shell/ops in. Empty until you add one; the plugin runs nothing in a project that is not approved.

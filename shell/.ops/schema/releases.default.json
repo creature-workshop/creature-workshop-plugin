@@ -1,0 +1,22 @@
+{
+  "groups": [
+    {
+      "header": "Breaking Changes",
+      "labels": ["crit/breaking", "crit/removal"]
+    },
+    {
+      "header": "Additional Development",
+      "labels": ["type/feature", "type/fix"]
+    },
+    {
+      "header": "Quality",
+      "labels": ["quality/security", "quality/perf", "quality/test"]
+    },
+    {
+      "header": "Support",
+      "labels": ["ops/docs", "ops/chore", "lifecycle/refactor", "lifecycle/deprecation", "ops/deps", "ops/cicd"]
+    }
+  ],
+  "skip": ["meta/skip-changelog"],
+  "default_group": "Support"
+}

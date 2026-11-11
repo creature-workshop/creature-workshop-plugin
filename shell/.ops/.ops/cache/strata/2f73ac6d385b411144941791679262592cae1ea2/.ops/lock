@@ -1,0 +1,241 @@
+{
+  "dependencies": {
+    "tools": {
+      "cargo-binstall": {
+        "cargo-audit": {
+          "args": "--disable-strategies compile",
+          "version": "0.22.2",
+          "needs": [
+            "cargo-binstall"
+          ]
+        },
+        "cargo-fuzz": {
+          "args": "--disable-strategies compile",
+          "musl": true,
+          "version": "0.13.2",
+          "needs": [
+            "cargo-binstall"
+          ]
+        },
+        "cargo-llvm-cov": {
+          "args": "--disable-strategies compile",
+          "musl": true,
+          "version": "0.9.1",
+          "needs": [
+            "cargo-binstall"
+          ]
+        },
+        "cargo-nextest": {
+          "args": "--disable-strategies compile",
+          "musl": true,
+          "version": "0.9.144",
+          "needs": [
+            "cargo-binstall"
+          ]
+        },
+        "cargo-tarpaulin": {
+          "args": "--disable-strategies compile",
+          "musl": true,
+          "version": "0.35.4",
+          "needs": [
+            "cargo-binstall"
+          ]
+        },
+        "cargo-zigbuild": {
+          "args": "--disable-strategies compile",
+          "musl": true,
+          "version": "0.22.1",
+          "needs": [
+            "cargo-binstall"
+          ]
+        }
+      },
+      "git": {
+        "shell-docs": {
+          "repository": "https://gitlab.creature-workshop.com/ksoft/libraries/shell-docs.git",
+          "version": "9330e90d28964a3974ccec8c24e0b8feed2f3cec",
+          "needs": [
+            "git"
+          ]
+        },
+        "shell-goldens": {
+          "repository": "https://gitlab.creature-workshop.com/ksoft/libraries/shell-goldens.git",
+          "version": "0bed61d8fa953740366e1418591d355e05f6e87a",
+          "needs": [
+            "git"
+          ]
+        },
+        "shell-lint": {
+          "repository": "https://gitlab.creature-workshop.com/ksoft/libraries/shell-lint.git",
+          "version": "8482df4d2541a2360fbd7d88057055344074320b",
+          "needs": [
+            "git"
+          ]
+        },
+        "shell-scan": {
+          "repository": "https://gitlab.creature-workshop.com/ksoft/libraries/shell-scan.git",
+          "version": "bdc0e2a182cd8afd1909a2168e02ceaa1955ec68",
+          "needs": [
+            "git"
+          ]
+        },
+        "shell-tree": {
+          "repository": "https://gitlab.creature-workshop.com/ksoft/libraries/shell-tree.git",
+          "version": "9697ee1174e4ad2fe522d7ecc3f4e298bf602320",
+          "needs": [
+            "git"
+          ]
+        }
+      },
+      "go-install": {
+        "yq": {
+          "pkg": "github.com/mikefarah/yq/v4",
+          "version": "4.53.6",
+          "needs": [
+            "go"
+          ]
+        }
+      },
+      "script": {
+        "cargo-binstall": {
+          "needs": [
+            "rustup"
+          ],
+          "version": "1.18.0"
+        },
+        "fnm": {
+          "needs": [
+            "curl",
+            "ca-certificates",
+            "unzip"
+          ],
+          "version": "1.39.0"
+        },
+        "llvm-strip": {
+          "version": "14"
+        },
+        "node": {
+          "needs": [
+            "fnm"
+          ],
+          "version": "24.20.0"
+        },
+        "rustup": {
+          "components": [
+            "rustfmt",
+            "clippy",
+            "llvm-tools"
+          ],
+          "needs": [
+            "build-essential",
+            "curl",
+            "ca-certificates"
+          ],
+          "toolchain": "1.95.0",
+          "version": "1.28.2"
+        },
+        "tectonic": {
+          "needs": [
+            "curl",
+            "ca-certificates"
+          ],
+          "version": "0.15.0"
+        },
+        "terraform": {
+          "needs": [
+            "curl",
+            "ca-certificates",
+            "unzip"
+          ],
+          "version": "1.16.4"
+        },
+        "vercel": {
+          "needs": [
+            "node"
+          ],
+          "version": "59.10.0"
+        },
+        "zig": {
+          "needs": [
+            "build-essential"
+          ],
+          "version": "0.16.0"
+        },
+        "go": {
+          "version": "1.25.5"
+        }
+      },
+      "system": {
+        "build-essential": {
+          "version": "latest"
+        },
+        "ca-certificates": {
+          "version": "latest"
+        },
+        "curl": {
+          "version": "latest"
+        },
+        "direnv": {
+          "postinstall": ".scripts/shim_direnv.sh"
+        },
+        "git": {
+          "version": "latest"
+        },
+        "jq": {
+          "version": "1.7.1"
+        },
+        "libssl-dev": {
+          "version": "latest"
+        },
+        "openssh-client": {
+          "version": "latest"
+        },
+        "openssl": {
+          "version": "latest"
+        },
+        "pandoc": {
+          "version": "latest"
+        },
+        "parallel": {
+          "version": "latest"
+        },
+        "pkg-config": {
+          "version": "latest"
+        },
+        "shellcheck": {
+          "version": "0.9.0"
+        },
+        "strace": {
+          "version": "5.16"
+        },
+        "sudo": {
+          "version": "latest"
+        },
+        "unzip": {
+          "version": "latest"
+        },
+        "dash": {
+          "version": "latest"
+        },
+        "mawk": {
+          "version": "latest"
+        }
+      },
+      "npm": {
+        "likec4": {
+          "bin": "bin/likec4.mjs",
+          "version": "1.59.3",
+          "needs": [
+            "node"
+          ]
+        }
+      }
+    },
+    "imports": {}
+  },
+  "features": {},
+  "release": {
+    "latest": "0.1.0-dev.9",
+    "stable": "0.0.0"
+  }
+}

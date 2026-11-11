@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/creature-workshop/shellops/lib/homebrew/formula_metadata.schema.json",
+  "title": "Homebrew Formula Metadata",
+  "description": "Metadata required to generate a Homebrew formula.",
+  "type": "object",
+  "required": [
+    "name",
+    "version"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Formula name: the file under Formula/ and the Ruby class (e.g. tool, git-fu, tool-pre)."
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Release version (e.g. 1.2.0)."
+    },
+    "description": {
+      "type": "string",
+      "description": "One-line description for the formula."
+    },
+    "homepage": {
+      "type": "string",
+      "description": "Project homepage URL."
+    },
+    "license": {
+      "type": "string",
+      "description": "SPDX license identifier (e.g. MIT, Apache-2.0)."
+    },
+    "bin": {
+      "type": "string",
+      "description": "Binary filename to install if it differs from name."
+    },
+    "artifact": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Name the release tarballs carry (<artifact>-<version>-<triple>.tar.gz) if it differs from name."
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2119  # bare @obj/@true/@false are the structs constructors
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/fingerprint/api.sh" \
+  "$SHELLOPS_DIR/lib/forge/api.sh" \
+  "$SHELLOPS_DIR/lib/git/remotes.sh" \
+  "$SHELLOPS_DIR/lib/gitlab/terraform_state.sh" \
+  "$SHELLOPS_DIR/lib/terraform/api.sh"
+
+fingerprint__secret GITLAB_TOKEN
+
+USAGE="$(cat <<HELP
+Plans .ops/infra, the project's GitLab settings and pipeline schedules, against
+the Terraform state GitLab manages for this project; applies it with --apply.
+
+Usage: ops infra [--apply] [-h,--help]
+
+.ops/infra under the project root holds them as Terraform against the GitLab
+provider, so a schedule changes in the same merge request as the job it runs
+and nothing is clicked together. The state lives on GitLab under the
+project the origin remote names, as the state named after the repository,
+and this is the one way .ops/infra reaches it: terraform on PATH, GITLAB_TOKEN
+in the environment. GitLab is asked which user the token belongs to, and the
+token and the user reach the state backend through the environment, so
+nothing terraform writes under .ops/infra carries the token.
+
+Options:
+  --apply        Apply the plan instead of printing it.
+
+Environment:
+  GITLAB_TOKEN   The token the provider and the state backend authenticate with.
+HELP
+)"
+
+@false ARG_APPLY
+
+main() {
+  parse_args "$@"
+  require_terraform
+  require_token
+  __main__host="$(origin_host)"
+  __main__path="$(origin_path)"
+
+  terraform__http_credentials "$(token_owner "$__main__host")" "$GITLAB_TOKEN"
+  terraform__init_http_backend \
+    "$PROJ/.ops/infra" \
+    "$(gitlab__terraform_state__address "$__main__host" "$__main__path" "${__main__path##*/}")"
+  if @is_true "$ARG_APPLY"; then
+    terraform__apply "$PROJ/.ops/infra"
+    log "infra: applied $PROJ/.ops/infra."
+  else
+    terraform__plan "$PROJ/.ops/infra"
+    log "infra: planned $PROJ/.ops/infra; --apply applies it."
+  fi
+}
+
+: <<'FUN'
+Exits, saying so, when terraform is not on PATH.
+
+Usage: require_terraform
+FUN
+require_terraform() {
+  if @is_true "$(terraform__available)"; then
+    return 0
+  fi
+  error "infra: terraform is not on PATH."
+  exit 1
+}
+
+: <<'FUN'
+Exits, saying so, when GITLAB_TOKEN is not in the environment.
+
+Usage: require_token
+FUN
+require_token() {
+  if @defined "${GITLAB_TOKEN:-}"; then
+    return 0
+  fi
+  error "infra: GITLAB_TOKEN is not set."
+  exit 1
+}
+
+: <<'FUN'
+Prints the host the project's origin remote points at; fails, saying so, when
+the clone has no origin.
+
+Usage: origin_host   # -> gitlab.example.com
+FUN
+origin_host() {
+  __origin_host__host="$(git__remotes__host origin)" || {
+    error "infra: $PROJ has no origin remote to name the GitLab project."
+    return 1
+  }
+  println "$__origin_host__host"
+}
+
+: <<'FUN'
+Prints the project path the origin remote points at; fails, saying so, when
+the clone has no origin.
+
+Usage: origin_path   # -> group/sub/repo
+FUN
+origin_path() {
+  __origin_path__path="$(git__remotes__path origin)" || {
+    error "infra: $PROJ has no origin remote to name the GitLab project."
+    return 1
+  }
+  println "$__origin_path__path"
+}
+
+: <<'FUN'
+Prints the username GITLAB_TOKEN authenticates as, asked of the GitLab at
+the host.
+
+Usage: token_owner gitlab.example.com   # -> blizz
+FUN
+token_owner() {
+  @obj __token_owner__obj_1 \
+    '.forge' gitlab \
+    '.host' "https://$1" \
+    '.token' "$GITLAB_TOKEN"
+  forge__current_user "$__token_owner__obj_1"
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE" && exit 0 ;;
+      --apply) @true __parse_args__true_2; ARG_APPLY="$__parse_args__true_2" ;;
+      *)
+        log "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+case "$0" in
+  *infra) main "$@" ;;
+esac

@@ -1,0 +1,7 @@
+{
+  "name": "shell-goldens",
+  "description": "A golden test suite for a shell library: one directory per case, a transcript of its calls, and a bats file that runs every case under every variant.",
+  "linear-team": "STRATA",
+  "org": "creature-workshop",
+  "repo": "shell-goldens"
+}

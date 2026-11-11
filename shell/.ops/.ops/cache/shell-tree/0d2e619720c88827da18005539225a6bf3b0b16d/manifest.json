@@ -1,0 +1,7 @@
+{
+  "name": "shell-tree",
+  "description": "The lowering of a shell source to a tree of its definitions, in POSIX awk over shell-scan.",
+  "linear-team": "OPS",
+  "org": "creature-workshop",
+  "repo": "shell-tree"
+}

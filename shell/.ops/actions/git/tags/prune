@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+import \
+  "$SHELLOPS_DIR/lib/git/tags.sh" \
+  "$SHELLOPS_DIR/lib/releases/orphans.sh"
+
+USAGE="$(cat <<HELP
+Remove orphaned tags: tags on a commit no branch reaches that record no
+release.
+
+These typically result from force-pushes that rewrote the commits they
+pointed to. They clutter the tag namespace and can cause version conflicts
+in automated pipelines.
+
+A release above dev is recorded on a commit off the trunk that its tag alone
+reaches (ADR 000044). Such a tag is not an orphan and is kept: its commit
+carries the Release-Record trailer, which is how the two are told apart.
+
+Usage: action git tags prune [options]
+
+Options:
+  --dry-run     Show what would be pruned without deleting
+  -h, --help    Show this help text.
+HELP
+)"
+
+main() {
+  @false __main__dry_run
+
+  parse_args "$@"
+
+  __main__pruned=0
+  @foreach prune_if_orphan "$(git__tags)"
+
+  report "$__main__pruned"
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --dry-run) @true __parse_args__true_1; __main__dry_run="$__parse_args__true_1" ;;
+      -h|--help) log "$USAGE"; exit 0 ;;
+      -*)
+        error "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+: <<'FUN'
+@foreach callback: prunes the wrapped tag $1 when it is an orphan, and counts
+it.
+FUN
+prune_if_orphan() {
+  @unwrap __prune_if_orphan__tag "$1"
+
+  if @is_true "$(releases__tag_is_orphan "$__prune_if_orphan__tag")"; then
+    prune_tag "$__prune_if_orphan__tag"
+    __main__pruned=$((__main__pruned + 1))
+  fi
+}
+
+: <<'FUN'
+Deletes <tag> on origin and locally, or says it would under --dry-run.
+FUN
+prune_tag() {
+  __prune_tag__short_commit="$(printf '%.8s' "$(git__commit_of "$1")")"
+
+  if @is_true "$__main__dry_run"; then
+    log "Would prune: $1 (commit $__prune_tag__short_commit not on any branch)"
+    return 0
+  fi
+
+  log "Pruning orphaned tag: $1 (commit $__prune_tag__short_commit)"
+  git__tag_delete_remote origin "$1" || true
+  git__tag_delete "$1" || true
+}
+
+: <<'FUN'
+Says how many tags were pruned, or would have been under --dry-run.
+FUN
+report() {
+  if [ "$1" -eq 0 ]; then
+    log "No orphaned tags found."
+    return 0
+  fi
+
+  __report__verb="Pruned"
+  if @is_true "$__main__dry_run"; then
+    __report__verb="Would prune"
+  fi
+  log "$__report__verb $1 orphaned tag(s)."
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *prune) main "$@" ;;
+esac

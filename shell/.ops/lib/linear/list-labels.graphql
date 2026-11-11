@@ -1,0 +1,10 @@
+query($cursor: String) {
+  issueLabels(first: 50, after: $cursor) {
+    pageInfo { hasNextPage endCursor }
+    nodes {
+      id
+      name
+      color
+    }
+  }
+}

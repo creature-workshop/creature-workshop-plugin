@@ -1,0 +1,12 @@
+{
+  "name": "strata",
+  "description": "Dead simple high-performance data representation.",
+  "linear-team": "STRATA",
+  "org": "creature-workshop",
+  "repo": "strata",
+  "naming": {
+    "major": "",
+    "minor": "",
+    "patch": ""
+  }
+}

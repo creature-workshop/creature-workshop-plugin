@@ -1,0 +1,9 @@
+{
+  "include": [
+    "test/tree.bats"
+  ],
+  "exclude": [
+    "shell/.ops",
+    "shell/.scan"
+  ]
+}

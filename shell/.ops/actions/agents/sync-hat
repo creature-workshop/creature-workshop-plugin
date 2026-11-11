@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2119  # bare @arr is the structs empty constructor
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+USAGE="$(cat <<'HELP'
+Puts on a code review the hat/* label its Linear issues call for, so who
+owns the work shows on the forge at a glance.
+
+The issues are the ones the review names; the hat is the one they agree on
+in Linear's `hat` label group, or hat/unknown when none resolve or they
+disagree. Any other lane label, hat/* or role/*, comes off.
+
+A missing FORGE_PR_TOKEN (or FORGE_ADMIN_TOKEN) skips the action, and so does
+a missing LINEAR_API_KEY: without the key every review would read
+hat/unknown, which says nothing about the work and hides a label a human
+set. A label change the forge refuses is logged and does not fail the run.
+HELP
+)"
+
+import \
+  "$SHELLOPS_DIR/lib/manifest/api.sh" \
+  "$SHELLOPS_DIR/lib/linear/mentions.sh" \
+  "$SHELLOPS_DIR/lib/forge/api.sh" \
+  "$SHELLOPS_DIR/lib/hats/api.sh"
+
+main() {
+  case "${1:-}" in
+    -h|--help)
+      log "$USAGE"
+      exit 0
+      ;;
+  esac
+
+  __main__review_number="$(forge__review_in_context)"
+  if ! @defined "$__main__review_number"; then
+    error "No code review number available. Is this running in a code-review pipeline?"
+    exit 1
+  fi
+
+  __main__token="$(forge__comment_token)"
+  if ! @defined "$__main__token"; then
+    warn "FORGE_PR_TOKEN is not set, skipping sync-hat."
+    return 0
+  fi
+  if ! @defined "${LINEAR_API_KEY:-}"; then
+    log "LINEAR_API_KEY is not set; leaving the hat label alone."
+    return 0
+  fi
+
+  @obj __main__forge_options \
+    '.review_number' "$__main__review_number" \
+    '.token' "$__main__token"
+  __main__team_key="$(team_key)"
+
+  __main__review="$(read_review "$__main__forge_options")" || return 1
+  __main__comments="$(forge__code_review_comments "$__main__forge_options" "$__main__review_number")"
+  __main__mentioned="$(linear__review_mentions \
+    "$__main__review" \
+    "$__main__comments" \
+    "$__main__team_key"
+  )"
+  __main__resolved="$(linear__resolve_mentions "$__main__mentioned" "$__main__team_key")"
+
+  sync_hat_label "$__main__forge_options" "$__main__resolved"
+}
+
+:<<'FUN'
+Prints the Linear team whose identifiers this repository uses, and nothing when
+the manifest names none, in which case no text can name an issue.
+FUN
+team_key() {
+  manifest__get linear_team || true
+}
+
+:<<'FUN'
+Prints the code review, failing loudly: without it there is nothing to read
+mentions out of.
+FUN
+read_review() {
+  forge__get_review "$1" || {
+    @get __read_review__get_1 "$1" '.review_number'
+    error "Could not read code review #$__read_review__get_1."
+    return 1
+  }
+}
+
+:<<'FUN'
+Puts the hat/* label the resolved issues call for on the code review and takes
+off any other lane label. With no issue resolved that is hat/unknown, which
+is as much as the review says about its owner.
+
+Usage: sync_hat_label "$forge_options" "$issues"
+FUN
+sync_hat_label() {
+  @arr __sync_hat_label__wanted "$(hats__hat_label "$2")"
+  __sync_hat_label__current="$(current_hat_labels)" || return 0
+  @difference __sync_hat_label__add "$__sync_hat_label__wanted" "$__sync_hat_label__current"
+  @difference __sync_hat_label__remove "$__sync_hat_label__current" "$__sync_hat_label__wanted"
+
+  if @len __sync_hat_label__len_2 "$__sync_hat_label__add"; @len __sync_hat_label__len_3 "$__sync_hat_label__remove"; [ "$__sync_hat_label__len_2" -eq 0 ] && [ "$__sync_hat_label__len_3" -eq 0 ]; then
+    @join __sync_hat_label__join_4 "$__sync_hat_label__wanted" ""
+    log "Hat label already $__sync_hat_label__join_4."
+    return 0
+  fi
+
+  if ! forge__reconcile_review_labels "$1" "$__sync_hat_label__add" "$__sync_hat_label__remove" > /dev/null; then
+    @join __sync_hat_label__join_5 "$__sync_hat_label__wanted" ""
+    log "Could not set the hat label to $__sync_hat_label__join_5."
+    return 0
+  fi
+
+  log "$(hat_label_change_said "$__sync_hat_label__wanted" "$__sync_hat_label__remove")"
+}
+
+:<<'FUN'
+Prints the lane labels the code review carries now, failing when the forge
+cannot say: without them a stale label could not be taken off.
+FUN
+current_hat_labels() {
+  __current_hat_labels__labels="$(forge__review_labels)" || {
+    log "Could not read the code review's labels; leaving the hat label alone."
+    return 1
+  }
+
+  hats__hat_labels_among "$__current_hat_labels__labels"
+}
+
+:<<'FUN'
+Prints the log line for a hat label change: the label set, and the ones taken
+off when there were any.
+
+  hat_label_change_said '["hat/ktlo"]' '["role/ktlo"]'
+    ->  Set the hat label to hat/ktlo, taking off role/ktlo.
+FUN
+hat_label_change_said() {
+  @join __hat_label_change_said__set "$1" ""
+  if @len __hat_label_change_said__len_6 "$2"; [ "$__hat_label_change_said__len_6" -eq 0 ]; then
+    printf 'Set the hat label to %s.\n' "$__hat_label_change_said__set"
+    return 0
+  fi
+
+  @join __hat_label_change_said__removed "$2" ", "
+
+  printf 'Set the hat label to %s, taking off %s.\n' \
+    "$__hat_label_change_said__set" \
+    "$__hat_label_change_said__removed"
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *sync-hat) main "$@" ;;
+esac

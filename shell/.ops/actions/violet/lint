@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+import "$SHELLOPS_DIR/lib/violet/api.sh"
+
+USAGE="$(cat <<HELP
+Runs violet against a path, failing on legibility violations.
+
+Usage: action violet lint [-h,--help] [path]
+
+Arguments:
+  path        Directory or file to analyze. Defaults to current directory.
+
+Flags:
+  -h, --help    Show this help text.
+HELP
+)"
+
+main() {
+  __main__path="."
+
+  parse_args "$@"
+  violet__lint "$__main__path" --no-color
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      -*)
+        error "Unknown option: $1"
+        exit 1
+        ;;
+      *)
+        __main__path="$1"
+        ;;
+    esac
+    shift
+  done
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *lint) main "$@" ;;
+esac

@@ -1,0 +1,34 @@
+#!/bin/sh
+set -u
+. "$SHELLOPS_DIR/lib/stdout/api.sh"
+
+USAGE="$(cat <<'HELP'
+Runs the command given after the run directory $1 and the working directory
+$2, with the command's output and errors kept beside the run, then records
+the exit code as the last file written, so a reader that finds the exit file
+finds a complete output. Records its own pid first: started under setsid it is
+the session leader, and that pid is what a cancel kills. Only the command
+moves to the working directory, so the run's own files land where the caller
+named them however that directory is spelled.
+
+  recorded /state/chat-1/run-1 /src/project claude -p "Land the queue"
+HELP
+)"
+
+main() {
+  case "${1:-}" in
+    -h|--help)
+      println "$USAGE"
+      exit 0
+      ;;
+  esac
+
+  __main__dir="$1"
+  __main__cwd="$2"
+  shift 2
+  println "$$" > "$__main__dir/pid"
+  (cd -- "$__main__cwd" && exec "$@") > "$__main__dir/out" 2> "$__main__dir/err" < /dev/null
+  println "$?" > "$__main__dir/exit"
+}
+
+main "$@"

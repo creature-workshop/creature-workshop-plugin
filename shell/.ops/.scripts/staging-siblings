@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+USAGE="$(cat <<'HELP'
+Prints, one per line, the <NAME>_URL settings that point every git tree the
+lock pins at its staging copy under <owner> on github.com, named
+<name>-staging, since GitHub has no groups inside an organisation and the
+staging copy of shellops there is shellops-staging. The boot reads the
+settings and fetches the staging siblings in place of the public ones
+beside the copy.
+
+Usage: .scripts/staging-siblings <owner> [<lock>] [-h,--help]
+
+  <owner>  The organisation the staging copies live under.
+  <lock>   The lock to read the names from; .ops/lock beside this script's
+           tree when left out.
+
+A workflow step on the staging copy runs this before the first shellops
+command and appends its output to GITHUB_ENV. It loads nothing from .envrc,
+because .envrc is what reads the settings.
+
+  .scripts/staging-siblings creature-workshop
+    ->  STRATA_URL=https://github.com/creature-workshop/strata-staging.git
+        SHELL_LOGS_URL=https://github.com/creature-workshop/shell-logs-staging.git
+HELP
+)"
+
+# CONST: The directory this script sits in, which the repository root is found from.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# CONST: The shellops tree this script belongs to.
+export SHELLOPS_DIR="${SHELLOPS_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+
+# CONST: The host the staging copies live on.
+HOST="https://github.com"
+
+# CONST: What a staging copy's name ends with on that host.
+SUFFIX="-staging"
+
+# CONST: The awk that reads a lock's lines by nesting, which the boot reads the lock with.
+LINES_AWK="$SHELLOPS_DIR/lib/self/lock/lines.awk"
+
+# CONST: The awk that prints a lock's git trees, one per line, name first.
+PINS_AWK="$SHELLOPS_DIR/lib/self/pins.awk"
+
+source "$SHELLOPS_DIR/shell/.logs/shell/log/api.sh"
+source "$SHELLOPS_DIR/lib/stdout/api.sh"
+
+main() {
+  case "${1:-}" in
+    -h|--help)
+      println "$USAGE"
+      exit 0
+      ;;
+    '')
+      error "staging-siblings: the owner is required"
+      log "$USAGE"
+      exit 1
+      ;;
+  esac
+  __main__owner="$1"
+  __main__lock="${2:-$SHELLOPS_DIR/.ops/lock}"
+
+  for __main__name in $(names "$__main__lock"); do
+    setting "$__main__owner" "$__main__name"
+  done
+}
+
+:<<'FUN'
+Prints the names of the git trees the lock <lock> pins, one per line, each
+once, read the way the boot reads them.
+FUN
+names() {
+  awk -f "$LINES_AWK" -f "$PINS_AWK" "$1" | cut -d '|' -f 1 | sort -u
+}
+
+:<<'FUN'
+Prints the setting that points the tree <name> at its staging copy under
+<owner>.
+
+  setting creature-workshop shell-logs  ->  SHELL_LOGS_URL=https://github.com/creature-workshop/shell-logs-staging.git
+FUN
+setting() {
+  printf '%s=%s/%s/%s%s.git\n' "$(variable "$2")" "$HOST" "$1" "$2" "$SUFFIX"
+}
+
+:<<'FUN'
+Prints the variable that names the repository of the tree <name>: the name
+in upper case, each dash a low line, and _URL after it, the variable the
+pins read.
+
+  variable shell-logs  ->  SHELL_LOGS_URL
+FUN
+variable() {
+  printf '%s_URL\n' "$1" | tr 'a-z-' 'A-Z_'
+}
+
+main "$@"

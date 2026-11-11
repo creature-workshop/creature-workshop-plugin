@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "description": "nextest suite. Runs the cargo tests under cargo-nextest, building the whole workspace and filtering the run to the selected packages, and leaves a JUnit report at target/nextest/<profile>/junit.xml under the workspace. Test selection is cargo's (a changed file maps to its owning package), so a nextest suite takes the same manifest a cargo suite does.",
+  "required": ["runner"],
+  "properties": {
+    "runner": { "const": "nextest" },
+    "manifest": {
+      "type": "string",
+      "description": "$PROJ-relative path to the Cargo.toml of the workspace to test, for a workspace below the repo root (e.g. \"engine/Cargo.toml\"). Omitted, nextest runs against whatever workspace the working directory is in."
+    },
+    "profile": {
+      "type": "string",
+      "description": "The nextest profile the run uses. Defaults to \"tia\", which the runner defines with the JUnit report enabled; a repository's own .config/nextest.toml may extend that profile or name another, as long as its junit path stays junit.xml."
+    },
+    "cargo_args": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Extra arguments for the build and run, one shell word per element (e.g. [\"--no-default-features\", \"--locked\"]). Defaults to none."
+    }
+  },
+  "additionalProperties": false
+}

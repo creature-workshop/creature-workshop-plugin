@@ -1,0 +1,17 @@
+mutation($projectPath: ID!, $tagName: String!, $name: String!, $url: String!, $linkType: ReleaseAssetLinkType) {
+  releaseAssetLinkCreate(input: {
+    projectPath: $projectPath
+    tagName: $tagName
+    name: $name
+    url: $url
+    linkType: $linkType
+  }) {
+    link {
+      id
+      name
+      url
+      linkType
+    }
+    errors
+  }
+}

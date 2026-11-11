@@ -1,0 +1,300 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2119  # bare @arr/@obj are the structs empty constructors
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/forge/api.sh" \
+  "$SHELLOPS_DIR/lib/areas/api.sh" \
+  "$SHELLOPS_DIR/lib/hats/api.sh" \
+  "$SHELLOPS_DIR/lib/releases/files.sh"
+
+USAGE="$(cat <<HELP
+Validates pull request hygiene in CI.
+
+Usage: ops pr-hygiene [-h,--help]
+
+Checks:
+  - PR has a description (body)
+  - PR has at least one label
+  - PR has an assignee
+  - PR has at least one area/* label (only when the repo declares a testing
+    block; apply-labels supplies these from the diff, so a missing one means
+    the labeling automation is broken rather than that the author forgot)
+  - When area/new is applied, the diff also updates the testing config (the
+    testmap) -- area/new flags code mapped to no established area
+  - PR has exactly one lane label, hat/* or role/*, the lane that owns it
+    (sync-hat supplies it from the Linear issues the PR names, so a missing
+    one means the PR names no issue or the hat automation broke)
+  - A commit that touches a version file touches the version files alone,
+    check B: the version moves through one commit on an approved merge
+    request and that commit carries nothing else
+
+Environment:
+  CI_COMMIT_PULL_REQUEST          Pull/merge request number
+  CI_COMMIT_PULL_REQUEST_LABELS   Comma-separated label names
+  SHELLOPS_FORGE                  Active forge (\"forgejo\" or \"gitlab\")
+  FORGE_PR_TOKEN                  PR/MR bot token. Falls back to
+                                  FORGEJO_PR_TOKEN for back-compat.
+
+  These are auto-detected from GitHub Actions / GitLab CI event context
+  if not already set. Owner and repo are read from manifest.json.
+
+HELP
+)"
+
+main() {
+  parse_args "$@"
+  validate_env
+
+  __main__pr_json="$(fetch_pr)"
+
+  __main__failed=0
+
+  check_description "$__main__pr_json" || __main__failed=1
+  check_labels                         || __main__failed=1
+  check_assignees "$__main__pr_json"   || __main__failed=1
+  check_area_label "$__main__pr_json"      || __main__failed=1
+  check_area_new_mapped "$__main__pr_json" || __main__failed=1
+  check_hat_label "$__main__pr_json"       || __main__failed=1
+  check_version_bump                       || __main__failed=1
+
+  if [ "$__main__failed" -eq 1 ]; then
+    log ""
+    log "Please add a description, at least one label, and an assignee to the PR, name its Linear issue so the lane label is set, and keep a version bump to the version files alone."
+    exit 1
+  fi
+
+  log "PASS: pr-hygiene"
+}
+
+fetch_pr() {
+  __fetch_pr__token="${FORGE_PR_TOKEN:-${FORGEJO_PR_TOKEN:-}}"
+  @obj __fetch_pr__options '.review_number' "$CI_COMMIT_PULL_REQUEST"
+  @set __fetch_pr__options "$__fetch_pr__options" '.token' "$__fetch_pr__token"
+  forge__get_review "$__fetch_pr__options"
+}
+
+validate_env() {
+  if [ -z "${CI_COMMIT_PULL_REQUEST:-}" ]; then
+    try_auto_detect_pr_env
+  fi
+
+  if [ -z "${CI_COMMIT_PULL_REQUEST:-}" ]; then
+    error "CI_COMMIT_PULL_REQUEST is not set. Is this running in a PR pipeline?"
+    exit 1
+  fi
+}
+
+try_auto_detect_pr_env() {
+  # GitLab CI auto-detection: $CI_MERGE_REQUEST_IID is set on MR pipelines.
+  if [ -n "${CI_MERGE_REQUEST_IID:-}" ]; then
+    CI_COMMIT_PULL_REQUEST="${CI_COMMIT_PULL_REQUEST:-$CI_MERGE_REQUEST_IID}"
+    CI_COMMIT_PULL_REQUEST_LABELS="${CI_COMMIT_PULL_REQUEST_LABELS:-${CI_MERGE_REQUEST_LABELS:-}}"
+    export CI_COMMIT_PULL_REQUEST CI_COMMIT_PULL_REQUEST_LABELS
+    return
+  fi
+
+  if [ -z "${GITHUB_ACTIONS:-}" ] || [ -z "${GITHUB_EVENT_PATH:-}" ]; then
+    return
+  fi
+
+  log "Auto-detecting PR environment from GitHub Actions context..."
+  __try_auto_detect_pr_env__event="$(cat "$GITHUB_EVENT_PATH")"
+  @get CI_COMMIT_PULL_REQUEST "$__try_auto_detect_pr_env__event" '.pull_request.number'
+  @get __try_auto_detect_pr_env__get_1 "$__try_auto_detect_pr_env__event" '.pull_request.labels'
+  @pluck __try_auto_detect_pr_env__pluck_2 "$__try_auto_detect_pr_env__get_1" '.name'
+  @join CI_COMMIT_PULL_REQUEST_LABELS "$__try_auto_detect_pr_env__pluck_2" ","
+  export CI_COMMIT_PULL_REQUEST CI_COMMIT_PULL_REQUEST_LABELS
+}
+
+check_description() {
+  @get __check_description__body "$1" '.body'
+
+  if ! @defined "$__check_description__body"; then
+    log "FAIL: PR has no description"
+    return 1
+  fi
+}
+
+check_labels() {
+  if [ -z "${CI_COMMIT_PULL_REQUEST_LABELS:-}" ]; then
+    log "FAIL: PR has no labels"
+    return 1
+  fi
+}
+
+check_assignees() {
+  # Both Forgejo (REST) and GitLab (via flatten_merge_request.jq) expose
+  # the assignees as a top-level array of objects, so this expression
+  # works against either response.
+  @get __check_assignees__get_3 "$1" '.assignees'
+  @len __check_assignees__count "$__check_assignees__get_3"
+
+  if [ "$__check_assignees__count" -eq 0 ]; then
+    log "FAIL: PR has no assignee"
+    return 1
+  fi
+}
+
+: <<'FUN'
+Requires an area/* label, but only once the repo has adopted the testing block.
+With the block, apply-labels maps the diff to area/* labels automatically, so a
+missing one means the labeling automation broke -- a defense-in-depth check, not
+an author-oversight one. Repos without the block have no diff-to-area mapping
+yet, so they are exempt. Reads the PR's live labels (the fetched PR json), not
+the CI_*_LABELS env, which snapshots at pipeline start before apply-labels runs.
+
+args:
+  $1  The fetched PR JSON; its .labels[].name are the PR's live labels
+FUN
+check_area_label() {
+  if @is_false "$(areas__has_areas_config)"; then
+    return 0
+  fi
+
+  @arr __check_area_label__arr_4
+  @get __check_area_label__get_5 "$1" '.labels' "$__check_area_label__arr_4"
+  @pluck __check_area_label__names "$__check_area_label__get_5" '.name'
+  @filter __check_area_label__area "$__check_area_label__names" silt__text_starts_with . area/
+
+  if @len __check_area_label__len_6 "$__check_area_label__area"; [ "$__check_area_label__len_6" -eq 0 ]; then
+    fatal "PR has no area/* label, but the manifest declares a testing block -- apply-labels should have applied one. Check the labeling automation."
+    return 1
+  fi
+}
+
+: <<'FUN'
+Requires a testing-config change whenever area/new is on the PR. area/new is the
+reconcile's fail-safe -- it flags a diff that touches code mapped to no
+established area -- so the author must map it into testing.areas in the same
+change, or the label is spurious and the new code stays untracked. Keeps area/new
+transient. Exempt when the repo declares no testing block, when area/new is
+absent, or when the diff range is unavailable (a violation can't be proven).
+
+args:
+  $1  The fetched PR JSON; its .labels[].name are the PR's live labels
+FUN
+check_area_new_mapped() {
+  if @is_false "$(areas__has_areas_config)"; then
+    return 0
+  fi
+
+  @arr __check_area_new_mapped__arr_7
+  @get __check_area_new_mapped__get_8 "$1" '.labels' "$__check_area_new_mapped__arr_7"
+  @pluck __check_area_new_mapped__names "$__check_area_new_mapped__get_8" '.name'
+  if @filter __check_area_new_mapped__filter_9 "$__check_area_new_mapped__names" silt__text_is . area/new; @len __check_area_new_mapped__len_10 "$__check_area_new_mapped__filter_9"; [ "$__check_area_new_mapped__len_10" -eq 0 ]; then
+    return 0
+  fi
+
+  if [ -z "${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}" ]; then
+    log "pr-hygiene: area/new is applied but the MR diff range is unavailable; skipping the testmap-change check."
+    return 0
+  fi
+
+  if __pr_hygiene__diff_touches_config; then
+    return 0
+  fi
+
+  fatal "area/new is applied but the diff does not update the testing config ($(areas__config_path)) -- area/new flags code mapped to no established area; add it to testing.areas so it resolves to a real area instead."
+  return 1
+}
+
+: <<'FUN'
+Requires exactly one lane label, hat/* or role/*: the lane that owns the
+change, which sync-hat sets from the Linear issues the PR names. None means
+the PR names no issue or the hat automation has not run; two means two lanes
+claim it, and a hat/* beside a role/* counts as two. Reads the PR's live
+labels, not the CI_*_LABELS env, which snapshots at pipeline start before
+sync-hat runs.
+
+args:
+  $1  The fetched PR JSON; its .labels[].name are the PR's live labels
+FUN
+check_hat_label() {
+  @arr __check_hat_label__arr_11
+  @get __check_hat_label__labels "$1" '.labels' "$__check_hat_label__arr_11"
+  @pluck __check_hat_label__names "$__check_hat_label__labels" '.name'
+  __check_hat_label__hats="$(hats__hat_labels_among "$__check_hat_label__names")"
+  @len __check_hat_label__count "$__check_hat_label__hats"
+
+  if [ "$__check_hat_label__count" -eq 0 ]; then
+    log "FAIL: PR has no lane label (hat/* or role/*) -- sync-hat sets one from the Linear issues the PR names. Name the issue, or check the hat automation."
+    return 1
+  fi
+
+  if [ "$__check_hat_label__count" -gt 1 ]; then
+    @join __check_hat_label__join_12 "$__check_hat_label__hats" ", "
+    log "FAIL: PR has more than one lane label ($__check_hat_label__join_12) -- one lane owns a change."
+    return 1
+  fi
+}
+
+: <<'FUN'
+Check B (ADR.17@global): a commit that moves the version moves the version
+files alone. Every commit the merge request adds over its diff base is
+read, and one that touches a version file together with any other file
+fails, naming the commit and the files outside the set. The set is the one
+lib/releases/files.sh names, so a file joins the check by joining that set.
+Exempt when the diff range is unavailable, since a violation cannot be
+proven; fails when the set or the commits cannot be read.
+FUN
+check_version_bump() {
+  if [ -z "${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}" ]; then
+    log "pr-hygiene: the MR diff range is unavailable; skipping the version-bump check."
+    return 0
+  fi
+
+  __check_version_bump__mixing="$(releases__commits_mixing_version_files "$CI_MERGE_REQUEST_DIFF_BASE_SHA" "${CI_COMMIT_SHA:-HEAD}")" || return 1
+  if @empty "$__check_version_bump__mixing"; then
+    return 0
+  fi
+
+  @foreach __pr_hygiene__report_mixing "$__check_version_bump__mixing"
+  log "FAIL: a version bump touches the version files alone (check B); move the other files to a commit of their own."
+  return 1
+}
+
+: <<'FUN'
+@foreach callback: names the commit <mixing> that touched a version file
+beside the files it should not have.
+FUN
+__pr_hygiene__report_mixing() {
+  @get __pr_hygiene__report_mixing__get_13 "$1" '.commit'
+  @get __pr_hygiene__report_mixing__get_14 "$1" '.files'
+  @join __pr_hygiene__report_mixing__join_15 "$__pr_hygiene__report_mixing__get_14" ", "
+  log "FAIL: commit $__pr_hygiene__report_mixing__get_13 moves a version file and also touches $__pr_hygiene__report_mixing__join_15"
+}
+
+: <<'FUN'
+True when the MR diff (CI_MERGE_REQUEST_DIFF_BASE_SHA...CI_COMMIT_SHA) touches the
+file that holds the testing config (areas__config_path). Returns non-zero when the
+config path is unknown or the file is untouched.
+FUN
+__pr_hygiene__diff_touches_config() {
+  __pr_hygiene__diff_touches_config__path="$(areas__config_path)"
+  @defined "$__pr_hygiene__diff_touches_config__path" || return 1
+
+  git -C "$PROJ" diff --name-only \
+    "${CI_MERGE_REQUEST_DIFF_BASE_SHA}...${CI_COMMIT_SHA:-HEAD}" 2>/dev/null \
+    | grep -qxF "$__pr_hygiene__diff_touches_config__path"
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE" && exit 0 ;;
+      -*)
+        log "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *pr-hygiene) main "$@" ;;
+esac

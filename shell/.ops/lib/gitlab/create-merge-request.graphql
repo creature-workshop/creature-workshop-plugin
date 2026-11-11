@@ -1,0 +1,24 @@
+mutation(
+  $projectPath: ID!
+  $title: String!
+  $sourceBranch: String!
+  $targetBranch: String!
+  $description: String
+  $labels: [String!]
+) {
+  mergeRequestCreate(input: {
+    projectPath: $projectPath
+    title: $title
+    sourceBranch: $sourceBranch
+    targetBranch: $targetBranch
+    description: $description
+    labels: $labels
+  }) {
+    mergeRequest {
+      iid
+      title
+      webUrl
+    }
+    errors
+  }
+}

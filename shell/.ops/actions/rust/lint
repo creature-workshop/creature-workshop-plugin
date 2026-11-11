@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+import "$SHELLOPS_DIR/lib/rust/api.sh"
+
+USAGE="$(cat <<HELP
+Runs Rust formatting and Clippy checks.
+
+Usage: action rust lint [-h,--help] [project-dir]
+
+Arguments:
+  project-dir    Directory containing the Cargo workspace. Defaults to current directory.
+
+Flags:
+  -h, --help     Show this help text.
+HELP
+)"
+
+main() {
+  __main__project_dir="."
+
+  parse_args "$@"
+  cd "$__main__project_dir"
+
+  rust__fmt_check
+  rust__clippy_workspace
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      -*)
+        error "Unknown option: $1"
+        exit 1
+        ;;
+      *)
+        __main__project_dir="$1"
+        ;;
+    esac
+    shift
+  done
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *lint) main "$@" ;;
+esac

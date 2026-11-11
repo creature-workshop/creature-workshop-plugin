@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2119  # bare @obj/@arr/@true/@false are the structs constructors
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/intake/api.sh" \
+  "$SHELLOPS_DIR/lib/self/config.sh" \
+  "$SHELLOPS_DIR/lib/self/lock/api.sh"
+
+USAGE="$(cat <<HELP
+Plans the email intakes .ops/config/intake.yaml declares against what the
+tracker it names holds; applies the plan with --apply, and records in
+.ops/lock, under intake, the id of each intake and the address the tracker
+generated for it.
+
+Usage: ops intake [--apply] [-h,--help]
+
+A declared intake is a custom address people mail, the team whose issue the
+mail becomes, the template that fills the issue in, by name, whether
+replies sync between the mail thread and the issue, and the tracker that
+holds it, under system; the file's own system is the default, linear when
+it names none. A tracker is a plugin of the intake kind (lib/intake/api.sh).
+A tracker reads an intake by its id, so the lock is how an intake is found
+again: an address the lock records on the same tracker is read, and updated
+when it drifted; one the lock does not record there is created, and one
+the lock records on another tracker is left there and said so, which is
+how an address moves. A declaration may name the id of an intake made by
+hand, which adopts it. The forward from the custom address to the generated
+one belongs to the mail provider, declared beside the records it holds.
+
+  system: linear
+  intakes:
+    - address: docs@example.com
+      team: ASK
+      template: Docs feedback
+      replies: true
+    - address: support@example.com
+      system: linear
+      team: ASK
+
+Options:
+  --apply   Apply the plan instead of printing it.
+HELP
+)"
+
+# CONST: The section of the lock the intakes are recorded under, which is the declaration's name.
+SECTION="intake"
+
+@false ARG_APPLY
+
+main() {
+  parse_args "$@"
+  require_declaration
+  __main__system="$(intake__system)" || exit 1
+  @foreach require_ready "$(intake__systems "$__main__system")" || exit 1
+  __main__context="$(context "$__main__system")"
+  __main__settled="$(self__lock__reconcile__section "$__main__context")" || exit 1
+  if @is_true "$ARG_APPLY"; then
+    self__lock__set_section "$SECTION" "$__main__settled" "$PROJ"
+    log "intake: applied; the lock records the intakes."
+  else
+    log "intake: planned; --apply records it in the lockfile."
+  fi
+}
+
+: <<'FUN'
+@foreach callback: fails, saying what is missing, when the wrapped tracker
+<tracker> cannot be asked.
+
+args:
+  $1  The tracker's name, wrapped
+FUN
+require_ready() {
+  @unwrap __require_ready__unwrap_1 "$1"
+  intake__ready "$__require_ready__unwrap_1"
+}
+
+: <<'FUN'
+Exits, saying so, when the repository declares no intakes.
+
+Usage: require_declaration
+FUN
+require_declaration() {
+  if @is_true "$(self__config__present "$SECTION")"; then
+    return 0
+  fi
+  error "intake: $PROJ declares no intakes; nothing at $(self__config__path "$SECTION")."
+  exit 1
+}
+
+: <<'FUN'
+Prints the context the reconcile walks: the declared intakes keyed by
+address, the section as the lock records it, whether to apply, the tracker
+an intake is on when it names none and the field that names one, and the
+kind's facade as the functions.
+
+args:
+  $1  The default tracker
+FUN
+context() {
+  __context__declared="$(intake__declared)"
+  __context__recorded="$(self__lock__get_section "$SECTION" "$PROJ")"
+  @obj __context__callbacks \
+    '.input' intake__input \
+    '.read' intake__read \
+    '.drift' intake__drift \
+    '.create' intake__create \
+    '.update' intake__update \
+    '.entry' intake__entry
+  @obj __context__out \
+    '.section' "$SECTION" \
+    '.key' address \
+    '.declared' "$__context__declared" \
+    '.recorded' "$__context__recorded" \
+    '.apply' "$ARG_APPLY" \
+    '.with' "$1" \
+    '.with_field' system \
+    '.callbacks' "$__context__callbacks"
+  println "$__context__out"
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE" && exit 0 ;;
+      --apply) @true __parse_args__true_2; ARG_APPLY="$__parse_args__true_2" ;;
+      *)
+        log "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+case "$0" in
+  *intake) main "$@" ;;
+esac

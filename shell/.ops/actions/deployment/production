@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+import \
+  "$SHELLOPS_DIR/lib/deployment/api.sh" \
+  "$SHELLOPS_DIR/lib/structs/api.sh"
+
+USAGE="$(cat <<HELP
+Deploys the project to production on every deployment target the
+repository declares, once their programs are on the PATH.
+
+Usage: action deployment production [-h,--help] [project-dir]
+
+Arguments:
+  project-dir    Directory containing the deployable project. Defaults to current directory.
+
+Flags:
+  -h, --help     Show this help text.
+
+Environment:
+  SHELLOPS_DEPLOY_TARGET   One target in place of the declaration's list
+                           (default: the targets of .ops/config/deployment.yaml,
+                           else vercel).
+HELP
+)"
+
+main() {
+  __main__project_dir="."
+
+  parse_args "$@"
+
+  __main__targets="$(deployment__targets)" || exit 1
+  @foreach deploy_production "$__main__targets" "$__main__project_dir"
+}
+
+:<<'FUN'
+Deploys the project to production on one target, once its programs are on
+the PATH.
+
+usage: deploy_production <target> <project-dir>, the target wrapped as
+@foreach hands it over
+FUN
+deploy_production() {
+  @unwrap __deploy_production__target "$1"
+  deployment__assert_needs "$__deploy_production__target" || return 1
+  deployment__production "$__deploy_production__target" "$2"
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      -*)
+        error "Unknown option: $1"
+        exit 1
+        ;;
+      *)
+        __main__project_dir="$1"
+        ;;
+    esac
+    shift
+  done
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *production) main "$@" ;;
+esac
