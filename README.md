@@ -89,10 +89,17 @@ plugins:
           - /home/you/code/your-project
 ```
 
-The pane's **Set up shop** form can add the path for you: its switch "Let
-the workshop run commands in this project" is off until you turn it on, and
-when it is on, pressing Set up shop adds the project's root to the setting
-through Hermes's own settings call, the one behind Settings → Plugins.
+The pane adds the path for you in two places, both through Hermes's own
+settings call, the one behind Settings → Plugins, and both only when you
+press the button:
+
+- The **Set up shop** form, which **Initialize workshop** opens, says above
+  its buttons, "By completing setup, you agree to let Creature Workshop run
+  commands to manage this repository." Pressing Confirm adds the project's
+  root to the setting, then writes the manifest.
+- A project that is set up and not approved shows, in place of its tabs,
+  "Approval needed for <folder>." with an **Approve project** button, which
+  adds the project's root.
 
 To withdraw the approval, remove the path.
 
@@ -110,9 +117,10 @@ every command pass there, and the pane's backend does not run
   Approving a project).
 - The approved projects are a setting of the plugin in Hermes's
   configuration, which each profile has its own copy of. The plugin has no
-  tool and no route that changes it. The pane changes it in one place: the
-  Set up shop form adds the project you are setting up, when you turn its
-  approval switch on, through Hermes's own settings call.
+  tool and no route that changes it. The pane changes it in two places,
+  through Hermes's own settings call and only when you press the button:
+  Confirm in Set up shop adds the project you are setting up, and Approve project adds
+  the selected project.
 - The project is the one selected for the session, which the pane shows. The
   plugin never selects a repository below the session's folder itself, and
   neither does the agent: until you select one in the pane, the tools run
@@ -132,7 +140,7 @@ every command pass there, and the pane's backend does not run
   answers with is the models under `workshop/models/`, one module per concept.
 - The pane's **Set up shop** form, on a branch with no `.ops/config/`, writes
   `.ops/config/manifest.yaml` from the values you enter, after you press its
-  Set up shop button. It fills the name and the repository from the
+  Confirm button. It fills the name and the repository from the
   folder's name and the `origin` remote's URL, and leaves the organization
   to you. It asks the model you are
   using, through Hermes, to suggest the description and the command: the

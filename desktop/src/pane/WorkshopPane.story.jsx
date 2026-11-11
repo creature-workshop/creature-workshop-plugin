@@ -3,7 +3,8 @@
  * one scenario, with the backend's answers it runs against built in, so a
  * test mounts a story and passes nothing but plain data. In OnMain and
  * OutsideGit the session's directory holds no repository; in Adopted and
- * NotAdopted it is one, with a workshop on its branch and without, and in
+ * NotAdopted it is one, with a workshop on its branch and without; in
+ * Unapproved its workshop is one the user has not approved; and in
  * WorkshopDeleted its workshop goes away while the pane is open. The header's own
  * scenarios are in header/Header.story.jsx. The pane's tests are in
  * pane.ct.jsx beside this file.
@@ -157,13 +158,51 @@ export function NotAdopted(props) {
 }
 
 /**
- * GET /project for the shellops project rooted at root, without the toolchain.
+ * The pane over a repository that is a shellops project's root and that
+ * the user has not approved, until the approved_projects setting is
+ * written, after which GET /project answers it as approved. Hermes's
+ * settings list `approved` as the approved projects and hand each write of
+ * them to `onApprove`, unless `unsaved` is set, when Hermes saves nothing.
+ *
+ * @param props The story's props.
+ * @param {string[]} [props.approved] The roots the approved_projects setting lists.
+ * @param {(roots: string[]) => void} [props.onApprove] Takes the roots of each write of the setting.
+ * @param {boolean} [props.unsaved] Whether Hermes fails to save the setting.
+ */
+export function Unapproved(props) {
+  const { approved = [], onApprove = () => {}, unsaved = false } = props;
+  const [backend] = useState(() => approvingBackend(approved, onApprove, unsaved));
+  useState(() => requestWith(backend.gateway));
+  return framed(backend.rest, DOCKED_WIDTH);
+}
+
+/**
+ * GET /project for the approved shellops project rooted at root, without the toolchain.
  *
  * @param root The project's root.
  * @param release The release record of its lock.
  */
 function projectAt(root, release) {
-  return { found: true, root, name: 'Notes', summary: '', declaration: {}, release, declared: [], refresh_seconds: 20 };
+  return { found: true, root, name: 'Notes', summary: '', declaration: {}, release, declared: [], refresh_seconds: 20, approved: true };
+}
+
+/**
+ * A backend over a shellops project that is not approved until the
+ * approved_projects setting is written, with the stand-in for Hermes's
+ * gateway that takes that write: `{rest, gateway}`.
+ *
+ * @param {string[]} approved The roots the setting lists.
+ * @param {(roots: string[]) => void} onApprove Takes the roots of each write.
+ * @param {boolean} unsaved Whether every call to the gateway fails.
+ */
+function approvingBackend(approved, onApprove, unsaved) {
+  let written = false;
+  const record = (roots) => {
+    written = true;
+    onApprove(roots);
+  };
+  const rest = async (path) => repositoryBackend({ ...projectAt(CWD, { latest: '', stable: '' }), approved: written })(path);
+  return { rest, gateway: settingsGateway(approved, record, unsaved) };
 }
 
 /**

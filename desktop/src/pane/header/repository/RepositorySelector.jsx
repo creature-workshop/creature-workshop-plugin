@@ -24,7 +24,7 @@ export function RepositorySelector() {
   const label = useId();
 
   return (
-    <LabelledField id={label} label="Session Repository" hint={HINT}>
+    <LabelledField id={label} qualifier="Session" label="Repository" hint={HINT}>
       <Select value={repo} onValueChange={select}>
         <Tip label={repositoryAt(repos.data.repos, repo)?.root}>
           <SelectTrigger

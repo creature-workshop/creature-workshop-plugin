@@ -1,6 +1,6 @@
 /**
  * @file The pane body for a checkout whose branch has no workshop: the
- * notice with Set up shop, and the adoption wizard once it is pressed.
+ * notice with Initialize workshop, and the adoption wizard once it is pressed.
  */
 
 import { Button, cn } from '@hermes/plugin-sdk';
@@ -9,7 +9,7 @@ import { SetupNotice } from '../SetupNotice.jsx';
 import { SetUpShop } from './SetUpShop.jsx';
 
 /**
- * The no-workshop notice with a Set up shop button, which opens the
+ * The no-workshop notice with an Initialize workshop button, which opens the
  * adoption wizard in its place; Cancel in the wizard goes back.
  *
  * @param props The component's props.
@@ -28,7 +28,7 @@ export function NoWorkshop({ root, name }) {
 
   return (
     <SetupNotice state="no-workshop" name={name}>
-      <Button size="xs" className={cn('workshop-set-up-shop-button', 'self-start')} onClick={() => setOpen(true)}>Set up shop</Button>
+      <Button size="xs" className={cn('workshop-set-up-shop-button')} onClick={() => setOpen(true)}>Initialize workshop</Button>
     </SetupNotice>
   );
 }

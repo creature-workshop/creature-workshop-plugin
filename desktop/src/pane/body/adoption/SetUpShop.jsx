@@ -1,6 +1,6 @@
 /**
- * @file The adoption wizard in the pane body: the manifest's fields and the
- * commit choice, then the adoption itself.
+ * @file The adoption wizard in the pane body: the manifest's fields, the
+ * commit choice and the approval notice, then the adoption itself.
  */
 
 import { cn } from '@hermes/plugin-sdk';

@@ -7,7 +7,11 @@ import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { approvedIn, approveProject, NOT_RECORDED, requestWith } from './approval.js';
 
-/** The answer of `plugins.manage list` with this plugin's approved_projects holding `value`. */
+/**
+ * The answer of `plugins.manage list` with this plugin's approved_projects holding `value`.
+ *
+ * @param value What the setting holds.
+ */
 function listing(value) {
   const answer = {
     plugins: [
@@ -21,6 +25,9 @@ function listing(value) {
 /**
  * A stand-in for Hermes's gateway whose plugin list holds `value`, recording
  * each settings write in `writes`.
+ *
+ * @param value What the setting holds.
+ * @param {object[]} writes Takes the parameters of each settings write.
  */
 function gateway(value, writes) {
   return async (method, params) => {

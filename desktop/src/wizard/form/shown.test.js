@@ -6,7 +6,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { FINISH } from '../branch.js';
 import { confirm, dialog, prompt, withDefaultIndex } from '../steps.js';
-import { finalAnswers, shownSteps, startingValues } from './shown.js';
+import { closingSplit, finalAnswers, shownSteps, startingValues } from './shown.js';
 
 /** A wizard that asks for a name, then whether to go on, then a note only on yes. */
 const STEPS = [dialog('Hello.'), prompt('Name', 'name', 'notes'), withDefaultIndex(confirm('Add a note?', 'more'), 1), prompt('Note', 'note', '')];
@@ -27,6 +27,18 @@ describe('shownSteps', () => {
     assert.deepEqual(shownSteps([], {}), []);
     const loop = [{ kind: 'dialog', text: 'again', id: 'a', branch: () => ({ kind: 'jump', id: 'a' }) }];
     assert.deepEqual(shownSteps(loop, {}), [0]);
+  });
+});
+
+describe('closingSplit', () => {
+  it('puts the dialogs after the last question with the buttons, and leaves an opening dialog in the body', () => {
+    const steps = [dialog('Hello.'), prompt('Name', 'name', ''), dialog('By the way.'), dialog('Last word.')];
+    assert.deepEqual(closingSplit(steps, [0, 1, 2, 3]), { body: [0, 1], closing: [2, 3] });
+  });
+
+  it('has no closing notes when a question comes last, and only those when nothing is asked', () => {
+    assert.deepEqual(closingSplit(STEPS, [0, 1, 2]), { body: [0, 1, 2], closing: [] });
+    assert.deepEqual(closingSplit([dialog('Only this.')], [0]), { body: [], closing: [0] });
   });
 });
 

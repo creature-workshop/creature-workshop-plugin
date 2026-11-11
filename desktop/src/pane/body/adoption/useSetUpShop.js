@@ -25,8 +25,8 @@ const NO_GUESS = Object.freeze({ found: false, description: '', command: '' });
  * agent's guesses from GET /project/adoption/guess as `guessed`; it
  * succeeds once both have answered, with no guess when that call failed.
  * `reload()` asks for both again. `adopt(answers)` first records the
- * user's approval of the project when the answers give it, then sends the
- * rest to POST /project/adopt, so a failure of either leaves nothing half
+ * user's approval of the project, which completing setup gives, then sends
+ * the answers to POST /project/adopt, so a failure of either leaves nothing half
  * done that trying again does not finish. `attempt.phase` is `filling`,
  * `adopting`, or `failed` with the `error`, the `step` that failed
  * (`approval` or `adoption`) and the `answers` to try again with. When it
@@ -80,15 +80,15 @@ function withGuess(found, guessed) {
 }
 
 /**
- * Sets up shop in the checkout at `root`: records the approval when it was
- * given, then adopts the branch. Answers null when both went through, else
+ * Sets up shop in the checkout at `root`: records the user's approval of
+ * it, then adopts the branch. Answers null when both went through, else
  * `{step, error}` for the first that failed, after which nothing more ran.
  *
  * @param {string} root The checkout's root.
- * @param {{manifest: Record<string, string>, commit: boolean, approve: boolean}} adoption What the wizard's answers ask for.
+ * @param {{manifest: Record<string, string>, commit: boolean}} adoption What the wizard's answers ask for.
  */
 async function carriedOut(root, adoption) {
-  const approved = adoption.approve ? await approveProject(root) : { ok: true };
+  const approved = await approveProject(root);
   if (!approved.ok) {
     return { step: 'approval', error: approved.error };
   }

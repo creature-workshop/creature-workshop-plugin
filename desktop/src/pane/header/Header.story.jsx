@@ -92,9 +92,14 @@ export function Several() {
   return docked(severalBackend);
 }
 
-/** The header for a directory inside the main worktree of a repository with three worktrees. */
-export function Worktrees() {
-  return docked(worktreesBackend);
+/**
+ * The header for a directory inside the main worktree of a repository with three worktrees.
+ *
+ * @param props The story's props.
+ * @param {number} [props.width] The header's width in pixels; the docked width by default.
+ */
+export function Worktrees({ width = DOCKED_WIDTH }) {
+  return docked(worktreesBackend, SUBJECT, width);
 }
 
 /** The header for a session inside a linked worktree. */
@@ -135,10 +140,11 @@ export function PickedElsewhere() {
  *
  * @param rest The backend call the header makes.
  * @param subject What the pane is about.
+ * @param width The box's width in pixels.
  */
-function docked(rest, subject = SUBJECT) {
+function docked(rest, subject = SUBJECT, width = DOCKED_WIDTH) {
   return (
-    <div className={cn('workshop-story')} style={{ width: DOCKED_WIDTH }}>
+    <div className={cn('workshop-story')} style={{ width }}>
       <WorkshopProvider rest={rest} subject={subject}>
         <Header />
       </WorkshopProvider>
