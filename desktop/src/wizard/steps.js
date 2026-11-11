@@ -25,6 +25,8 @@ const YES_NO = Object.freeze([
  * @property {{label: string, value: string}[]} [options] A select's options, in order.
  * @property {number} [defaultIndex] The option a select starts on.
  * @property {string} [id] The name a branch jumps to.
+ * @property {string} [hint] A short note shown with the step, such as where its starting answer came from.
+ * @property {string} [info] What the step's answer is for, shown on request, as the pane's (i) shows a field's help.
  * @property {(output: Record<string, string>) => {kind: string, id?: string}} [branch]
  *   Decides where to go from this step's own answer, `{[key]: value}`; NEXT when absent.
  */
@@ -92,6 +94,41 @@ export function confirm(question, key, onYes = NEXT, onNo = FINISH) {
  */
 export function withId(step, id) {
   return Object.freeze({ ...step, id });
+}
+
+/**
+ * Whether the step is a confirm: a select over exactly Yes and No.
+ *
+ * @param {Step} step The step.
+ */
+export function isConfirm(step) {
+  return step.kind === 'select' && step.options === YES_NO;
+}
+
+/**
+ * The step with a short note shown with it, as blizz's hint line: where
+ * its starting answer came from, or what to enter.
+ *
+ * @param {Step} step The step.
+ * @param {string} hint The note.
+ *
+ * @returns {Step} A copy of the step with the hint.
+ */
+export function withHint(step, hint) {
+  return Object.freeze({ ...step, hint });
+}
+
+/**
+ * The step with help on what its answer is for, which an implementation
+ * shows when the user asks, as the pane's (i) after a field's name does.
+ *
+ * @param {Step} step The step.
+ * @param {string} info The help.
+ *
+ * @returns {Step} A copy of the step with the help.
+ */
+export function withInfo(step, info) {
+  return Object.freeze({ ...step, info });
 }
 
 /**

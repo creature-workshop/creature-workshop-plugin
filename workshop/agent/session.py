@@ -12,13 +12,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..project.declaration import counted, find_project
-from ..project.setup import NO_WORKSHOP, NOT_SET_UP, setup_state
+from ..project.setup import NO_WORKSHOP, setup_state
 from ..selection.state import state
 
-MISSING = {
-  NO_WORKSHOP: "The checkout selected for this session, {checkout}, doesn't have a workshop: its branch has no .ops/config.",
-  NOT_SET_UP: "The checkout selected for this session, {checkout}, has a workshop that isn't set up yet. To set it up, run .ops/boot in it.",
-}
+NO_WORKSHOP_PROBLEM = "The checkout selected for this session, {checkout}, doesn't have a workshop: its branch has no .ops/config."
 
 
 @dataclass(frozen=True)
@@ -26,7 +23,7 @@ class Standing:
   """Where a session stands: its folder, the roots of the checkouts the folder
   holds, the checkout the session is on, and the root of that checkout's
   project. `checkout` is None when the session is on none, and `root` is
-  None when it is on none or on one whose workshop is missing or not set up."""
+  None when it is on none or on one whose branch has no workshop."""
 
   folder: str
   held: tuple
@@ -57,8 +54,8 @@ def standing(session_id):
 
 def project(session_id):
   """(root, problem) for the project the session is on. root is None when the
-  session is on no checkout, or on one whose workshop is missing or not set
-  up, and problem then says which, for the agent to read."""
+  session is on no checkout, or on one whose branch has no workshop, and
+  problem then says which, for the agent to read."""
 
   stands = standing(session_id)
   if stands.root is None:
@@ -71,7 +68,7 @@ def problem_of(stands):
   """Why a session that stands like this is on no project, and what changes that."""
 
   if stands.checkout is not None:
-    return MISSING[setup_state(stands.checkout)].format(checkout=stands.checkout)
+    return NO_WORKSHOP_PROBLEM.format(checkout=stands.checkout)
 
   if not stands.held:
     return (f"No repository is selected for this session: its folder, {stands.folder}, is not inside a git "
@@ -83,6 +80,6 @@ def problem_of(stands):
 
 
 def holds_a_workshop(stands):
-  """Whether any checkout the session's folder holds has a workshop, set up or not."""
+  """Whether any checkout the session's folder holds has a workshop."""
 
   return any(setup_state(root) != NO_WORKSHOP for root in stands.held)

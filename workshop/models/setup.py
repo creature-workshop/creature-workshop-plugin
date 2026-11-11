@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 
 class Setup(BaseModel):
-  """How far the checkout at `root` is set up: `no-workshop` when its branch has no .ops/config, `not-set-up` when the checkout has no shell/ops yet, else `ready`."""
+  """Whether the checkout at `root` has a workshop: `no-workshop` when its branch has no .ops/config, else `ready`."""
 
   root: str
-  state: Literal["no-workshop", "not-set-up", "ready"]
+  state: Literal["no-workshop", "ready"]
