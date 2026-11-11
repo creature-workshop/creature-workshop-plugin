@@ -5,126 +5,69 @@
   },
   "dependencies": {
     "tools": {
-      "cargo-binstall": {
-        "cargo-audit": {
-          "args": "--disable-strategies compile",
-          "version": "0.22.2",
-          "needs": [
-            "cargo-binstall"
-          ]
+      "system": {
+        "git": {
+          "version": "latest"
         },
-        "cargo-fuzz": {
-          "args": "--disable-strategies compile",
-          "musl": true,
-          "version": "0.13.2",
-          "needs": [
-            "cargo-binstall"
-          ]
+        "ca-certificates": {
+          "version": "latest"
         },
-        "cargo-llvm-cov": {
-          "args": "--disable-strategies compile",
-          "musl": true,
-          "version": "0.9.1",
-          "needs": [
-            "cargo-binstall"
-          ]
+        "curl": {
+          "version": "latest"
         },
-        "cargo-nextest": {
-          "args": "--disable-strategies compile",
-          "musl": true,
-          "version": "0.9.144",
-          "needs": [
-            "cargo-binstall"
-          ]
+        "jq": {
+          "version": "1.6"
         },
-        "cargo-tarpaulin": {
-          "args": "--disable-strategies compile",
-          "musl": true,
-          "version": "0.35.4",
-          "needs": [
-            "cargo-binstall"
-          ]
+        "sudo": {
+          "version": "latest"
         },
-        "cargo-zigbuild": {
-          "args": "--disable-strategies compile",
-          "musl": true,
-          "version": "0.22.1",
-          "needs": [
-            "cargo-binstall"
-          ]
-        }
-      },
-      "git": {
-        "shell-docs": {
-          "repository": "https://gitlab.creature-workshop.com/ksoft/libraries/shell-docs.git",
-          "version": "f8e0ce7198a580971b0933fa20680d39a80ea1ae",
-          "needs": [
-            "git"
-          ]
+        "shellcheck": {
+          "version": "0.9.0"
         },
-        "shell-goldens": {
-          "repository": "https://gitlab.creature-workshop.com/ksoft/libraries/shell-goldens.git",
-          "version": "0bed61d8fa953740366e1418591d355e05f6e87a",
-          "needs": [
-            "git"
-          ]
+        "strace": {
+          "version": "5.16"
         },
-        "shell-lint": {
-          "repository": "https://gitlab.creature-workshop.com/ksoft/libraries/shell-lint.git",
-          "version": "6bb8baf3915fd940dea47627c1387af0b9511a35",
-          "needs": [
-            "git"
-          ]
+        "direnv": {
+          "postinstall": ".scripts/shim_direnv.sh"
         },
-        "shell-scan": {
-          "repository": "https://gitlab.creature-workshop.com/ksoft/libraries/shell-scan.git",
-          "version": "da3ddd31b8dd705898931470d675ca4c35aaf730",
-          "needs": [
-            "git"
-          ]
+        "build-essential": {
+          "version": "latest"
         },
-        "shell-tree": {
-          "repository": "https://gitlab.creature-workshop.com/ksoft/libraries/shell-tree.git",
-          "version": "0d2e619720c88827da18005539225a6bf3b0b16d",
-          "needs": [
-            "git"
-          ]
-        }
-      },
-      "go-install": {
-        "yq": {
-          "pkg": "github.com/mikefarah/yq/v4",
-          "version": "4.53.6",
-          "needs": [
-            "go"
-          ]
+        "openssh-client": {
+          "version": "latest"
+        },
+        "pkg-config": {
+          "version": "latest"
+        },
+        "libssl-dev": {
+          "version": "latest"
+        },
+        "unzip": {
+          "version": "latest"
+        },
+        "xz-utils": {
+          "version": "latest"
+        },
+        "pandoc": {
+          "version": "latest"
+        },
+        "openssl": {
+          "version": "latest"
+        },
+        "parallel": {
+          "version": "latest"
+        },
+        "python3": {
+          "version": "3.12.3"
+        },
+        "uv": {
+          "version": "0.11.19"
         }
       },
       "script": {
-        "cargo-binstall": {
-          "needs": [
-            "rustup"
-          ],
-          "version": "1.18.0"
-        },
-        "fnm": {
-          "needs": [
-            "curl",
-            "ca-certificates",
-            "unzip"
-          ],
-          "version": "1.39.0"
-        },
-        "llvm-strip": {
-          "version": "14"
-        },
-        "node": {
-          "needs": [
-            "fnm"
-          ],
-          "version": "24.20.0"
-        },
         "rustup": {
+          "version": "1.28.2",
+          "toolchain": "1.95.0",
           "components": [
             "rustfmt",
             "clippy",
@@ -134,104 +77,167 @@
             "build-essential",
             "curl",
             "ca-certificates"
-          ],
-          "toolchain": "1.95.0",
-          "version": "1.28.2"
+          ]
         },
-        "tectonic": {
+        "cargo-binstall": {
+          "version": "1.18.0",
           "needs": [
-            "curl",
-            "ca-certificates"
-          ],
-          "version": "0.15.0"
+            "rustup"
+          ]
         },
-        "terraform": {
+        "llvm-strip": {
+          "version": "14"
+        },
+        "zig": {
+          "version": "0.16.0",
+          "needs": [
+            "build-essential"
+          ]
+        },
+        "node": {
+          "version": "24.20.0",
+          "needs": [
+            "fnm"
+          ]
+        },
+        "fnm": {
+          "version": "1.39.0",
           "needs": [
             "curl",
             "ca-certificates",
             "unzip"
-          ],
-          "version": "1.16.4"
+          ]
         },
         "vercel": {
+          "version": "59.10.0",
           "needs": [
             "node"
-          ],
-          "version": "59.10.0"
+          ]
         },
-        "zig": {
+        "tectonic": {
+          "version": "0.15.0",
           "needs": [
-            "build-essential"
-          ],
-          "version": "0.16.0"
+            "curl",
+            "ca-certificates"
+          ]
+        },
+        "terraform": {
+          "version": "1.16.4",
+          "needs": [
+            "curl",
+            "ca-certificates",
+            "unzip"
+          ]
         },
         "hermes": {
+          "version": "2026.9.24",
           "commit": "f97608f178d1ffeca59860195ab7da295f7c8e5f",
           "needs": [
             "curl",
             "ca-certificates",
             "git"
-          ],
-          "version": "2026.9.24"
+          ]
         },
         "go": {
           "version": "1.25.5"
         }
       },
-      "system": {
-        "build-essential": {
-          "version": "latest"
+      "cargo-binstall": {
+        "cargo-audit": {
+          "version": "0.22.2",
+          "args": "--disable-strategies compile",
+          "musl": true,
+          "release": "https://github.com/rustsec/rustsec/releases/download/cargo-audit/v{ version }/cargo-audit-{ target }-v{ version }.tgz",
+          "needs": [
+            "cargo-binstall"
+          ]
         },
-        "ca-certificates": {
-          "version": "latest"
+        "cargo-tarpaulin": {
+          "version": "0.35.4",
+          "args": "--disable-strategies compile",
+          "musl": true,
+          "release": "https://github.com/xd009642/tarpaulin/releases/download/{ version }/cargo-tarpaulin-{ target }.tar.gz",
+          "needs": [
+            "cargo-binstall"
+          ]
         },
-        "curl": {
-          "version": "latest"
+        "cargo-llvm-cov": {
+          "version": "0.9.1",
+          "args": "--disable-strategies compile",
+          "musl": true,
+          "release": "https://github.com/taiki-e/cargo-llvm-cov/releases/download/v{ version }/cargo-llvm-cov-{ target }.tar.gz",
+          "needs": [
+            "cargo-binstall"
+          ]
         },
-        "direnv": {
-          "postinstall": ".scripts/shim_direnv.sh"
+        "cargo-nextest": {
+          "version": "0.9.144",
+          "args": "--disable-strategies compile",
+          "musl": true,
+          "release": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-{ version }/cargo-nextest-{ version }-{ target }.tar.gz",
+          "needs": [
+            "cargo-binstall"
+          ]
         },
-        "git": {
-          "version": "latest"
+        "cargo-fuzz": {
+          "version": "0.13.2",
+          "args": "--disable-strategies compile",
+          "musl": true,
+          "release": "https://github.com/rust-fuzz/cargo-fuzz/releases/download/{ version }/cargo-fuzz-{ version }-{ target }.tar.gz",
+          "needs": [
+            "cargo-binstall"
+          ]
         },
-        "jq": {
-          "version": "1.6"
+        "cargo-zigbuild": {
+          "version": "0.22.1",
+          "args": "--disable-strategies compile",
+          "musl": true,
+          "release": "https://github.com/rust-cross/cargo-zigbuild/releases/download/v{ version }/cargo-zigbuild-{ target }.tar.xz",
+          "needs": [
+            "xz-utils",
+            "cargo-binstall"
+          ]
+        }
+      },
+      "go-install": {
+        "yq": {
+          "version": "4.53.6",
+          "pkg": "github.com/mikefarah/yq/v4",
+          "needs": [
+            "go"
+          ]
+        }
+      },
+      "git": {
+        "shell-scan": {
+          "version": "da3ddd31b8dd705898931470d675ca4c35aaf730",
+          "needs": [
+            "git"
+          ]
         },
-        "libssl-dev": {
-          "version": "latest"
+        "shell-tree": {
+          "version": "0d2e619720c88827da18005539225a6bf3b0b16d",
+          "needs": [
+            "git"
+          ]
         },
-        "openssh-client": {
-          "version": "latest"
+        "shell-docs": {
+          "version": "f8e0ce7198a580971b0933fa20680d39a80ea1ae",
+          "needs": [
+            "git"
+          ]
         },
-        "openssl": {
-          "version": "latest"
+        "shell-goldens": {
+          "version": "0bed61d8fa953740366e1418591d355e05f6e87a",
+          "needs": [
+            "git"
+          ]
         },
-        "pandoc": {
-          "version": "latest"
-        },
-        "parallel": {
-          "version": "latest"
-        },
-        "pkg-config": {
-          "version": "latest"
-        },
-        "shellcheck": {
-          "version": "0.9.0"
-        },
-        "strace": {
-          "version": "5.16"
-        },
-        "sudo": {
-          "version": "latest"
-        },
-        "unzip": {
-          "version": "latest"
-        },
-        "python3": {
-          "version": "3.12.3"
-        },
-        "uv": {
-          "version": "0.11.19"
+        "shell-lint": {
+          "version": "125159be7eec03bc2433669e2bee63791db33bf5",
+          "needs": [
+            "git"
+          ]
         }
       },
       "npm": {
@@ -242,8 +248,8 @@
           ]
         },
         "pnpm": {
-          "bin": "bin/pnpm.mjs",
           "version": "12.18.0",
+          "bin": "bin/pnpm.mjs",
           "needs": [
             "node"
           ]
@@ -253,7 +259,7 @@
     "imports": {}
   },
   "release": {
-    "latest": "0.1.0-dev.21",
+    "latest": "0.1.0-dev.22",
     "stable": "0.0.0"
   }
 }
