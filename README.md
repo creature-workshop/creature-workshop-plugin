@@ -54,6 +54,12 @@ version of the plugin you are on (`release.latest` of the plugin's own
 rest of the pane is being rebuilt around the project's plan, one part at a
 time, and the parts arrive in later releases.
 
+Its **Dependencies** tab lists the tools the project declares in
+`.ops/config/tools.yaml`, under the channel that installs each, with the
+declared version and whether the tool is installed. Opening the tab runs
+`shell/ops install --check` in the project to find that out; it installs
+nothing.
+
 ## Install
 
 ```bash
