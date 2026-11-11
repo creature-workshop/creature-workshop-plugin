@@ -1,7 +1,9 @@
 """Covers workshop.agent.guard: which terminal commands the hook blocks, what it says, and when it re-runs the check.
 
 The project is the golden case `missing`, whose shell/ops stub reports ffmpeg
-installed and rsync missing.
+installed and rsync missing. It is copied into a repository of its own, which
+the session's folder is inside, so it is the one the session is on, and it
+is approved, since the hook checks nothing in a project the user has not approved.
 """
 
 import shutil
@@ -10,7 +12,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from workshop.agent import guard
+from tests.python.workshop.test_repos import repo
+from workshop import consent
+from workshop.about import data
+from workshop.selection import picking
+from workshop.agent import guard, session
 from workshop.run import ops
 
 HERE = Path(__file__).parent
@@ -26,13 +32,23 @@ def terminal(command, workdir):
 class InAProject(unittest.TestCase):
   def setUp(self):
     guard.CACHE.clear()
-    self.scratch = tempfile.mkdtemp()
-    self.root = Path(self.scratch) / "demo"
-    shutil.copytree(MISSING, self.root)
+    self.scratch = str(Path(tempfile.mkdtemp()).resolve())
+    self.root = repo(Path(self.scratch) / "demo")
+    shutil.copytree(MISSING, self.root, dirs_exist_ok=True)
     (self.root / "shell" / "ops").chmod(0o755)
+    self.patch(data, "data_dir", Path(self.scratch) / "data")
+    self.patch(session, "directory", str(self.root))
+    consent.approve(self.root)
 
   def tearDown(self):
     shutil.rmtree(self.scratch)
+
+  def patch(self, target, name, value):
+    """Makes target.name answer value until the test ends."""
+
+    patched = mock.patch.object(target, name, return_value=value)
+    patched.start()
+    self.addCleanup(patched.stop)
 
   def test_a_declared_tool_that_is_missing_is_blocked_with_the_version_and_the_fix(self):
     answer = terminal("rsync -a src/ dst/", self.root)
@@ -53,6 +69,35 @@ class InAProject(unittest.TestCase):
   def test_another_tool_passes_whatever_its_arguments(self):
     self.assertIsNone(guard.before_tool_call("read_file", {"path": "rsync"}, ""))
 
+  def test_a_command_that_names_no_directory_is_checked_against_the_sessions_project(self):
+    answer = guard.before_tool_call("terminal", {"command": "rsync -a src/ dst/"}, "", session_id="s1")
+    self.assertEqual(answer["action"], "block")
+
+  def test_a_command_in_a_directory_outside_the_sessions_project_passes(self):
+    elsewhere = Path(self.scratch) / "elsewhere"
+    shutil.copytree(MISSING, elsewhere)
+    with mock.patch.object(guard.ops, "run") as run:
+      self.assertIsNone(terminal("rsync -a src/ dst/", elsewhere))
+      run.assert_not_called()
+
+  def test_a_session_on_another_repository_is_not_checked_against_this_project(self):
+    other = repo(Path(self.scratch) / "other")
+    self.patch(session, "directory", self.scratch)
+    picking.select_repository("s1", self.scratch, other)
+    with mock.patch.object(guard.ops, "run") as run:
+      self.assertIsNone(guard.before_tool_call("terminal", {"command": "rsync -a src/ dst/"}, "", session_id="s1"))
+      run.assert_not_called()
+
+  def test_a_session_in_a_folder_above_the_project_is_checked_only_once_the_user_selects_it(self):
+    self.patch(session, "directory", self.scratch)
+    with mock.patch.object(guard.ops, "run") as run:
+      self.assertIsNone(guard.before_tool_call("terminal", {"command": "rsync -a src/ dst/"}, "", session_id="s1"))
+      run.assert_not_called()
+
+    picking.select_repository("s1", self.scratch, self.root)
+    answer = guard.before_tool_call("terminal", {"command": "rsync -a src/ dst/"}, "", session_id="s1")
+    self.assertEqual(answer["action"], "block")
+
   def test_the_check_runs_once_until_forgotten(self):
     with mock.patch.object(guard.ops, "run", wraps=ops.run) as run:
       terminal("rsync -a src/ dst/", self.root)
@@ -66,7 +111,7 @@ class InAProject(unittest.TestCase):
 class OutsideAProject(unittest.TestCase):
   def test_passes_without_running_anything(self):
     with tempfile.TemporaryDirectory() as tmp:
-      with mock.patch.object(guard.ops, "run") as run:
+      with mock.patch.object(session, "directory", return_value=tmp), mock.patch.object(guard.ops, "run") as run:
         self.assertIsNone(terminal("rsync -a src/ dst/", tmp))
         run.assert_not_called()
 

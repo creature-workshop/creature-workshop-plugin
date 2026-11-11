@@ -23,11 +23,17 @@ class Repo(BaseModel):
 
 
 class Repos(BaseModel):
-  """The repositories a session's directory holds; `inside` is true when the directory is inside the one listed, and `checkout` is then the root of the worktree it is in."""
+  """The repositories a session's directory holds, and what the session is on.
+  `inside` is true when the directory is inside the one listed, and
+  `checkout` is then the root of the worktree it is in. `repository` is the
+  root of the repository the session is on, and `selected` is the root of
+  the checkout of it the pane reads; both are empty when it is on none."""
 
   start: str
   inside: bool
   checkout: str = ""
+  repository: str = ""
+  selected: str = ""
   repos: list[Repo]
   refresh_seconds: int
 

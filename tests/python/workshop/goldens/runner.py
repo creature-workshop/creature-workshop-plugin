@@ -14,16 +14,24 @@ The transcript has one block per call: `## <call>`, then the tool's reply as
 sorted, indented JSON, or `!! <error>` when the handler raised. The project is
 copied to a fresh directory before the calls run, so the replies name it as
 `<root>`, and `duration_ms` is written as `<ms>`; nothing else is normalised.
-A case without an input/ runs in an empty directory, which is how the tools
-answer outside any project.
+
+The calls run in a session whose directory is the project. The project is a
+git repository, the only one the session holds, so it is the one the session
+is on, and the user has approved it. A case without an input/ runs in an
+empty directory that is no repository, which is how the tools answer in a
+session that is on none.
 """
 
 import json
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
+from unittest import mock
 
-from workshop.agent import tools
+from workshop import consent
+from workshop.about import data
+from workshop.agent import session, tools
 
 CASES = Path(__file__).parent / "cases"
 HANDLERS = {
@@ -51,21 +59,27 @@ def transcript(case):
   """The transcript of a case's calls, run in a fresh copy of its input."""
 
   with tempfile.TemporaryDirectory() as scratch:
-    root = Path(scratch) / "project"
-    copy_input(case, root)
-    blocks = [block(line, root) for line in calls_of(case)]
+    root = Path(scratch).resolve() / "project"
+    kept = Path(scratch).resolve() / "data"
+    with mock.patch.object(session, "directory", return_value=str(root)), mock.patch.object(data, "data_dir", return_value=kept):
+      copy_input(case, root)
+      blocks = [block(line, root) for line in calls_of(case)]
 
   return "".join(blocks)
 
 
 def copy_input(case, root):
-  """Copies the case's input/ tree to root, or makes root empty when there is none."""
+  """Copies the case's input/ tree to root as an approved git repository, or
+  makes root an empty directory when the case has none."""
 
   source = case / "input"
-  if source.is_dir():
-    shutil.copytree(source, root)
-  else:
+  if not source.is_dir():
     root.mkdir()
+    return
+
+  shutil.copytree(source, root)
+  subprocess.run(["git", "init", "-q", str(root)], check=True)
+  consent.approve(root)
 
 
 def calls_of(case):
@@ -85,7 +99,6 @@ def reply(line, root):
   """The transcript entry for one tool call in a case: the tool's answer with the case's root replaced, or the error it raised."""
 
   tool, arguments = parse_call(line)
-  arguments.setdefault("path", str(root))
   try:
     answer = json.loads(HANDLERS[tool](arguments))
   except Exception as error:

@@ -1,3 +1,4 @@
-The case has no input/, so the calls run in an empty directory. Every tool
-answers ok false with the same error, which says what a project needs and
-how it gets it, and none of them raises.
+The case has no input/, so the calls run in a session whose directory is an
+empty folder that is not a git repository. The session is on no repository,
+so every tool answers ok false with the same error, which says why nothing
+is selected, and none of them raises.

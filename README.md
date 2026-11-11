@@ -8,7 +8,8 @@ shows the result in a Desktop pane.
 
 ## What the agent gets
 
-Four tools, each a thin wrapper of a `shell/ops` command run in the project:
+Four tools, each a thin wrapper of a `shell/ops` command run in the
+project:
 
 | Tool | What it does |
 |---|---|
@@ -17,9 +18,23 @@ Four tools, each a thin wrapper of a `shell/ops` command run in the project:
 | `workshop_test` | The test plan for changed paths, the run of exactly those, or the full suite |
 | `workshop_lint` | The house-style lint over paths, or the whole project |
 
-In a session whose directory is a shellops project, the system prompt gets a
-short section saying so, with the project's name, its tool count and its
-latest release, so the agent reaches for the tools without being told.
+A session is on one repository, or on none, and the agent and the pane are
+always on the same one. A session whose folder is inside a repository is on
+that repository. A session whose folder is inside none, such as your home
+folder or a folder of checkouts, is on none until you select one in the
+pane's selector, even when the folder holds only one. The plugin looks below
+such a folder only to list the repositories for that selector. Each chat
+keeps its own selection. When a repository has several worktrees, the
+session is on one of them: the one you pick in the pane's worktree selector,
+else the one the session's folder is inside, else the main worktree. Only
+you change what a session is on: the agent has no tool that does. The tools,
+the hook and the pane all work on that checkout and on no other.
+
+At the start of each turn the agent is told which project its session is on,
+with the project's name, its tool count and its latest release, so it
+reaches for the tools without being told and follows a pick you make in the
+middle of a chat. A session whose folder holds no workshop is told
+nothing.
 
 And one hook, on every terminal command. When the command runs a program the
 project declares in `.ops/config/tools.yaml` and `install --check` reports
@@ -27,7 +42,8 @@ missing, the hook blocks the command before it runs and tells the agent the
 tool, its declared version and channel, and the `workshop_install` call that
 installs it, so the agent installs and retries instead of failing on a
 command that was never going to work. A program the project does not declare
-passes, as does every command outside a project. The check behind the hook
+passes, as does every command in a session that is on no project, and every
+command run in a directory outside the session's project. The check behind the hook
 is cached for `pane_refresh_seconds` and forgotten after an install.
 
 ## What you get
@@ -57,6 +73,13 @@ git submodule add https://gitlab.creature-workshop.com/ksoft/shellops.git shell/
 - The tools run the project's own `shell/ops` as a subprocess, in the project
   directory, with the project's `.envrc` loaded. Nothing runs outside the
   project.
+- The project is the one selected for the session, which the pane shows. The
+  plugin never selects a repository below the session's folder itself, and
+  neither does the agent: until you select one in the pane, the tools run
+  nothing there.
+- The plugin keeps each chat's selected repository and worktree in its data
+  folder, `~/.hermes/plugin-data/creature-workshop/selection/`: their
+  paths, in files named with a hash of the session id.
 - `workshop_install` with `check: false` installs tools, which fetches from
   the channel the declaration names: the host's package manager, cargo, npm,
   go, a git repository, Flathub, or an installer script the project ships.

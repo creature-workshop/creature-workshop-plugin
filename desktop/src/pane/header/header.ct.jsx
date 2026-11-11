@@ -1,14 +1,16 @@
 /**
  * @file What a user sees in the header: that no git repository was found,
- * the one repository's name and state, or a selector over several that
- * shows the selected one's state; a worktree selector when a repository
- * has several worktrees; and that it follows the focused session. The
- * tests mount the header's stories and read it by role and by text, never
- * by a test id.
+ * the name and state of the repository the folder is inside, or a selector
+ * over the repositories below the folder, even only one, with none
+ * selected until the user selects one; a worktree selector when a repository
+ * has several worktrees; that it follows the focused session, each session
+ * keeping its own selection; and that the worktree selector follows a
+ * pick made in another window. The tests mount the header's stories and read it by role and
+ * by text, never by a test id.
  */
 
 import { test, expect } from '@playwright/experimental-ct-react';
-import { Empty, Following, InsideWorktree, Several, Single, Worktrees } from './Header.story.jsx';
+import { Empty, Following, InsideWorktree, OneBelow, PickedElsewhere, Several, Single, Worktrees } from './Header.story.jsx';
 
 test('a directory with no git repository says so', async ({ mount }) => {
   const component = await mount(<Empty />);
@@ -16,7 +18,7 @@ test('a directory with no git repository says so', async ({ mount }) => {
   await expect(component.getByRole('banner', { name: 'Project' })).toHaveText('No repositories detected');
 });
 
-test('a directory with one repository shows its name and its state like a prompt', async ({ mount }) => {
+test('a directory inside a repository shows its name and its state like a prompt', async ({ mount }) => {
   const component = await mount(<Single />);
 
   const header = component.getByRole('banner', { name: 'Project' });
@@ -33,6 +35,20 @@ test('the state says itself in words in the same tooltip as the (i)s, and to ass
 
   await expect(page.getByRole('tooltip')).toHaveText('main, 2 ahead, 1 staged, 3 untracked');
   await expect(header.getByText('main, 2 ahead, 1 staged, 3 untracked')).toHaveClass(/sr-only/);
+});
+
+test('a directory that holds one repository below it offers a selector, with none selected until the user selects it', async ({ mount, page }) => {
+  const component = await mount(<OneBelow />);
+
+  const selector = component.getByRole('combobox', { name: 'Session Repository' });
+  await expect(selector).toHaveText('Select a repository');
+  await expect(component.getByText('main ↑2 +1 ?3')).toHaveCount(0);
+
+  await selector.click();
+  await page.getByRole('option', { name: 'demo' }).click();
+
+  await expect(selector).toHaveText('demo');
+  await expect(component.getByText('main ↑2 +1 ?3')).toBeVisible();
 });
 
 test('a directory with several repositories offers a selector, with none selected at first', async ({ mount }) => {
@@ -53,7 +69,7 @@ test('selecting a repository shows its state beside the selector', async ({ moun
   await expect(component.getByText('feat/x ✓')).toBeVisible();
 });
 
-test('focusing another session shows its folder and drops the selection', async ({ mount, page }) => {
+test('focusing another session shows its folder, and each session keeps its own selection', async ({ mount, page }) => {
   const component = await mount(<Following />);
 
   await component.getByRole('combobox', { name: 'Session Repository' }).click();
@@ -64,7 +80,18 @@ test('focusing another session shows its folder and drops the selection', async 
   await expect(component.getByRole('banner', { name: 'Project' })).toHaveText('No repositories detected');
 
   await component.update(<Following />);
-  await expect(component.getByRole('combobox', { name: 'Session Repository' })).toHaveText('Select a repository');
+  await expect(component.getByRole('combobox', { name: 'Session Repository' })).toHaveText('site');
+  await expect(component.getByText('feat/x ✓')).toBeVisible();
+});
+
+test('a worktree picked in another window becomes the one the worktree selector shows', async ({ mount }) => {
+  const component = await mount(<PickedElsewhere />);
+  await expect(component.getByRole('combobox', { name: 'Session Worktree' })).toHaveText('site');
+
+  await component.getByRole('button', { name: 'Pick site-hotfix in another window' }).click();
+
+  await expect(component.getByRole('combobox', { name: 'Session Worktree' })).toHaveText('site-hotfix');
+  await expect(component.getByText('fix/hotfix ~1')).toBeVisible();
 });
 
 test('a repository with only its main worktree has no worktree selector', async ({ mount }) => {

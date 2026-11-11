@@ -17,6 +17,9 @@ provides_tools:
   - workshop_lint
 provides_hooks:
   - pre_tool_call
+  - pre_llm_call
+  - post_compaction
+  - subagent_start
 config_schema:
   ops_timeout_seconds:
     type: int

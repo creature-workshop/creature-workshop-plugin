@@ -11,6 +11,7 @@
 
 import { cn } from '@hermes/plugin-sdk';
 import { useState } from 'react';
+import { standIn } from '../standIn/index.js';
 import { sessionSubject } from '../subject.js';
 import { WorkshopProvider } from '../workshop/WorkshopProvider.jsx';
 import { WorkshopPane } from './WorkshopPane.jsx';
@@ -31,7 +32,7 @@ const SUBJECT = sessionSubject('stored-session-1', CWD);
 const NO_REPOS = { start: CWD, inside: false, repos: [], refresh_seconds: 20 };
 
 /** GET /repos for a directory that is a repository itself. */
-const ONE_REPO = { start: CWD, inside: true, repos: [{ root: CWD, name: 'notes' }], refresh_seconds: 20 };
+const ONE_REPO = { start: CWD, inside: true, checkout: CWD, repos: [{ root: CWD, name: 'notes' }], refresh_seconds: 20 };
 
 /** GET /repos/status for that repository: clean, on main. */
 const CLEAN = { root: CWD, ok: true, branch: 'main', detached: false, upstream: false, ahead: 0, behind: 0, staged: 0, modified: 0, untracked: 0, conflicted: 0 };
@@ -148,7 +149,7 @@ function repositoryBackend(project, setup = 'ready') {
     ['/store/query', MANIFEST_RECORD],
     ['/store/introspect', MANIFEST_SCHEMA],
   ];
-  return async (path) => answers.find(([prefix]) => path.startsWith(prefix))[1];
+  return standIn(async (path) => answers.find(([prefix]) => path.startsWith(prefix))[1]);
 }
 
 /**
@@ -176,7 +177,7 @@ function failingOnce(rest, path, rejection) {
  * @param about The answer to GET /about.
  */
 function backendWith(about) {
-  return async (path) => (path.startsWith('/about') ? about : NO_REPOS);
+  return standIn(async (path) => (path.startsWith('/about') ? about : NO_REPOS));
 }
 
 /**

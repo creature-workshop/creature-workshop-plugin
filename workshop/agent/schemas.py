@@ -7,12 +7,10 @@ pass; a handler then receives those arguments as a mapping. Nothing here runs
 anything.
 """
 
-PATH_PROPERTY = {"type": "string", "description": "A directory inside the project. The session's directory when left out."}
-
 PROJECT_SCHEMA = {
   "name": "workshop_project",
-  "description": "What the current shellops project declares (its manifest, tools, ecosystems, imports and lint declarations), its release record, and which declared tools are installed right now. Call this first in a project that has shell/ops.",
-  "parameters": {"type": "object", "properties": {"path": PATH_PROPERTY}, "required": []},
+  "description": "What the session's selected project declares (its manifest, tools, ecosystems, imports and lint declarations), its release record, and which declared tools are installed right now. Call this first in a project that has shell/ops.",
+  "parameters": {"type": "object", "properties": {}, "required": []},
 }
 
 INSTALL_SCHEMA = {
@@ -21,7 +19,6 @@ INSTALL_SCHEMA = {
   "parameters": {
     "type": "object",
     "properties": {
-      "path": PATH_PROPERTY,
       "check": {"type": "boolean", "description": "true to only report; false to install what is missing."},
       "tools": {"type": "array", "items": {"type": "string"}, "description": "Only these tools, by name."},
       "approve": {"type": "boolean", "description": "true to approve this project for execution. Required once per project before any shell command runs."},
@@ -36,7 +33,6 @@ TEST_SCHEMA = {
   "parameters": {
     "type": "object",
     "properties": {
-      "path": PATH_PROPERTY,
       "verb": {"type": "string", "enum": ["plan", "files", "all"], "description": "plan by default."},
       "paths": {"type": "array", "items": {"type": "string"}, "description": "The paths you changed, relative to the project."},
     },
@@ -50,7 +46,6 @@ LINT_SCHEMA = {
   "parameters": {
     "type": "object",
     "properties": {
-      "path": PATH_PROPERTY,
       "paths": {"type": "array", "items": {"type": "string"}, "description": "Files or directories to lint, relative to the project."},
     },
     "required": [],
