@@ -22,8 +22,7 @@ from the working tree, so the tree must be clean.
 Hermes Agent installs no submodules, so the build writes a complete copy of
 shellops at shell/.ops in place of the submodule: shellops at the commit the
 submodule pins, with every tree it pins and its compiled tree, so that the
-installed plugin boots shellops with no network. jq is the one thing the copy
-cannot carry, since it is a binary; the user's machine provides it.
+installed plugin boots shellops with no network. The copy runs without jq.
 
 The plugin/build job runs this and keeps the directory as an artifact;
 plugin/catalog runs hermes plugins validate on it, and
