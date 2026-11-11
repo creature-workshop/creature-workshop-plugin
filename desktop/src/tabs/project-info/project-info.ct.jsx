@@ -3,12 +3,13 @@
  * value, Enter or Save keeps the change, Escape or Cancel drops it, a
  * required field cannot be emptied, an unset field reads Not set and can be
  * filled in, a save the store refuses keeps the editor open with the store's
- * reason, and a save over a change made outside the pane says so and shows
- * the current value. The tests mount the stories in ProjectInfoPanel.story.jsx.
+ * reason, a save over a change made outside the pane says so and shows
+ * the current value, and a project with no manifest gets Create manifest
+ * in place of a failure. The tests mount the stories in ProjectInfoPanel.story.jsx.
  */
 
 import { test, expect } from '@playwright/experimental-ct-react';
-import { ChangedOutside, Editable, Refusing } from './ProjectInfoPanel.story.jsx';
+import { ChangedOutside, Editable, NoManifestYet, Refusing } from './ProjectInfoPanel.story.jsx';
 
 /**
  * The value shown under a field's name.
@@ -169,3 +170,40 @@ test('a save over a change made outside the pane says so, and saving again repla
   await expect(valueOf(component, 'Description')).toHaveText('Mine.');
 });
 
+test('a project with no manifest says so in the Manifest group, with Create manifest and no failure', async ({ mount }) => {
+  const component = await mount(<NoManifestYet />);
+
+  const group = component.getByRole('region', { name: 'Manifest' });
+  await expect(group.getByRole('status')).toContainText('notes has no manifest yet.');
+  await expect(group.getByRole('button', { name: 'Create manifest' })).toBeVisible();
+  await expect(component.getByRole('alert')).toHaveCount(0);
+  await expect(valueOf(component, 'Latest')).toHaveText('0.1.0');
+});
+
+test('Create manifest opens the setup form, and Confirm writes the manifest and shows its fields', async ({ mount }) => {
+  const sent = [];
+  const component = await mount(<NoManifestYet onAdopt={(body) => sent.push(body)} />);
+
+  await component.getByRole('button', { name: 'Create manifest' }).click();
+  const form = component.getByRole('form', { name: 'Set up shop' });
+  await expect(form.getByRole('textbox', { name: 'Project Name' })).toHaveValue('notes');
+  await form.getByRole('textbox', { name: 'Organization' }).fill('someone');
+  await form.getByRole('button', { name: 'Confirm' }).click();
+
+  await expect(valueOf(component, 'Organization')).toHaveText('someone');
+  await expect(component.getByRole('button', { name: 'Create manifest' })).toHaveCount(0);
+  expect(sent).toEqual([{
+    root: '/home/someone/notes',
+    manifest: { name: 'notes', description: 'Notes kept in git.', 'command-name': 'notes', org: 'someone', repo: 'notes' },
+    commit: false,
+  }]);
+});
+
+test('Cancel in the form goes back to Create manifest', async ({ mount }) => {
+  const component = await mount(<NoManifestYet />);
+
+  await component.getByRole('button', { name: 'Create manifest' }).click();
+  await component.getByRole('button', { name: 'Cancel' }).click();
+
+  await expect(component.getByRole('button', { name: 'Create manifest' })).toBeVisible();
+});

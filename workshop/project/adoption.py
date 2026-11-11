@@ -61,6 +61,12 @@ def remote_parts(url):
   return found["org"], found["repo"]
 
 
+def has_manifest(root):
+  """Whether the checkout at root has a .ops/config/manifest.yaml."""
+
+  return (Path(root) / MANIFEST_PATH).is_file()
+
+
 def write_manifest(root, manifest):
   """Writes manifest, the declaration's values by key, to .ops/config/manifest.yaml under root."""
 

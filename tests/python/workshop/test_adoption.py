@@ -80,14 +80,24 @@ class Adopt(unittest.TestCase):
       self.assertEqual(git_out(root, "show", "--name-only", "--format="), ".ops/config/manifest.yaml")
       self.assertEqual(git_out(root, "diff", "--cached", "--name-only"), "staged.txt")
 
-  def test_refuses_a_checkout_that_already_has_a_workshop(self):
+  def test_refuses_a_checkout_that_already_has_a_manifest_and_leaves_it_alone(self):
     with tempfile.TemporaryDirectory() as tmp:
       root = repository(Path(tmp) / "notes")
       (root / ".ops" / "config").mkdir(parents=True)
+      (root / ".ops" / "config" / "manifest.yaml").write_text("name: Kept\n")
       with self.assertRaises(HTTPException) as refused:
         asyncio.run(adopt(AdoptBody(root=str(root), manifest=MANIFEST)))
 
-      self.assertEqual(refused.exception.detail, "notes already has a workshop.")
+      self.assertEqual(refused.exception.detail, "notes already has a manifest.")
+      self.assertEqual((root / ".ops" / "config" / "manifest.yaml").read_text(), "name: Kept\n")
+
+  def test_writes_the_manifest_beside_the_declarations_a_checkout_already_has(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root = repository(Path(tmp) / "notes")
+      (root / ".ops" / "config").mkdir(parents=True)
+      (root / ".ops" / "config" / "tools.yaml").write_text("system: {}\n")
+      asyncio.run(adopt(AdoptBody(root=str(root), manifest=MANIFEST)))
+      self.assertEqual(sorted(each.name for each in (root / ".ops" / "config").iterdir()), ["manifest.yaml", "tools.yaml"])
 
   def test_says_when_git_did_not_commit(self):
     with tempfile.TemporaryDirectory() as tmp:

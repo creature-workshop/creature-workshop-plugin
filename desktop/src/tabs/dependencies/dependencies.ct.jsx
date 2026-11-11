@@ -7,7 +7,7 @@
  */
 
 import { test, expect } from '@playwright/experimental-ct-react';
-import { CheckFailsOnce, CheckSaysNothing, Declared, NoneDeclared, StillChecking } from './DependenciesPanel.story.jsx';
+import { CheckFailsOnce, CheckSaysNothing, Declared, DeclaredLater, NoneDeclared, StillChecking } from './DependenciesPanel.story.jsx';
 
 test('each channel is a group named after it, holding its tools in the order declared', async ({ mount }) => {
   const component = await mount(<Declared />);
@@ -67,6 +67,17 @@ test('a project that declares no tools says where they go', async ({ mount }) =>
   const component = await mount(<NoneDeclared />);
 
   await expect(component.getByRole('tabpanel', { name: 'Dependencies' })).toHaveText('This project declares no dependencies yet. They go in .ops/config/tools.yaml.');
+});
+
+test('tools declared outside the pane show within 5 seconds, checked', async ({ mount, page }) => {
+  await page.clock.install();
+  const component = await mount(<DeclaredLater />);
+
+  await expect(component.getByRole('tabpanel', { name: 'Dependencies' })).toContainText('This project declares no dependencies yet.');
+  await page.clock.runFor(5_000);
+
+  await expect(component.getByRole('status')).toHaveText('4 dependencies, all installed');
+  await expect(component.getByRole('group', { name: 'pnpm' }).getByRole('definition')).toHaveText('12.18.0Installed');
 });
 
 test('a group heading folds its tools away', async ({ mount }) => {

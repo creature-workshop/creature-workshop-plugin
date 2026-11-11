@@ -10,7 +10,8 @@
  * - `selected`: the root of the checkout the session is on, one of that
  *   repository's worktrees; the backend decides both, and the agent's
  *   tools work on the same checkout;
- * - `project`: the shellops project of that checkout;
+ * - `project`: the shellops project of that checkout, read again every 5
+ *   seconds so a change to its declaration made outside the pane shows;
  * - `setup`: whether that checkout has a workshop, read again every 5
  *   seconds so a workshop added or deleted outside the pane shows.
  *
@@ -32,9 +33,10 @@ import { useSetupFollower } from './useSetupFollower.js';
 const WorkshopContext = createContext(null);
 
 /**
- * How often the pane re-reads the checkout's setup, in seconds. It is its
- * own, shorter than pane_refresh_seconds, because the read only looks for
- * .ops/config, while that setting paces the git status.
+ * How often the pane re-reads the checkout's setup and its project, in
+ * seconds. It is its own, shorter than pane_refresh_seconds, because both
+ * reads only look at files under .ops, while that setting paces the git
+ * status.
  */
 const SETUP_REFRESH_SECONDS = 5;
 
@@ -56,7 +58,7 @@ export function WorkshopProvider({ rest, subject, children }) {
   const [retried, retry] = useRetry();
   const about = useAbout(rest, retried.about);
   const checkout = useCheckout(rest, subject, retried.repos);
-  const project = useProject(rest, checkout.selected, retried.project);
+  const project = useProject(rest, checkout.selected, retried.project, SETUP_REFRESH_SECONDS);
   const setup = useSetup(rest, checkout.selected, retried.setup, SETUP_REFRESH_SECONDS);
   useSetupFollower(checkout.selected, setup, retry);
   const value = useMemo(() => ({ about, subject, ...checkout, project, setup, retry }), [about, subject, checkout, project, setup, retry]);

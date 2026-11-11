@@ -40,10 +40,10 @@ from workshop.models.project import DeclaredTool, NoProject, Project, Release
 from workshop.models.setup import Setup
 from workshop.models.toolchain import Toolchain
 from workshop.project import check_table
-from workshop.project.adoption import MANIFEST_PATH, commit_manifest, suggestions, write_manifest
+from workshop.project.adoption import MANIFEST_PATH, commit_manifest, has_manifest, suggestions, write_manifest
 from workshop.project.declaration import declaration, declared_tools, find_project, manifest, release, summary_line
 from workshop.project.guess import guess
-from workshop.project.setup import NO_WORKSHOP, setup_state
+from workshop.project.setup import setup_state
 from workshop.run import ops
 
 
@@ -92,10 +92,10 @@ async def adoption_guess(root: str = Query()):
 
 @api.register("/project/adopt", Adopted, method="POST")
 async def adopt(body: AdoptBody):
-  """Writes the checkout's .ops/config/manifest.yaml from body.manifest and commits it alone when body.commit is set, refusing a checkout whose branch already has a workshop."""
+  """Writes the checkout's .ops/config/manifest.yaml from body.manifest and commits it alone when body.commit is set, refusing a checkout that already has a manifest."""
 
-  if setup_state(body.root) != NO_WORKSHOP:
-    raise HTTPException(status_code=400, detail=f"{Path(body.root).name} already has a workshop.")
+  if has_manifest(body.root):
+    raise HTTPException(status_code=400, detail=f"{Path(body.root).name} already has a manifest.")
 
   write_manifest(body.root, body.manifest.model_dump(by_alias=True))
   failure = await asyncio.to_thread(commit_manifest, body.root) if body.commit else ""

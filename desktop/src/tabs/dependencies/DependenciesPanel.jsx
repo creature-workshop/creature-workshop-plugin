@@ -23,14 +23,16 @@ const UNCHECKED = "I couldn't tell which of these are installed: the check said 
  * missing, then one group for each channel, named after it, with a row for
  * each tool. The list shows at once, from the declaration; each row says
  * Checking until `ops install --check` has answered, then Installed or
- * Missing. When the check could not be asked for, the panel says why above
+ * Missing. The list follows the declaration: a tool added to tools.yaml
+ * outside the pane shows within 5 seconds, and the check runs again. When
+ * the check could not be asked for, the panel says why above
  * the list, with Try again; when it answered nothing about the tools, it
  * says so. A project that declares no tools gets one line saying where
  * they go.
  */
 export function DependenciesPanel() {
   const { project, selected } = useWorkshop();
-  const { check, recheck } = useToolchain(selected);
+  const { check, recheck } = useToolchain(selected, project.data.declared);
   const groups = channelsOf(project.data.declared, check);
   if (groups.length === 0) {
     return <p className={cn('workshop-dependencies-none', 'text-(--ui-text-secondary)')}>{NONE}</p>;

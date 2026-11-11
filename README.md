@@ -144,7 +144,8 @@ every command pass there, and the pane's backend does not run
 - The backend in `dashboard/plugin_api.py` runs `shell/ops install --check`
   for the pane on a timer. It reads files under the project only. What it
   answers with is the models under `workshop/models/`, one module per concept.
-- The pane's **Set up shop** form, on a branch with no `.ops/config/`, writes
+- The pane's **Set up shop** form, on a checkout with no
+  `.ops/config/manifest.yaml`, writes
   `.ops/config/manifest.yaml` from the values you enter, after you press its
   Confirm button. It fills the name and the repository from the
   folder's name and the `origin` remote's URL, and leaves the organization
