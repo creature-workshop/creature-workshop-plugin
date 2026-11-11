@@ -4,7 +4,9 @@ The answer is a workshop.models.project.Project: its declaration files, its
 release record, the tools it declares and, when `check` is not "0", the
 toolchain as `ops install --check` reports it right now. Running the check
 costs a few seconds, which is why the pane asks for it on its own timer and
-not on every render. Outside a project the answer is a NoProject. Every
+not on every render. In a project the user has not approved, the check is
+not run: `approved` is false and the toolchain is left out. Outside a
+project the answer is a NoProject. Every
 answer carries `refresh_seconds`, the pane_refresh_seconds setting, so the
 pane schedules that timer from the setting without reading configuration
 itself.
@@ -30,10 +32,9 @@ import os
 from pathlib import Path
 
 from fastapi import HTTPException, Query
-from pydantic import BaseModel
 
 from workshop import api, settings
-from workshop.consent import approve as approve_project, is_approved
+from workshop.consent import is_approved
 from workshop.models.adoption import AdoptBody, Adopted, AdoptionGuess, AdoptionSuggestions
 from workshop.models.project import DeclaredTool, NoProject, Project, Release
 from workshop.models.setup import Setup
@@ -132,24 +133,3 @@ def toolchain(root):
     stderr=outcome["stderr"],
     duration_ms=outcome["duration_ms"],
   )
-
-
-class ApproveBody(BaseModel):
-  """The body of POST /project/approve: the project root to approve."""
-
-  root: str
-
-
-class ApproveAnswer(BaseModel):
-  """The answer of POST /project/approve."""
-
-  approved: bool
-  root: str
-
-
-@api.register("/project/approve", ApproveAnswer, method="POST")
-async def approve(body: ApproveBody):
-  """Approves a project for execution, so the plugin can run shell commands in it."""
-
-  approve_project(body.root)
-  return ApproveAnswer(approved=True, root=body.root)

@@ -68,11 +68,43 @@ Then restart Hermes. The pane needs Hermes Desktop. Only projects that have
 git submodule add https://gitlab.creature-workshop.com/ksoft/shellops.git shell/.ops && shell/.ops/init
 ```
 
+## Approving a project
+
+The plugin runs a project's own `shell/ops`, with its `.envrc` loaded, on
+your machine and outside Hermes's terminal sandbox. So it runs nothing in a
+project until you approve that project, and only you can approve one. No
+project is approved when the plugin is installed.
+
+To approve a project, add the absolute path of its root to the
+`approved_projects` setting, under Settings → Plugins in Hermes Desktop or in
+Hermes's configuration:
+
+```yaml
+plugins:
+  entries:
+    creature-workshop:
+      settings:
+        approved_projects:
+          - /home/you/code/your-project
+```
+
+To withdraw the approval, remove the path.
+
+The agent cannot approve a project. No tool takes an approval, and in a
+project that is not approved every `workshop_*` tool answers that the
+project needs your approval and runs nothing. The hook on the terminal lets
+every command pass there, and the pane's backend does not run
+`install --check` there.
+
 ## Disclosure
 
 - The tools run the project's own `shell/ops` as a subprocess, in the project
   directory, with the project's `.envrc` loaded. Nothing runs outside the
-  project.
+  project, and nothing runs in a project you have not approved (see
+  Approving a project).
+- The approved projects are a setting of the plugin in Hermes's
+  configuration, which each profile has its own copy of. The plugin has no
+  tool and no route that changes it.
 - The project is the one selected for the session, which the pane shows. The
   plugin never selects a repository below the session's folder itself, and
   neither does the agent: until you select one in the pane, the tools run
@@ -124,6 +156,8 @@ They are set under Settings → Plugins in Hermes Desktop, or under
 - `ops_env_passthrough` (default empty): the names of more environment
   variables for every program the plugin starts, for example `HTTPS_PROXY`
   behind a proxy. The plugin passes the value Hermes has for each name.
+- `approved_projects` (default empty): the absolute paths of the project
+  roots the plugin may run `shell/ops` in. See Approving a project.
 
 ## Development
 

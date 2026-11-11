@@ -3,9 +3,8 @@
  * a folder belongs to; GET /project/setup, whether one checkout has a
  * workshop;
  * GET /project/adoption, what the adoption form starts with; GET
- * /project/adoption/guess, the agent's guesses for it; POST /project/adopt,
- * which writes a branch's first manifest; and POST /project/approve, which
- * records the user's approval of a project.
+ * /project/adoption/guess, the agent's guesses for it; and POST
+ * /project/adopt, which writes a branch's first manifest.
  */
 
 import * as api from './api.js';
@@ -39,6 +38,3 @@ export const adoptionGuess = api.register(
  * commits it alone when `commit` is true, as POST /project/adopt answers.
  */
 export const adopt = api.register('adopt', (rest, root, manifest, commit) => rest('/project/adopt', { method: 'POST', body: { root, manifest, commit } }));
-
-/** Records the user's approval of the project at a root, as POST /project/approve answers. */
-export const approve = api.register('approve', (rest, root) => rest('/project/approve', { method: 'POST', body: { root } }));

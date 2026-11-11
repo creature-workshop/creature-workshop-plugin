@@ -1,62 +1,50 @@
 """Per-project consent: a project must be approved before the plugin runs
 shell commands in it.
 
-The user approves a project once, and the approval is stored in a JSON file
-under the plugin's data directory. Every path that leads to ops.run checks
-consent first: the tool handlers, the guard hook, and the dashboard backend.
-The pane and the system prompt section read the declaration without running
-anything, so they do not need consent.
+Only the user approves a project, and in one way: they add the project's
+root to the approved_projects setting, which is empty until they fill it.
+The agent has no way to approve one. No tool and no route takes an approval,
+and what the agent reads about an unapproved project tells it to ask the
+user and not to change the setting.
+
+Every path that leads to ops.run checks consent first: the tool handlers, the
+guard hook, and the dashboard backend. The pane and the system prompt section
+read the declaration without running anything, so they do not need consent.
 """
 
-import json
-import logging
+from pathlib import Path
 
-from .about import data
-
-log = logging.getLogger("creature-workshop")
-
-CONSENT_FILE = "approved-projects.json"
+from . import settings
 
 
 def is_approved(root):
-  """Whether the user has approved running shell commands in this project."""
+  """Whether the user has approved running shell commands in this project: the
+  approved_projects setting lists its root."""
 
-  return str(root) in _approved_set()
-
-
-def approve(root):
-  """Records the user's approval for a project. Returns True when the
-  project was not already approved, False when it was."""
-
-  key = str(root)
-  approved = _approved_set()
-  if key in approved:
-    return False
-
-  approved.add(key)
-  _save(approved)
-  log.info("Approved project %s", key)
-  return True
+  return resolved(root) in listed_projects(settings.value("approved_projects"))
 
 
-def revoke(root):
-  """Removes the user's approval for a project."""
+def listed_projects(setting):
+  """The project roots the approved_projects setting lists, each as an absolute
+  path with no links or `..` in it. An entry that is not text is left out, and
+  so is everything when the setting is not a list.
 
-  key = str(root)
-  approved = _approved_set()
-  if key not in approved:
-    return False
+    listed_projects(["~/code/demo/", 7])  ->  frozenset({"/home/someone/code/demo"})
+  """
 
-  approved.discard(key)
-  _save(approved)
-  log.info("Revoked approval for project %s", key)
-  return True
+  if not isinstance(setting, list):
+    return frozenset()
+
+  return frozenset(resolved(entry) for entry in setting if isinstance(entry, str) and entry.strip())
 
 
-def approved_projects():
-  """The set of approved project roots, as strings."""
+def resolved(root):
+  """A project's root as the setting and a caller are compared: absolute, with no links or `..` in it.
 
-  return _approved_set()
+    resolved("~/code/demo/")  ->  "/home/someone/code/demo"
+  """
+
+  return str(Path(root).expanduser().resolve())
 
 
 def require_consent(root):
@@ -66,39 +54,9 @@ def require_consent(root):
     return None
 
   return (
-    f"The shellops project at {root} has not been approved for execution. "
-    f"The creature-workshop plugin needs the user's consent before it runs "
-    f"shell commands in a project. Ask the user to approve it, then call "
-    f"workshop_install with approve: true."
+    f"The workshop at {root} has not been approved for execution, so nothing was run. "
+    f"Only the user can approve it: they add {root} to the approved_projects setting of the "
+    f"creature-workshop plugin, under Settings → Plugins in Hermes Desktop or under "
+    f"plugins.entries.creature-workshop.settings in Hermes's configuration. "
+    f"Tell the user this, and do not change that setting yourself."
   )
-
-
-def _consent_path():
-  """The path of the file that lists the approved project roots."""
-
-  return data.data_dir() / CONSENT_FILE
-
-
-def _approved_set():
-  """The set of approved project roots from disk."""
-
-  path = _consent_path()
-  if not path.is_file():
-    return set()
-
-  try:
-    data = json.loads(path.read_text())
-    if isinstance(data, list):
-      return set(data)
-  except (ValueError, OSError):
-    pass
-
-  return set()
-
-
-def _save(approved):
-  """Writes the approved set to disk."""
-
-  path = _consent_path()
-  path.parent.mkdir(parents=True, exist_ok=True)
-  path.write_text(json.dumps(sorted(approved), indent=2) + "\n")

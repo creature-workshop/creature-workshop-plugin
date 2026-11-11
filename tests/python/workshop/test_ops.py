@@ -6,9 +6,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from tests.python.workshop.test_consent import approving
 from tests.python.workshop.test_repos import repo
-from workshop import consent
-from workshop.about import data
 from workshop.agent import session, tools
 from workshop.project import check_table
 from workshop.run import ops
@@ -32,24 +31,16 @@ class ParseCheckTable(unittest.TestCase):
     self.assertEqual(check_table.parse(""), [])
 
 
-class ScratchData(unittest.TestCase):
-  def setUp(self):
-    kept = tempfile.TemporaryDirectory()
-    self.addCleanup(kept.cleanup)
-    patched = mock.patch.object(data, "data_dir", return_value=Path(kept.name))
-    patched.start()
-    self.addCleanup(patched.stop)
-
-
-class Run(ScratchData):
+class Run(unittest.TestCase):
   def test_reports_the_dispatcher_output_and_duration(self):
     with tempfile.TemporaryDirectory() as tmp:
       root = Path(tmp)
       (root / "shell").mkdir()
       (root / "shell" / "ops").write_text("#!/bin/sh\necho \"ran $*\"\n")
       (root / "shell" / "ops").chmod(0o755)
-      consent.approve(root)
-      outcome = ops.run(root, ["install", "--check"])
+      with approving(root):
+        outcome = ops.run(root, ["install", "--check"])
+
       self.assertTrue(outcome["ok"])
       self.assertEqual(outcome["stdout"].strip(), "ran install --check")
       self.assertEqual(outcome["command"], "shell/ops install --check")
@@ -61,8 +52,9 @@ class Run(ScratchData):
       (root / "shell").mkdir()
       (root / "shell" / "ops").write_text("#!/bin/sh\necho nope >&2\nexit 3\n")
       (root / "shell" / "ops").chmod(0o755)
-      consent.approve(root)
-      outcome = ops.run(root, ["lint"])
+      with approving(root):
+        outcome = ops.run(root, ["lint"])
+
       self.assertFalse(outcome["ok"])
       self.assertEqual(outcome["stderr"].strip(), "nope")
 
@@ -107,11 +99,10 @@ if __name__ == "__main__":
   unittest.main()
 
 
-class Logging(ScratchData):
+class Logging(unittest.TestCase):
   def test_a_failed_run_is_logged_as_a_warning_with_its_stderr(self):
     with tempfile.TemporaryDirectory() as tmp:
-      consent.approve(tmp)
-      with self.assertLogs("creature-workshop", level="WARNING") as logged:
+      with approving(tmp), self.assertLogs("creature-workshop", level="WARNING") as logged:
         ops.run(tmp, ["install", "--check"])
 
       self.assertIn("shell/ops install --check failed", logged.output[0])
@@ -122,8 +113,7 @@ class Logging(ScratchData):
       (root / "shell").mkdir()
       (root / "shell" / "ops").write_text("#!/bin/sh\nexit 0\n")
       (root / "shell" / "ops").chmod(0o755)
-      consent.approve(root)
-      with self.assertLogs("creature-workshop", level="INFO") as logged:
+      with approving(root), self.assertLogs("creature-workshop", level="INFO") as logged:
         ops.run(root, ["lint"])
 
       self.assertIn("INFO:creature-workshop:shell/ops lint in", logged.output[0])

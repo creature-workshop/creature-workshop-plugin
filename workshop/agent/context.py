@@ -78,8 +78,9 @@ def current_project(stands):
 
 
 def selected_project(root):
-  """What the agent reads about the project its session is on, with the consent
-  it still needs when the user has not approved the project."""
+  """What the agent reads about the project its session is on. For a project the
+  user has not approved, it also says that the tools run nothing there and
+  that only the user can approve it."""
 
   name = manifest(root).get("name") or root.name
   told = (f'Creature Workshop: this session is on the workshop "{name}" at {root}; it declares '
@@ -88,5 +89,6 @@ def selected_project(root):
   if is_approved(root):
     return told
 
-  return (f"{told} It has not been approved for execution yet: before any other workshop_* tool runs "
-      "in it, call workshop_install with approve: true to record the user's consent.")
+  return (f"{told} It has not been approved for execution yet, so the workshop_* tools run nothing in it. "
+      "Only the user can approve it, by adding its path to the plugin's approved_projects setting. "
+      "Do not change that setting yourself; tell the user when they ask for something these tools would do.")
