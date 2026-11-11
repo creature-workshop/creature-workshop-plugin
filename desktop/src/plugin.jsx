@@ -8,12 +8,15 @@
  * Workshop tabs, one folder each; wizard/,
  * the contract every wizard implementation fills, the one Wizard the pane
  * renders, and form/, the plain implementation; standIn/, the backend the
- * stories and tests run against; and events.js, the names Hermes and the
- * plugin agree on and how the pane listens for its events.
+ * stories and tests run against; modules/approval/, recording the user's approval
+ * of a project in the plugin's settings; and events.js, the names Hermes
+ * and the plugin agree on and how the pane listens for its events.
  * This is the source; shell/actions/hermes/bundle writes desktop/plugin.js
  * from it, which is what Desktop loads.
  */
 
+import { host } from '@hermes/plugin-sdk';
+import { requestWith } from './modules/approval/approval.js';
 import { listenWith, PLUGIN_ID } from './events.js';
 import { SessionPane } from './pane/SessionPane.jsx';
 import { FormWizard } from './wizard/form/FormWizard.jsx';
@@ -26,8 +29,9 @@ export default {
   /**
    * Registers the form wizard as the wizard implementation, then the pane,
    * with one backend call for its whole life, so the pane's effects that
-   * depend on it run once and not on every render, and names Desktop's
-   * event stream as the way the pane listens for events.
+   * depend on it run once and not on every render, names Desktop's event
+   * stream as the way the pane listens for events, and names Desktop's
+   * gateway call as the way the pane records an approval.
    *
    * @param ctx The plugin context the SDK hands over.
    */
@@ -35,6 +39,7 @@ export default {
     registerWizard(FormWizard);
     const rest = (path, options) => ctx.rest(path, options);
     listenWith((type, listener) => ctx.onEvent(type, listener));
+    requestWith((method, params) => host.request(method, params));
     ctx.register({
       id: 'pane',
       area: 'panes',

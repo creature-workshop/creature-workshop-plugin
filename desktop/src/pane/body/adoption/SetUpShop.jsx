@@ -16,8 +16,8 @@ import { useSetUpShop } from './useSetUpShop.js';
  * whichever implementation is registered, starting on GET
  * /project/adoption's suggestions and the agent's guesses; while those
  * load it says "Reading <name>" with dots. While the adoption runs it says
- * "Setting up shop" with dots; when it fails, what happened, with Try
- * again. Cancel calls `onCancel`.
+ * "Setting up shop" with dots; when recording the approval or the adoption
+ * fails, which of the two and why, with Try again. Cancel calls `onCancel`.
  *
  * @param props The component's props.
  * @param {string} props.root The checkout's root.
@@ -37,8 +37,21 @@ export function SetUpShop({ root, name, onCancel }) {
     return <p className={cn('workshop-set-up-shop-running', 'text-(--ui-text-secondary)')}><LoadingDots>Setting up shop</LoadingDots></p>;
   }
   if (attempt.phase === 'failed') {
-    return <FailureNotice what={`I couldn't set up shop in ${name}.`} error={attempt.error} onRetry={() => adopt(attempt.answers)} />;
+    return <FailureNotice what={whatFailed(attempt.step, name)} error={attempt.error} onRetry={() => adopt(attempt.answers)} />;
   }
 
   return steps && <Wizard tool="shop" steps={steps} onFinish={adopt} onCancel={onCancel} />;
+}
+
+/**
+ * What to say failed: recording the approval, before anything was written
+ * to the checkout, or the adoption.
+ *
+ * @param {'approval' | 'adoption'} step The step that failed.
+ * @param {string} name The checkout's folder name.
+ */
+function whatFailed(step, name) {
+  return step === 'approval'
+    ? `I couldn't record your approval of ${name}, so I haven't set up shop yet.`
+    : `I couldn't set up shop in ${name}.`;
 }
