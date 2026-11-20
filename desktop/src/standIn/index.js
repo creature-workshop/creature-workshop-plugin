@@ -5,6 +5,7 @@
  */
 
 import './selection.js';
+import './sync.js';
 
 /** Builds a backend call for a story or a test from the story's own answers. */
 export { standIn } from './api.js';

@@ -124,7 +124,7 @@ export function WorkshopDeleted() {
  * again succeeds.
  *
  * @param props The story's props.
- * @param {string} props.path The path whose first call fails, such as `/repos?` or `/store/query`.
+ * @param {string} props.path The path whose first call fails, such as `/repos?` or `/store/sync`.
  * @param {'no-route' | 'internal' | 'unreachable'} props.kind How it fails.
  */
 export function FailingOnce({ path, kind }) {

@@ -3,7 +3,8 @@
  * backend whose file store keeps each change it is sent, as the real one
  * writes it to the manifest; one whose store refuses every change with a
  * reason; one where the manifest changed outside the pane before the
- * first save; and one whose project has no manifest until the form writes
+ * first save; one where it changes outside the pane after the pane's first
+ * read; and one whose project has no manifest until the form writes
  * it. The tests are in
  * project-info.ct.jsx beside this file.
  */
@@ -77,6 +78,12 @@ export function ChangedOutside() {
   return framed(rest);
 }
 
+/** The tabs over a backend whose manifest reads as changed outside the pane from its second read on. */
+export function EditedLater() {
+  const [rest] = useState(() => standIn(editedLaterBackend()));
+  return framed(rest);
+}
+
 /**
  * The tabs over a project that has no manifest until POST /project/adopt
  * writes one, with the form wizard registered. Each POST's body goes to
@@ -109,21 +116,35 @@ function framed(rest) {
  * A backend call that answers the reads and applies each write at the
  * current revision to its own copy of the manifest, answering a write at
  * any other revision as stale. `stored` is the manifest as it is on disk,
- * which differs from what the pane first reads when it changed outside the
- * pane.
+ * which differs from MANIFEST when it changed outside the pane. The reads
+ * answer MANIFEST until the first write has been sent, as when the change
+ * was made between the pane's last read and the save.
  *
  * @param stored The manifest on disk.
  */
 function keepingBackend(stored = MANIFEST) {
   let manifest = stored;
-  let reads = 0;
+  let unwritten = MANIFEST;
   return async (path, options) => {
     if (options?.method === 'POST') {
+      unwritten = null;
       manifest = written(manifest, options.body);
       return { data: { record: manifest } };
     }
+    return read(path, unwritten ?? manifest);
+  };
+}
+
+/**
+ * A backend call that answers the manifest as MANIFEST the first time it
+ * is read and as EDITED_OUTSIDE every time after, as when an agent or an
+ * editor changes the file while the pane is open.
+ */
+function editedLaterBackend() {
+  let reads = 0;
+  return async (path) => {
     reads += path.startsWith('/store/query') ? 1 : 0;
-    return read(path, reads === 1 ? MANIFEST : manifest);
+    return read(path, reads > 1 ? EDITED_OUTSIDE : MANIFEST);
   };
 }
 

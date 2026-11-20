@@ -10,8 +10,11 @@ Writes desktop/plugin.js, the file Hermes Desktop loads, from the JSX under
 desktop/src/.
 
 esbuild bundles desktop/src/plugin.jsx into one readable ES module, with the
-JSX turned into React's runtime calls and the three modules Desktop provides
-left as imports: @hermes/plugin-sdk, react and react/jsx-runtime. The output
+three modules Desktop provides left as imports: @hermes/plugin-sdk, react and
+react/jsx-runtime. The JSX is turned into calls of the pane's own runtime,
+desktop/src/bind/jsx-runtime.js, which the name @workshop/jsx resolves to:
+it is React's runtime, and it also wraps a component given a bind prop so
+the component reads and writes the checkout's synced stores. The output
 is not tracked: shell/actions/hermes/build runs this as one step of building
 the tree the catalog pins. esbuild comes from .ops/config/tools.yaml
 through ops install, and runs from its package home, because its bin is a
@@ -45,7 +48,8 @@ main() {
     --format=esm \
     --platform=browser \
     --jsx=automatic \
-    --jsx-import-source=react \
+    --jsx-import-source=@workshop/jsx \
+    --alias:@workshop/jsx="$PROJ/desktop/src/bind" \
     --external:@hermes/plugin-sdk \
     --external:react \
     --external:react/jsx-runtime \
