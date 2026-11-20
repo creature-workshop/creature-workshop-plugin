@@ -15,9 +15,6 @@
         "curl": {
           "version": "latest"
         },
-        "jq": {
-          "version": "1.6"
-        },
         "sudo": {
           "version": "latest"
         },
@@ -259,7 +256,7 @@
     "imports": {}
   },
   "release": {
-    "latest": "0.1.0-dev.24",
+    "latest": "0.1.0-dev.25",
     "stable": "0.0.0"
   }
 }
