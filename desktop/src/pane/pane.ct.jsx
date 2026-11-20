@@ -345,7 +345,7 @@ test('a failed read of the version says the Workshop plugin version is unavailab
 });
 
 test('a failed read of the manifest says so in its group, and Try again shows the fields', async ({ mount }) => {
-  const component = await mount(<FailingOnce path="/store/sync" kind="unreachable" />);
+  const component = await mount(<FailingOnce path="/store/query" kind="unreachable" />);
   const manifest = component.getByRole('region', { name: 'Manifest' });
 
   await expect(manifest.getByRole('alert')).toContainText("I couldn't read the Manifest fields from config/manifest.yaml.");

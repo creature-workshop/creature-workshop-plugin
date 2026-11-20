@@ -39,8 +39,8 @@ const TOP_LEVEL_DECLARATIONS = [
 /** What a part of the pane is told when it reaches for a store itself. */
 const BIND_INSTEAD = "A part of the pane reads and writes a store through a bind prop, not through the client. Give the component a bind prop where it is used, and desktop/src/bind/Bound.jsx reads the checkout's synced stores for it.";
 
-/** A call of one of the client's store routes, such as client.query(...). */
-const STORE_CALL = "MemberExpression[object.name='client'][property.name=/^(introspect|query|mutate|sync)$/]";
+/** A call of one of the client routes a store is read and written through, such as client.query(...). */
+const STORE_CALL = "MemberExpression[object.name='client'][property.name=/^(introspect|query|mutate|fileState)$/]";
 
 /** The configuration, as ESLint's flat config: the ignores first, then the rulesets, then the house's own rules. */
 export default [
