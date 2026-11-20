@@ -14,7 +14,7 @@ import { FailureNotice } from '../failures/FailureNotice.jsx';
  * @param {object} props.binding What the group shows, as register in bindings.js returns it.
  * @param {((reread: () => void) => import('react').ReactNode) | null} props.missing Draws what to show when the record does not exist, or null.
  * @param props.error Why the record could not be read, as client/api.js flattens an error.
- * @param {() => void} props.onRetry Reads the store again.
+ * @param {() => void} props.onRetry Reads the file again.
  */
 export function InspectorFailed({ binding, missing, error, onRetry }) {
   if (missing && error.code === 'NOT_FOUND') {

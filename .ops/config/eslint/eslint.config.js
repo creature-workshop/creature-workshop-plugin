@@ -15,7 +15,7 @@
  * when a file should split: its constants come before its first function,
  * and no comment draws a banner across it. Outside workshop/ and client/, no
  * part of the pane calls the client's store routes or imports them: a
- * component reads and writes a store through a bind prop.
+ * component reads and writes a file under .ops/ through a bind prop.
  * The one exception syntax is ESLint's own eslint-disable comment, with the
  * reason after two dashes.
  */
@@ -36,10 +36,10 @@ const TOP_LEVEL_DECLARATIONS = [
   'Program > ExportDefaultDeclaration',
 ];
 
-/** What a part of the pane is told when it reaches for a store itself. */
-const BIND_INSTEAD = "A part of the pane reads and writes a store through a bind prop, not through the client. Give the component a bind prop where it is used, and desktop/src/bind/Bound.jsx reads the checkout's synced stores for it.";
+/** What a part of the pane is told when it reaches for a file under .ops/ itself. */
+const BIND_INSTEAD = "A part of the pane reads and writes a file under .ops/ through a bind prop, not through the client. Give the component a bind prop where it is used, and desktop/src/bind/Bound.jsx reads the checkout's synced files for it.";
 
-/** A call of one of the client routes a store is read and written through, such as client.query(...). */
+/** A call of one of the client routes a file under .ops/ is read and written through, such as client.query(...). */
 const STORE_CALL = "MemberExpression[object.name='client'][property.name=/^(introspect|query|mutate|fileState)$/]";
 
 /** The configuration, as ESLint's flat config: the ignores first, then the rulesets, then the house's own rules. */

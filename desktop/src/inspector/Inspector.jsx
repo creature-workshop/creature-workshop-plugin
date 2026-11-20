@@ -1,6 +1,6 @@
 /**
  * @file The inspector: shows a binding's fields, each drawn by the component
- * the binding names, from the record and the schema of the binding's store.
+ * the binding names, from the record and the schema of the binding's file.
  */
 
 import './builtins.js';
@@ -17,7 +17,7 @@ import { InspectorFields } from './InspectorFields.jsx';
  * could not be read, the group says so in the fields' place, with why, what
  * to try, and Try again. A record that does not exist is not a failure
  * when `missing` is given: the group shows what `missing` draws in the
- * fields' place. `missing` is given `reread`, which reads the store again,
+ * fields' place. `missing` is given `reread`, which reads the file again,
  * for when it has made the record.
  *
  * @param props The component's props.

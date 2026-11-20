@@ -1,7 +1,7 @@
 /**
  * @file A component bound with a `bind` prop: an ordinary controlled text
  * box shows the value its binding names, shows what is typed at once, and
- * each change is written to the store at the revision the one before it
+ * each change is written to the file at the revision the one before it
  * answered; and a binding that cannot be read shows a notice that names
  * the file in the component's place. The tests mount the stories in
  * Bound.story.jsx.

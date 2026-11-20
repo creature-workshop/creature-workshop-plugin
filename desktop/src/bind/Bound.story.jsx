@@ -2,7 +2,7 @@
  * @file The stories of binding: an ordinary controlled component, NameBox,
  * which knows nothing about the pane's data, bound to the name in the
  * manifest by a `bind` prop where it is used; and the same component
- * bound to a file the store cannot read. The backend keeps each write it
+ * bound to a file the backend cannot read. The backend keeps each write it
  * is sent. The tests are in bound.ct.jsx beside this file.
  */
 
@@ -18,7 +18,7 @@ const ROOT = '/home/someone/notes';
 /** The name in the manifest, as a binding. */
 const NAME = Object.freeze({ kind: 'file', source: 'config/manifest.yaml', record: 'document', key: 'name' });
 
-/** The manifest as the file store first answers it. */
+/** The manifest as the backend first answers it. */
 const MANIFEST = Object.freeze({ id: 'document', revision: 'r1', values: { name: 'Notes' } });
 
 /** What the backend answers to each read that is not the manifest. */

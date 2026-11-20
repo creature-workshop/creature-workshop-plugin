@@ -1,7 +1,7 @@
 /**
  * @file The wrapper the pane's JSX runtime puts around every component
  * that is given a `bind` prop. It is the one place a component's data
- * reaches the checkout's synced stores, so the component itself is
+ * reaches the checkout's synced files, so the component itself is
  * ordinary React: props in, callbacks out.
  */
 
@@ -14,7 +14,7 @@ import { targetOf } from './target.js';
 
 /**
  * Draws `bound` with the data its binding names, and draws it again
- * whenever that store changes, whether a read answered something new or a
+ * whenever that file changes, whether a read answered something new or a
  * write was queued, confirmed or refused.
  *
  * The component is drawn only once the data has arrived, with the props

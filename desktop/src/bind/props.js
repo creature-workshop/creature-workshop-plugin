@@ -1,6 +1,6 @@
 /**
  * @file The props a bound component receives for its data, by what its
- * binding names: a store, a record or a key.
+ * binding names: a file, a record or a key.
  */
 
 /**
@@ -14,20 +14,20 @@
  * - a record binding gets `value`, the record's values; `schema`; `git`;
  *   `write(operation)`, which writes one operation to that record; and
  *   `reread()`;
- * - a store binding gets `value`, every record; `schema`; `git`;
- *   `write(operation)`, which writes one operation to the store; and
+ * - a file binding gets `value`, every record; `schema`; `git`;
+ *   `write(operation)`, which writes one operation to the file; and
  *   `reread()`.
  *
- * `git` is the state of the store's file in git, or null.
+ * `git` is the state of the file in git, or null.
  *
  * @param {{record?: string, key?: string}} bind The binding.
  * @param data The data of the binding's target, as target.js narrows it.
- * @param writer How the component changes the store.
- * @param {(operation: object) => Promise<string | null>} writer.write Queues one operation on the store.
+ * @param writer How the component changes the file.
+ * @param {(operation: object) => Promise<string | null>} writer.write Queues one operation on the file.
  * @param {(operation: object) => Promise<void>} writer.save Queues one operation and keeps its state.
  * @param {boolean} writer.saving Whether a saved operation is in flight.
  * @param {string} writer.error What the last saved operation resolved to, or empty.
- * @param {() => Promise<void>} writer.reread Reads the followed stores again.
+ * @param {() => Promise<void>} writer.reread Reads the followed files again.
  */
 export function propsFor(bind, data, writer) {
   if (bind.key !== undefined) {
@@ -44,7 +44,7 @@ export function propsFor(bind, data, writer) {
  *
  * @param {{record: string, key: string}} bind The binding.
  * @param data The target's data, with its `record`.
- * @param writer How the component changes the store.
+ * @param writer How the component changes the file.
  */
 function keyProps({ record, key }, data, writer) {
   return { value: data.record.values[key], onChange: (value) => writer.save({ op: 'set', id: record, key, value }), saving: writer.saving, error: writer.error };
@@ -55,7 +55,7 @@ function keyProps({ record, key }, data, writer) {
  *
  * @param {{record: string}} bind The binding.
  * @param data The target's data, with its `record`.
- * @param writer How the component changes the store.
+ * @param writer How the component changes the file.
  */
 function recordProps({ record }, data, writer) {
   return { value: data.record.values, schema: data.schema, git: data.git, write: (operation) => writer.write({ ...operation, id: record }), reread: writer.reread };

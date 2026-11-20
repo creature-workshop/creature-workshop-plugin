@@ -7,7 +7,7 @@
  *
  * It is React's runtime with one addition: a component given a `bind` prop
  * is drawn inside Bound, which reads and writes the checkout's synced
- * stores for it. A component's author writes no data hook; whoever uses
+ * files for it. A component's author writes no data hook; whoever uses
  * the component names its data with `bind`.
  */
 

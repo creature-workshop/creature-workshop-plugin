@@ -14,7 +14,7 @@ three modules Desktop provides left as imports: @hermes/plugin-sdk, react and
 react/jsx-runtime. The JSX is turned into calls of the pane's own runtime,
 desktop/src/bind/jsx-runtime.js, which the name @workshop/jsx resolves to:
 it is React's runtime, and it also wraps a component given a bind prop so
-the component reads and writes the checkout's synced stores. The output
+the component reads and writes the checkout's synced files. The output
 is not tracked: shell/actions/hermes/build runs this as one step of building
 the tree the catalog pins. esbuild comes from .ops/config/tools.yaml
 through ops install, and runs from its package home, because its bin is a

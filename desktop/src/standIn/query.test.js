@@ -8,7 +8,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { standIn } from './index.js';
 
-/** The record the story's store holds. */
+/** The record the story's file holds. */
 const RECORD = Object.freeze({ id: 'document', revision: 'r1', values: { name: 'Notes' } });
 
 /** A story's backend call that answers every query with its one record. */

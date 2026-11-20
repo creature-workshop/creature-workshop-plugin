@@ -1,7 +1,7 @@
 /**
- * @file The plain parts of binding a component to the synced stores: what
- * a binding names inside a store's view, the props a bound component gets
- * for a store, a record and a key, and which elements the JSX runtime
+ * @file The plain parts of binding a component to the synced files: what
+ * a binding names inside a file's view, the props a bound component gets
+ * for a file, a record and a key, and which elements the JSX runtime
  * wraps.
  */
 
@@ -11,13 +11,13 @@ import { propsFor } from './props.js';
 import { targetOf } from './target.js';
 import { wrapped } from './wrap.js';
 
-/** The manifest's store. */
+/** The manifest. */
 const MANIFEST = Object.freeze({ kind: 'file', source: 'config/manifest.yaml' });
 
-/** The record the store's view holds. */
+/** The record the file's view holds. */
 const RECORD = Object.freeze({ id: 'document', revision: 'r1', values: { name: 'Notes', org: null } });
 
-/** The store's view once it has been read. */
+/** The file's view once it has been read. */
 const VIEW = Object.freeze({ state: 'success', data: { records: [RECORD], schema: { type: 'object' }, git: 'modified' } });
 
 /**
@@ -52,7 +52,7 @@ function make(type, props, key) {
 }
 
 describe('targetOf', () => {
-  it('hands a store binding the view as it is', () => {
+  it('hands a file binding the view as it is', () => {
     assert.equal(targetOf(MANIFEST, VIEW), VIEW);
   });
 
@@ -60,7 +60,7 @@ describe('targetOf', () => {
     assert.deepEqual(targetOf({ ...MANIFEST, record: 'document' }, VIEW), { state: 'success', data: { ...VIEW.data, record: RECORD } });
   });
 
-  it('is a NOT_FOUND failure for a record the store does not hold', () => {
+  it('is a NOT_FOUND failure for a record the file does not hold', () => {
     const target = targetOf({ ...MANIFEST, record: 'other' }, VIEW);
     assert.deepEqual([target.state, target.error.code, target.error.message], ['failure', 'NOT_FOUND', 'config/manifest.yaml has no record other.']);
   });
@@ -72,7 +72,7 @@ describe('targetOf', () => {
 });
 
 describe('propsFor', () => {
-  it('gives a store binding every record, the schema, the git state and the write', async () => {
+  it('gives a file binding every record, the schema, the git state and the write', async () => {
     const sent = [];
     const props = propsFor(MANIFEST, VIEW.data, writer(sent));
     assert.deepEqual([props.value, props.schema, props.git, props.reread()], [[RECORD], { type: 'object' }, 'modified', 'read again']);
