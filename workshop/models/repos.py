@@ -1,4 +1,4 @@
-"""The answers of GET /repos and GET /repos/status: the repositories a session holds, with their worktrees, and the state of one."""
+"""The answers of GET /repos, GET /repos/status and GET /repos/file-state: the repositories a session holds, with their worktrees, the state of one, and the state of one file in git."""
 
 from pydantic import BaseModel
 
@@ -52,3 +52,11 @@ class RepoStatus(BaseModel):
   modified: int = 0
   untracked: int = 0
   conflicted: int = 0
+
+
+class FileState(BaseModel):
+  """The state of one file in git: `state` is clean, modified, new, deleted or conflict, or none when git has nothing to say about the file."""
+
+  root: str
+  path: str
+  state: str

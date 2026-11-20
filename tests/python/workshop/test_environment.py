@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from workshop.repos import status
+from workshop.repos import file_state, status
 from workshop.run import environment, git, ops
 
 HERMES_ENVIRON = {
@@ -88,6 +88,15 @@ class Programs(unittest.TestCase):
       with mock.patch.object(status.subprocess, "run") as run:
         run.return_value.returncode = 1
         status.status_of("/home/someone/demo")
+
+    self.assertIn("PATH", run.call_args.kwargs["env"])
+    self.assertNotIn("OPENAI_API_KEY", run.call_args.kwargs["env"])
+
+  def test_state_of_starts_the_file_state_action_without_a_secret_of_this_process(self):
+    with mock.patch.dict(os.environ, SECRET):
+      with mock.patch.object(file_state.subprocess, "run") as run:
+        run.return_value.returncode = 1
+        file_state.state_of("/home/someone/demo", "/home/someone/demo/notes.yaml")
 
     self.assertIn("PATH", run.call_args.kwargs["env"])
     self.assertNotIn("OPENAI_API_KEY", run.call_args.kwargs["env"])
