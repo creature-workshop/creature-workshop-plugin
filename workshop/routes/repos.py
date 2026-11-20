@@ -7,7 +7,9 @@ of them the session is on, as workshop.selection decides it. It carries
 `refresh_seconds`, the pane_refresh_seconds setting, so the pane reads their
 state again on that interval. GET /repos/status?root=<dir> answers with a RepoStatus, the state
 of one repository the way a shell prompt shows it, with `ok` false when git
-cannot read it.
+cannot read it. GET /repos/file-state?root=<dir>&path=<file> answers with a
+FileState, the state of one file in git, as workshop.repos.file_state names
+it.
 """
 
 import asyncio
@@ -16,7 +18,8 @@ import os
 from fastapi import Query
 
 from workshop import api, settings
-from workshop.models.repos import Repo, Repos, RepoStatus
+from workshop.models.repos import FileState, Repo, Repos, RepoStatus
+from workshop.repos.file_state import state_of
 from workshop.repos.grouping import repositories_of
 from workshop.repos.status import status_of
 from workshop.selection.state import state
@@ -47,3 +50,10 @@ async def repo_status(root: str = Query()):
 
   state = await asyncio.to_thread(status_of, root)
   return RepoStatus(root=root, ok=state is not None, **(state or {}))
+
+
+@api.register("/repos/file-state", FileState)
+async def file_state(root: str = Query(), path: str = Query()):
+  """The state in git of the file at path, in the checkout at root."""
+
+  return FileState(root=root, path=path, state=await asyncio.to_thread(state_of, root, path))

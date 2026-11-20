@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -eu
+
+USAGE="$(cat <<'HELP'
+Prints the state in git of one file as one word: clean, modified, new,
+deleted or conflict, or none when git has nothing to say about the file.
+It exits 1 when git cannot read a repository at the folder. GET
+/repos/file-state runs this, through workshop/repos/file_state.py.
+
+It runs with nothing but git, awk and a POSIX shell, and does not load the
+project's .envrc, because Hermes installs the plugin without its shellops
+submodule.
+
+Usage: shell/actions/git/file-state <folder> <file> [-h,--help]
+HELP
+)"
+
+ARG_FOLDER=""
+ARG_FILE=""
+
+: <<'FUN'
+Prints the state of the file the command names, in the repository the
+folder is inside.
+FUN
+main() {
+  parse_args "$@"
+  PROJ="$(plugin_root)"
+  # shellcheck source=shell/lib/git/file_state/api.sh
+  . "$PROJ/shell/lib/git/file_state/api.sh"
+  git__file_state__read "$ARG_FOLDER" "$ARG_FILE"
+}
+
+: <<'FUN'
+Reads the command line into ARG_FOLDER and ARG_FILE, and prints the help
+and exits for -h or --help, or when either is missing.
+FUN
+parse_args() {
+  case "${1:-}" in
+    -h | --help) print_help 0 ;;
+    "") print_help 2 ;;
+    *) ARG_FOLDER="$1" ;;
+  esac
+  case "${2:-}" in
+    "") print_help 2 ;;
+    *) ARG_FILE="$2" ;;
+  esac
+}
+
+: <<'FUN'
+Prints the help, to stdout when it was asked for and to stderr otherwise,
+and exits with the status given.
+FUN
+print_help() {
+  if [ "$1" -eq 0 ]; then
+    printf '%s\n' "$USAGE"
+  else
+    printf '%s\n' "$USAGE" >&2
+  fi
+  exit "$1"
+}
+
+: <<'FUN'
+Prints the plugin's root: three folders above this file.
+FUN
+plugin_root() {
+  __plugin_root__here="$(dirname "$0")"
+  cd "$__plugin_root__here/../../.." && pwd
+}
+
+main "$@"
