@@ -1,7 +1,13 @@
 /**
- * @file What a binding names inside a store's view. A binding is the value
- * of a `bind` prop: a store, `{kind, source}`; one record of it, with
- * `record`; or one key of that record, with `record` and `key`.
+ * @file What a binding names inside a store's view. A store is one YAML
+ * file under the checkout's .ops/ folder, as workshop/synced/address.js
+ * describes one. A binding is the value of a `bind` prop: a store,
+ * `{kind, source}`; one record of it, with `record`; or one key of that
+ * record, with `record` and `key`.
+ *
+ *     {kind: 'file', source: 'config/manifest.yaml', record: 'document', key: 'name'}
+ *
+ * names the `name` key of `.ops/config/manifest.yaml`.
  */
 
 /**
