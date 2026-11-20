@@ -36,21 +36,16 @@ async function synced({ options }, backend) {
 }
 
 /**
- * The entry of one store: only that it is unchanged when the stamp asked
- * with is its current stamp, else its content under that stamp. The stamp
- * is the content as JSON.
+ * The entry of one store: the store, and what the story's answers say
+ * about it.
  *
  * @param backend The stand-in.
  * @param {string} root The project's root.
- * @param {{kind: string, source: string, stamp?: string}} asked The store asked for.
+ * @param {{kind: string, source: string}} asked The store asked for.
  */
-async function entryOf(backend, root, { kind, source, stamp }) {
+async function entryOf(backend, root, { kind, source }) {
   const content = await contentOf(backend, new URLSearchParams({ kind, root, source }).toString());
-  const current = JSON.stringify(content);
-  if (stamp && stamp === current) {
-    return { kind, source, stamp, unchanged: true };
-  }
-  return { kind, source, stamp: current, ...content };
+  return { kind, source, ...content };
 }
 
 /**

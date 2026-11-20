@@ -1,8 +1,7 @@
 /**
  * @file The stand-in's POST /store/sync over a story's own answers: an
- * entry built from the story's query and introspect answers, a current
- * stamp answered as unchanged, a store's own error put in its entry, and
- * any other rejection rejecting the sync.
+ * entry built from the story's query and introspect answers, a store's own
+ * error put in its entry, and any other rejection rejecting the sync.
  */
 
 import { describe, it } from 'node:test';
@@ -16,13 +15,12 @@ const MANIFEST = Object.freeze({ kind: 'file', source: 'config/manifest.yaml' })
 const RECORD = Object.freeze({ id: 'document', revision: 'r1', values: { name: 'Notes' } });
 
 /**
- * POST /store/sync on a stand-in over `answer`, for the manifest with `stamp`.
+ * POST /store/sync on a stand-in over `answer`, for the manifest.
  *
  * @param answer The story's backend call.
- * @param {string} [stamp] The stamp to ask with.
  */
-function sync(answer, stamp = '') {
-  return standIn(answer)('/store/sync', { method: 'POST', body: { root: '/home/someone/notes', stores: [{ ...MANIFEST, stamp }] } });
+function sync(answer) {
+  return standIn(answer)('/store/sync', { method: 'POST', body: { root: '/home/someone/notes', stores: [MANIFEST] } });
 }
 
 /**
@@ -37,17 +35,12 @@ function reading(git) {
 describe('the stand-in sync', () => {
   it('builds an entry from the story’s query and introspect answers', async () => {
     const [entry] = (await sync(reading('modified'))).data.stores;
-    assert.deepEqual({ ...entry, stamp: '' }, { ...MANIFEST, stamp: '', records: [RECORD], schema: { type: 'object' }, git: 'modified' });
+    assert.deepEqual(entry, { ...MANIFEST, records: [RECORD], schema: { type: 'object' }, git: 'modified' });
   });
 
   it('gives no git state when the story names none', async () => {
     const [entry] = (await sync(reading())).data.stores;
     assert.equal(entry.git, null);
-  });
-
-  it('answers only unchanged for the stamp it gave', async () => {
-    const [entry] = (await sync(reading())).data.stores;
-    assert.deepEqual((await sync(reading(), entry.stamp)).data.stores, [{ ...MANIFEST, stamp: entry.stamp, unchanged: true }]);
   });
 
   it('puts a store’s own error in its entry', async () => {
