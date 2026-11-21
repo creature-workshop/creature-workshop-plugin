@@ -13,6 +13,7 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@playwright/experimental-ct-react": "1.62.1",
+    "@vitejs/plugin-react": "6.2.1",
     "clsx": "2.1.1",
     "eslint": "10.14.0",
     "eslint-plugin-jsdoc": "65.4.4",

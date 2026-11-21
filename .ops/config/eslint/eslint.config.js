@@ -13,7 +13,9 @@
  * Playwright's recommended rules with its locator rules, plus no test ids:
  * a test finds the page by role and by text, as a user does. Two more say
  * when a file should split: its constants come before its first function,
- * and no comment draws a banner across it.
+ * and no comment draws a banner across it. Outside workshop/ and client/, no
+ * part of the pane calls the client's /file routes or imports them: a
+ * component reads and writes a file under .ops/ through a bind prop.
  * The one exception syntax is ESLint's own eslint-disable comment, with the
  * reason after two dashes.
  */
@@ -33,6 +35,12 @@ const TOP_LEVEL_DECLARATIONS = [
   'Program > ExportNamedDeclaration',
   'Program > ExportDefaultDeclaration',
 ];
+
+/** What a part of the pane is told when it reaches for a file under .ops/ itself. */
+const BIND_INSTEAD = "A part of the pane reads and writes a file under .ops/ through a bind prop, not through the client. Give the component a bind prop where it is used, and desktop/src/bind/Bound.jsx reads the checkout's synced files for it.";
+
+/** A call of one of the client routes a file under .ops/ is read and written through, such as client.query(...). */
+const FILE_CALL = "MemberExpression[object.name='client'][property.name=/^(introspect|query|mutate|fileState)$/]";
 
 /** The configuration, as ESLint's flat config: the ignores first, then the rulesets, then the house's own rules. */
 export default [
@@ -80,6 +88,14 @@ export default [
   {
     files: ['desktop/src/**/*.{js,jsx}'],
     languageOptions: { globals: globals.browser },
+  },
+  {
+    files: ['desktop/src/**/*.{js,jsx}'],
+    ignores: ['desktop/src/workshop/**', 'desktop/src/client/**'],
+    rules: {
+      'no-restricted-syntax': ['error', { selector: FILE_CALL, message: BIND_INSTEAD }],
+      'no-restricted-imports': ['error', { patterns: [{ group: ['**/client/file.js'], message: BIND_INSTEAD }] }],
+    },
   },
   {
     files: ['**/*.jsx'],

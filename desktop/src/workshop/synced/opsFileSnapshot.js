@@ -12,10 +12,10 @@
  * schema that describes them, or the backend's error in their place, and
  * the state of the file in git.
  *
- *     {kind: 'file', source: 'config/manifest.yaml', records: [{id: 'document', revision: 'r1', values: {name: 'Notes'}}], schema: {type: 'object'}, git: 'modified'}
+ *     {kind: 'document', source: 'config/manifest.yaml', records: [{id: 'document', revision: 'r1', values: {name: 'Notes'}}], schema: {type: 'object'}, git: 'modified'}
  *
  * @typedef {object} OpsFileSnapshot
- * @property {string} kind The file's kind, such as `file`.
+ * @property {string} kind The file's kind, such as `document`.
  * @property {string} source The file's source, such as `config/manifest.yaml`.
  * @property {object[]} [records] Every record, each `{id, revision, values}`.
  * @property {object} [schema] The JSON Schema that describes the records.
@@ -31,17 +31,17 @@ const NO_STATE = 'none';
  * the backend answered with an error, such as NOT_FOUND for a file that is
  * not there, has that error in place of its records and schema.
  *
- *     snapshotFrom({kind: 'file', source: 'config/manifest.yaml'}, {
+ *     snapshotFrom({kind: 'document', source: 'config/manifest.yaml'}, {
  *       queried: {ok: true, data: {records: [{id: 'document', revision: 'r1', values: {}}]}},
  *       described: {ok: true, data: {schema: {type: 'object'}}},
  *       state: {ok: true, data: {state: 'modified'}},
  *     })
- *       ->  {kind: 'file', source: 'config/manifest.yaml', records: [{id: 'document', revision: 'r1', values: {}}], schema: {type: 'object'}, git: 'modified'}
+ *       ->  {kind: 'document', source: 'config/manifest.yaml', records: [{id: 'document', revision: 'r1', values: {}}], schema: {type: 'object'}, git: 'modified'}
  *
  * @param {import('./address.js').OpsFile} file The file.
  * @param answers The results of the three calls, as client/api.js answers one.
- * @param answers.queried The result of GET /store/query with no id.
- * @param answers.described The result of GET /store/introspect.
+ * @param answers.queried The result of GET /file/query with no id.
+ * @param answers.described The result of GET /file/introspect.
  * @param answers.state The result of GET /repos/file-state.
  */
 export function snapshotFrom({ kind, source }, { queried, described, state }) {
@@ -107,8 +107,8 @@ function withRecord(records, record) {
  * What a file holds, from the backend's two answers about it: its records
  * and its schema, or the first error the backend answered.
  *
- * @param queried The result of GET /store/query with no id.
- * @param described The result of GET /store/introspect.
+ * @param queried The result of GET /file/query with no id.
+ * @param described The result of GET /file/introspect.
  */
 function heldBy(queried, described) {
   const failed = [queried, described].find((each) => !each.ok);

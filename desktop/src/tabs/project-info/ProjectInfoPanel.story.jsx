@@ -1,9 +1,10 @@
 /**
  * @file The stories of the Project Info tab: an adopted repository over a
- * backend whose file store keeps each change it is sent, as the real one
- * writes it to the manifest; one whose store refuses every change with a
- * reason; one where the manifest changed outside the pane before the
- * first save; and one whose project has no manifest until the form writes
+ * backend that keeps each change it is sent, as the real one writes it to
+ * the manifest; one that refuses every change with a reason; one where the
+ * manifest changed outside the pane before the
+ * first save; one where it changes outside the pane after the pane's first
+ * read; and one whose project has no manifest until the form writes
  * it. The tests are in
  * project-info.ct.jsx beside this file.
  */
@@ -50,13 +51,13 @@ const SCHEMA = Object.freeze({
   },
 });
 
-/** The manifest as the file store first answers it; it sets no command name. */
+/** The manifest as the backend first answers it; it sets no command name. */
 const MANIFEST = Object.freeze({ id: 'document', revision: 'r1', values: { name: 'Notes', description: 'Notes, kept in git.', org: 'someone', repo: 'notes' } });
 
 /** The manifest after someone changed its description outside the pane. */
 const EDITED_OUTSIDE = Object.freeze({ ...MANIFEST, revision: 'r2', values: { ...MANIFEST.values, description: 'Edited by an agent.' } });
 
-/** What the refusing store says to every change. */
+/** What the refusing backend says to every change. */
 const REFUSAL = 'description cannot be cleared: its schema has no empty value for it.';
 
 /** The tabs over a backend that keeps every change it is sent. */
@@ -74,6 +75,12 @@ export function Refusing() {
 /** The tabs over a backend whose manifest changed outside the pane after the pane read it. */
 export function ChangedOutside() {
   const [rest] = useState(() => standIn(keepingBackend(EDITED_OUTSIDE)));
+  return framed(rest);
+}
+
+/** The tabs over a backend whose manifest reads as changed outside the pane from its second read on. */
+export function EditedLater() {
+  const [rest] = useState(() => standIn(editedLaterBackend()));
   return framed(rest);
 }
 
@@ -109,21 +116,35 @@ function framed(rest) {
  * A backend call that answers the reads and applies each write at the
  * current revision to its own copy of the manifest, answering a write at
  * any other revision as stale. `stored` is the manifest as it is on disk,
- * which differs from what the pane first reads when it changed outside the
- * pane.
+ * which differs from MANIFEST when it changed outside the pane. The reads
+ * answer MANIFEST until the first write has been sent, as when the change
+ * was made between the pane's last read and the save.
  *
  * @param stored The manifest on disk.
  */
 function keepingBackend(stored = MANIFEST) {
   let manifest = stored;
-  let reads = 0;
+  let unwritten = MANIFEST;
   return async (path, options) => {
     if (options?.method === 'POST') {
+      unwritten = null;
       manifest = written(manifest, options.body);
       return { data: { record: manifest } };
     }
-    reads += path.startsWith('/store/query') ? 1 : 0;
-    return read(path, reads === 1 ? MANIFEST : manifest);
+    return read(path, unwritten ?? manifest);
+  };
+}
+
+/**
+ * A backend call that answers the manifest as MANIFEST the first time it
+ * is read and as EDITED_OUTSIDE every time after, as when an agent or an
+ * editor changes the file while the pane is open.
+ */
+function editedLaterBackend() {
+  let reads = 0;
+  return async (path) => {
+    reads += path.startsWith('/file/query') ? 1 : 0;
+    return read(path, reads > 1 ? EDITED_OUTSIDE : MANIFEST);
   };
 }
 
@@ -148,7 +169,7 @@ function manifestlessBackend(onAdopt) {
     if (path.startsWith('/project/adoption')) {
       return { root: ROOT, name: 'notes', repo: 'notes', branch: 'main' };
     }
-    if (path.startsWith('/store/query') && !manifest) {
+    if (path.startsWith('/file/query') && !manifest) {
       throw new Error(`404: ${JSON.stringify(failure('The project has no .ops/config/manifest.yaml.', { code: 'NOT_FOUND', status: 404 }))}`);
     }
     return read(path, manifest);
@@ -169,7 +190,7 @@ function refusingBackend() {
  * The answer to a read.
  *
  * @param path The path asked for.
- * @param manifest The manifest record the file store answers.
+ * @param manifest The manifest record the backend answers.
  */
 function read(path, manifest) {
   const record = { data: { record: manifest } };
@@ -178,19 +199,19 @@ function read(path, manifest) {
     ['/repos/status', STATUS],
     ['/repos', REPOS],
     ['/project', PROJECT],
-    ['/store/query', record],
-    ['/store/introspect', { data: { schema: SCHEMA } }],
+    ['/file/query', record],
+    ['/file/introspect', { data: { schema: SCHEMA } }],
   ];
   return answers.find(([prefix]) => path.startsWith(prefix))[1];
 }
 
 /**
- * The manifest with one write applied, the way the file store reads it
+ * The manifest with one write applied, the way the backend reads it
  * back; a write at another revision throws the STALE error as Desktop
  * rejects a 409.
  *
  * @param manifest The manifest before.
- * @param body The body of POST /store/mutate.
+ * @param body The body of POST /file/mutate.
  */
 function written(manifest, body) {
   if (body.revision !== manifest.revision) {
@@ -201,7 +222,7 @@ function written(manifest, body) {
 }
 
 /**
- * A failed answer as the store routes shape it.
+ * A failed answer as the /file routes shape it.
  *
  * @param {string} message The reason.
  * @param extensions The code, the status and anything else the error carries.

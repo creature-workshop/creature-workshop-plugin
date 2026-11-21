@@ -27,7 +27,7 @@ describe('register', () => {
     assert.deepEqual(await probe('/x'), { ok: true, data: { record: { id: 'document' } } });
   });
 
-  it('answers a GraphQL-shaped body with errors as its first error, as the store answers a 3xx', async () => {
+  it('answers a GraphQL-shaped body with errors as its first error, as the /file routes answer a 3xx', async () => {
     connect(async () => ({ data: null, errors: [{ message: 'Nothing changed.', extensions: { code: 'UNCHANGED', status: 304 } }] }));
     const result = await probe('/x');
     assert.equal(result.ok, false);

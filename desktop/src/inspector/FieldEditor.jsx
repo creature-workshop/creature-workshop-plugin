@@ -54,7 +54,7 @@ export function FieldEditor({
 
 /**
  * Saves on Enter and cancels on Escape. Enter with Shift is left alone, and
- * a text area's Enter saves too, because the stores write one line.
+ * a text area's Enter saves too, because the backend writes a value on one line.
  *
  * @param {KeyboardEvent} event The key event from the input.
  * @param {() => void} onSave Saves the draft.

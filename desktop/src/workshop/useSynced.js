@@ -54,7 +54,7 @@ function syncThroughClient(root, files) {
 }
 
 /**
- * POST /store/mutate through the client as it is connected when the call
+ * POST /file/mutate through the client as it is connected when the call
  * is made.
  *
  * @param {object} file The file to write to.

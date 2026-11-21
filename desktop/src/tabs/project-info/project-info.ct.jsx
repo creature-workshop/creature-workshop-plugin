@@ -2,14 +2,15 @@
  * @file Editing the Project Info fields: the pencil opens a field with its
  * value, Enter or Save keeps the change, Escape or Cancel drops it, a
  * required field cannot be emptied, an unset field reads Not set and can be
- * filled in, a save the store refuses keeps the editor open with the store's
+ * filled in, a save the backend refuses keeps the editor open with the backend's
  * reason, a save over a change made outside the pane says so and shows
- * the current value, and a project with no manifest gets Create manifest
- * in place of a failure. The tests mount the stories in ProjectInfoPanel.story.jsx.
+ * the current value, a change made to the manifest outside the pane shows
+ * by itself within 5 seconds, and a project with no manifest gets Create
+ * manifest in place of a failure. The tests mount the stories in ProjectInfoPanel.story.jsx.
  */
 
 import { test, expect } from '@playwright/experimental-ct-react';
-import { ChangedOutside, Editable, NoManifestYet, Refusing } from './ProjectInfoPanel.story.jsx';
+import { ChangedOutside, Editable, EditedLater, NoManifestYet, Refusing } from './ProjectInfoPanel.story.jsx';
 
 /**
  * The value shown under a field's name.
@@ -99,7 +100,7 @@ test('the read-only releases have an (i) too', async ({ mount, page }) => {
   await expect(component.getByRole('button', { name: 'About Latest' })).toBeVisible();
 });
 
-test('a save the store refuses keeps the editor open and says why', async ({ mount }) => {
+test('a save the backend refuses keeps the editor open and says why', async ({ mount }) => {
   const component = await mount(<Refusing />);
 
   await component.getByRole('button', { name: 'Edit Name' }).click();
@@ -168,6 +169,16 @@ test('a save over a change made outside the pane says so, and saving again repla
   await component.getByRole('textbox', { name: 'Description' }).fill('Mine.');
   await component.getByRole('button', { name: 'Save' }).click();
   await expect(valueOf(component, 'Description')).toHaveText('Mine.');
+});
+
+test('a change made to the manifest outside the pane shows within 5 seconds', async ({ mount, page }) => {
+  await page.clock.install();
+  const component = await mount(<EditedLater />);
+
+  await expect(valueOf(component, 'Description')).toHaveText('Notes, kept in git.');
+  await page.clock.runFor(5_000);
+
+  await expect(valueOf(component, 'Description')).toHaveText('Edited by an agent.');
 });
 
 test('a project with no manifest says so in the Manifest group, with Create manifest and no failure', async ({ mount }) => {

@@ -5,6 +5,8 @@
  */
 
 import './selection.js';
+import './fileState.js';
+import './query.js';
 
 /** Builds a backend call for a story or a test from the story's own answers. */
 export { standIn } from './api.js';

@@ -2,9 +2,11 @@
  * @file The entry point of the plugin's Desktop side: the one file Desktop
  * loads, through the bundle built from it, and that bundle's only entry. It
  * registers the pane with the SDK. The tree under desktop/src is pane/, the
- * pane, its parts and its tests; workshop/, the state the pane shares;
- * client/, the backend's routes; hooks/, the hooks the parts share, such as
- * polling the backend; repos/, how a repository's state reads; tabs/, the
+ * pane, its parts and its tests; workshop/, the state the pane shares,
+ * with the checkout's synced files under synced/; bind/, the pane's JSX
+ * runtime, which gives a component with a `bind` prop its data from those
+ * files; client/, the backend's routes; hooks/, the hooks the parts share,
+ * such as polling the backend; repos/, how a repository's state reads; tabs/, the
  * Workshop tabs, one folder each; wizard/,
  * the contract every wizard implementation fills, the one Wizard the pane
  * renders, and form/, the plain implementation; standIn/, the backend the

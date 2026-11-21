@@ -1,6 +1,6 @@
 /**
  * @file One read of a checkout's files from the backend. For each file it
- * asks GET /store/query for the records, GET /store/introspect for the
+ * asks GET /file/query for the records, GET /file/introspect for the
  * schema and GET /repos/file-state for the state of the file in git, and
  * opsFileSnapshot.js makes the three answers one OpsFileSnapshot. The read
  * fails as a whole when the backend did not answer one of the calls.
