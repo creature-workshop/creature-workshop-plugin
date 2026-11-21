@@ -1,11 +1,11 @@
-"""Covers the /store routes over the file store: each answer's HTTP status and
+"""Covers the /file routes over the document kind: each answer's HTTP status and
 its GraphQL-shaped body, `{data}` on success and `{data: null, errors}` with
 the code and status in the error's extensions otherwise; a 3xx travelling as
 HTTP 200; a mutation's operation checked for what it needs; and the project
-root and store kind checked first.
+root and kind checked first.
 
 The backend is loaded the way Hermes loads it, and each route is called
-directly; the project is the one test_file_store builds.
+directly; the project is the one test_document_files builds.
 """
 
 import asyncio
@@ -19,18 +19,18 @@ from pathlib import Path
 
 from fastapi.responses import JSONResponse
 
-from tests.python.workshop.test_file_store import MANIFEST, project_copy
-from workshop.models.store import MutateBody
+from tests.python.workshop.test_document_files import MANIFEST, project_copy
+from workshop.models.file import MutateBody
 
 BACKEND = Path(__file__).resolve().parents[3] / "dashboard" / "plugin_api.py"
 
 
 def route_module():
-  """workshop.routes.store, once the backend is loaded the way Hermes loads it."""
+  """workshop.routes.file, once the backend is loaded the way Hermes loads it."""
 
   spec = importlib.util.spec_from_file_location("plugin_api", BACKEND)
   spec.loader.exec_module(importlib.util.module_from_spec(spec))
-  return importlib.import_module("workshop.routes.store")
+  return importlib.import_module("workshop.routes.file")
 
 
 def answer_of(result):
@@ -49,7 +49,7 @@ def error_of(body):
   return extensions["code"], extensions["status"]
 
 
-class TheStoreRoutes(unittest.TestCase):
+class TheFileRoutes(unittest.TestCase):
   def setUp(self):
     self.scratch = tempfile.mkdtemp()
     self.root = str(project_copy(self.scratch))
@@ -64,9 +64,9 @@ class TheStoreRoutes(unittest.TestCase):
     return answer_of(asyncio.run(handler(**arguments)))
 
   def query(self, revision=""):
-    """GET /store/query for the manifest."""
+    """GET /file/query for the manifest."""
 
-    return self.call(self.route.query, kind="file", root=self.root, source=MANIFEST, id="document", revision=revision)
+    return self.call(self.route.query, kind="document", root=self.root, source=MANIFEST, id="document", revision=revision)
 
   def revision(self):
     """The manifest's current revision."""
@@ -74,9 +74,9 @@ class TheStoreRoutes(unittest.TestCase):
     return self.query()[1]["data"]["record"]["revision"]
 
   def mutate(self, **fields):
-    """POST /store/mutate on the manifest with fields."""
+    """POST /file/mutate on the manifest with fields."""
 
-    return self.call(self.route.mutate, body=MutateBody(kind="file", root=self.root, source=MANIFEST, **fields))
+    return self.call(self.route.mutate, body=MutateBody(kind="document", root=self.root, source=MANIFEST, **fields))
 
   def test_a_query_answers_the_record_as_data(self):
     status, body = self.query()
@@ -84,7 +84,7 @@ class TheStoreRoutes(unittest.TestCase):
     self.assertEqual(body["data"]["record"]["values"]["name"], "Recording rig")
 
   def test_a_query_without_an_id_answers_every_record(self):
-    status, body = self.call(self.route.query, kind="file", root=self.root, source=MANIFEST, id="", revision="")
+    status, body = self.call(self.route.query, kind="document", root=self.root, source=MANIFEST, id="", revision="")
     self.assertEqual([record["id"] for record in body["data"]["records"]], ["document"])
 
   def test_a_query_at_the_current_revision_is_unchanged_as_304_in_an_http_200(self):
@@ -116,11 +116,11 @@ class TheStoreRoutes(unittest.TestCase):
     self.assertIn("needs revision", body["errors"][0]["message"])
 
   def test_introspect_answers_the_schema(self):
-    status, body = self.call(self.route.introspect, kind="file", root=self.root, source=MANIFEST)
+    status, body = self.call(self.route.introspect, kind="document", root=self.root, source=MANIFEST)
     self.assertEqual(status, 200)
     self.assertIn("name", body["data"]["schema"]["required"])
 
-  def test_create_and_delete_on_the_file_store_answer_405(self):
+  def test_create_and_delete_on_a_document_answer_405(self):
     self.assertEqual(self.mutate(op="create", values={})[0], 405)
     self.assertEqual(self.mutate(op="delete", id="document", revision="x")[0], 405)
 
@@ -129,5 +129,5 @@ class TheStoreRoutes(unittest.TestCase):
     self.assertEqual((status, error_of(body)[0]), (404, "NOT_FOUND"))
 
   def test_a_folder_inside_a_project_is_not_its_root(self):
-    status, body = self.call(self.route.query, kind="file", root=str(Path(self.root) / "shell"), source=MANIFEST, id="", revision="")
+    status, body = self.call(self.route.query, kind="document", root=str(Path(self.root) / "shell"), source=MANIFEST, id="", revision="")
     self.assertEqual((status, error_of(body)[0]), (400, "REFUSED"))

@@ -16,15 +16,15 @@ const bindings = new Map();
  * @param {object} binding The binding.
  * @param {string} binding.id The binding's name, unique across the pane.
  * @param {string} binding.title The heading of its group of fields.
- * @param {{kind: string, source: string}} binding.store The store the record is in, less the project's root, which the inspector adds.
+ * @param {{kind: string, source: string}} binding.file The file the record is in, less the project's root, which the inspector adds.
  * @param {string} binding.record The record's id.
  * @param {object[]} binding.fields The keys to show, in order, each as boundField takes it.
  */
-export function register({ id, title, store, record, fields }) {
+export function register({ id, title, file, record, fields }) {
   const frozen = Object.freeze({
     id,
     title,
-    store: Object.freeze({ kind: store.kind, source: store.source }),
+    file: Object.freeze({ kind: file.kind, source: file.source }),
     record,
     fields: Object.freeze(fields.map(boundField)),
   });

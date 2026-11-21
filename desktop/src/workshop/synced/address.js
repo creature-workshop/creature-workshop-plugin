@@ -9,23 +9,23 @@
  * as a list of records. `source` is the file's path under .ops/, and `kind`
  * says how the backend reads the file as records.
  *
- * - `{kind: 'file', source: 'config/manifest.yaml'}` is
+ * - `{kind: 'document', source: 'config/manifest.yaml'}` is
  *   `.ops/config/manifest.yaml`, read as one record with the id `document`.
  * - `{kind: 'plan', source: 'data/plan.yaml'}` is `.ops/data/plan.yaml`,
  *   read as one record for each ticket in it.
  *
- * The backend's routes for these files are under /store, and
- * client/store.js calls them.
+ * The backend's routes for these files are under /file, and
+ * client/file.js calls them.
  *
  * @typedef {object} OpsFile
- * @property {string} kind `file` or `plan`.
+ * @property {string} kind `document` or `plan`.
  * @property {string} source The file's path under .ops/, such as `config/manifest.yaml`.
  */
 
 /**
  * The key of a file: its kind and its source, joined.
  *
- *     keyOf({kind: 'file', source: 'config/manifest.yaml'})  ->  'file:config/manifest.yaml'
+ *     keyOf({kind: 'document', source: 'config/manifest.yaml'})  ->  'document:config/manifest.yaml'
  *
  * @param {OpsFile} file The file.
  */

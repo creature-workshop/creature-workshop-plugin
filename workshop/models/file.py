@@ -1,10 +1,10 @@
-"""The answers and the mutation body of the /store routes, shaped like GraphQL's.
+"""The answers and the mutation body of the /file routes, shaped like GraphQL's.
 
 Every answer is `{data, errors}`. A record is `{id, revision, values}`,
 where an untouched key is absent from `values` and a cleared one is null. On success `data` holds what was asked for
 (`schema`, `record`, `records` or `deleted`) and `errors` is absent; when the
-store refuses or fails, `data` is null and `errors` holds one error from
-workshop.stores.outcomes.
+backend refuses or fails, `data` is null and `errors` holds one error from
+workshop.files.outcomes.
 """
 
 from typing import Any, Literal
@@ -19,7 +19,7 @@ class Answer(BaseModel):
 
 
 class MutateBody(BaseModel):
-  """The body of POST /store/mutate: where, which operation, and what it needs.
+  """The body of POST /file/mutate: where, which operation, and what it needs.
 
   set, clear and reset take `id`, `revision` and `key` (and set takes
   `value`); create takes `values`; delete takes `id` and `revision`.

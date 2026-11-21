@@ -1,4 +1,4 @@
-"""The JSON Schema of a file store document: the project's own, from its pinned
+"""The JSON Schema of a document: the project's own, from its pinned
 shell/.ops/schema/, so the pane describes the file as the shellops the
 project runs reads it, or else the one in the shellops that comes with the
 plugin (SHOP-101), for a checkout with no shellops of its own. References
@@ -9,7 +9,7 @@ without a schema answers {}.
 import json
 from pathlib import Path
 
-from workshop.stores.file.location import stem_of
+from workshop.files.document.location import stem_of
 
 BUNDLED_SCHEMAS = Path(__file__).resolve().parents[3] / "shell" / ".ops" / "schema"
 

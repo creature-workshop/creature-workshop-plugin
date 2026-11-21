@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { snapshotFrom } from './opsFileSnapshot.js';
 
 /** The manifest. */
-const MANIFEST = Object.freeze({ kind: 'file', source: 'config/manifest.yaml' });
+const MANIFEST = Object.freeze({ kind: 'document', source: 'config/manifest.yaml' });
 
 /** The record the manifest holds. */
 const RECORD = Object.freeze({ id: 'document', revision: 'r1', values: { name: 'Notes' } });

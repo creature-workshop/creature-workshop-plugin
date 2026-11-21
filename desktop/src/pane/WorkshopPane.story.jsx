@@ -44,12 +44,12 @@ const CLEAN = { root: CWD, ok: true, branch: 'main', detached: false, upstream: 
 /** GET /project outside any shellops project. */
 const NO_PROJECT = { found: false, start: CWD, refresh_seconds: 20 };
 
-/** GET /store/introspect for the manifest: each key a string. */
+/** GET /file/introspect for the manifest: each key a string. */
 const MANIFEST_SCHEMA = Object.freeze({
   data: { schema: { properties: { name: { type: 'string' }, description: { type: 'string' }, 'command-name': { type: 'string' }, org: { type: 'string' }, repo: { type: 'string' } } } },
 });
 
-/** GET /store/query for the manifest of the project, as the file store answers it. */
+/** GET /file/query for the manifest of the project, as the backend answers it. */
 const MANIFEST_RECORD = Object.freeze({
   data: { record: { id: 'document', revision: 'r1', values: { name: 'Notes', description: 'Notes, kept in git.', 'command-name': 'notes', org: 'someone', repo: 'notes' } } },
 });
@@ -124,7 +124,7 @@ export function WorkshopDeleted() {
  * again succeeds.
  *
  * @param props The story's props.
- * @param {string} props.path The path whose first call fails, such as `/repos?` or `/store/query`.
+ * @param {string} props.path The path whose first call fails, such as `/repos?` or `/file/query`.
  * @param {'no-route' | 'internal' | 'unreachable'} props.kind How it fails.
  */
 export function FailingOnce({ path, kind }) {
@@ -208,7 +208,7 @@ function approvingBackend(approved, onApprove, unsaved) {
 /**
  * A backend call over a directory that is one repository, answering GET
  * /project with project, GET /project/setup with setup, and GET
- * /store/query and GET /store/introspect with its manifest.
+ * /file/query and GET /file/introspect with its manifest.
  *
  * @param project The answer to GET /project.
  * @param {'no-workshop' | 'ready'} [setup] Whether the checkout has a workshop.
@@ -220,8 +220,8 @@ function repositoryBackend(project, setup = 'ready') {
     ['/repos', ONE_REPO],
     ['/project/setup', { root: CWD, state: setup }],
     ['/project', project],
-    ['/store/query', MANIFEST_RECORD],
-    ['/store/introspect', MANIFEST_SCHEMA],
+    ['/file/query', MANIFEST_RECORD],
+    ['/file/introspect', MANIFEST_SCHEMA],
   ];
   return standIn(async (path) => answers.find(([prefix]) => path.startsWith(prefix))[1]);
 }

@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { readFiles } from './read.js';
 
 /** The manifest. */
-const MANIFEST = Object.freeze({ kind: 'file', source: 'config/manifest.yaml' });
+const MANIFEST = Object.freeze({ kind: 'document', source: 'config/manifest.yaml' });
 
 /** The checkout every test reads. */
 const ROOT = '/home/someone/notes';

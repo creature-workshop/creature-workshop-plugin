@@ -36,7 +36,7 @@ import { failureMessage, STALE_MESSAGE } from './writeMessage.js';
  * - `view(file)`, the file's view as view.js describes it, the same
  *   object until it changes;
  * - `write(file, operation)`, which queues one operation, as
- *   client/store.js describes an Operation without its revision, and
+ *   client/file.js describes an Operation without its revision, and
  *   resolves to null once the backend kept it, to STALE_MESSAGE when the
  *   record changed outside the pane, or to why the backend refused it;
  * - `read()`, which reads every followed file again and resolves when the

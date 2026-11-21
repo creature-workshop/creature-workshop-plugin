@@ -1,5 +1,5 @@
 """How every route of the plugin answers a failure: the way a GraphQL server
-answers an error, as the /store routes already do, so the pane reads one
+answers an error, as the /file routes already do, so the pane reads one
 shape whichever route failed.
 
     {

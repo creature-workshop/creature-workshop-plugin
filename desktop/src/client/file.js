@@ -1,11 +1,11 @@
 /**
- * @file The client's calls for the stores the inspector reads and writes
- * data through, named and shaped after GraphQL's operations so that a
- * GraphQL client can replace them later: `introspect` (GET
- * /store/introspect), `query` (GET /store/query) and `mutate` (POST
- * /store/mutate). Each call names a store: the records in one file of one
- * project, kept by a kind of store, such as `config/manifest.yaml` in the
- * selected repository, kept by the `file` kind.
+ * @file The client's calls for the files under a project's .ops/ folder
+ * that the pane reads and writes as records, named and shaped after
+ * GraphQL's operations so that a GraphQL client can replace them later:
+ * `introspect` (GET /file/introspect), `query` (GET /file/query) and
+ * `mutate` (POST /file/mutate). Each call names one file of one project,
+ * such as `config/manifest.yaml` in the selected repository, and its kind,
+ * which says how the backend reads the file as records.
  *
  * Every call answers a result, as api.js describes, and never throws. The
  * backend answers a query with the record:
@@ -20,9 +20,9 @@
  *     }
  *   }
  *
- * so the result is `{ok: true, data: {record}}`. When the store refuses or
- * fails, the result's error carries the store's code, and anything the
- * store sent with it in `extensions`, such as the current record of a
+ * so the result is `{ok: true, data: {record}}`. When the backend refuses or
+ * fails, the result's error carries the backend's code, and anything the
+ * backend sent with it in `extensions`, such as the current record of a
  * stale mutation:
  *
  *   {
@@ -39,18 +39,18 @@
 import * as api from './api.js';
 
 /**
- * A store: the records in one file of one project.
+ * One file under a project's .ops/ folder, read as records.
  *
- * @typedef {object} Store
- * @property {string} kind The kind of store that keeps them, such as `file`.
+ * @typedef {object} ProjectFile
+ * @property {string} kind How the backend reads the file as records: `document` or `plan`.
  * @property {string} root The project's root folder.
- * @property {string} source The file, such as `config/manifest.yaml`.
+ * @property {string} source The file's path under .ops/, such as `config/manifest.yaml`.
  */
 
 /**
- * Where one record lives: its store, and its id.
+ * Where one record is: its file, and its id.
  *
- * @typedef {Store & {id: string}} Address
+ * @typedef {ProjectFile & {id: string}} Address
  */
 
 /**
@@ -93,7 +93,7 @@ import * as api from './api.js';
  * @typedef {SetOperation | KeyOperation | CreateOperation | DeleteOperation} Operation
  */
 
-/** The JSON Schema that describes a store's records: a result whose data is `{schema}`. */
+/** The JSON Schema that describes a file's records: a result whose data is `{schema}`. */
 export const introspect = api.register('introspect', askIntrospect);
 
 /**
@@ -112,44 +112,44 @@ export const query = api.register('query', askQuery);
 export const mutate = api.register('mutate', askMutate);
 
 /**
- * GET /store/introspect.
+ * GET /file/introspect.
  *
  * @param rest The backend call.
- * @param {Store} store The store.
+ * @param {ProjectFile} file The file.
  */
-function askIntrospect(rest, store) {
-  return rest(`/store/introspect?${search(storeOf(store))}`);
+function askIntrospect(rest, file) {
+  return rest(`/file/introspect?${search(fileOf(file))}`);
 }
 
 /**
- * GET /store/query.
+ * GET /file/query.
  *
  * @param rest The backend call.
- * @param {Store} store The store.
+ * @param {ProjectFile} file The file.
  * @param {Selection} [selection] Which record, and the revision the caller has.
  */
-function askQuery(rest, store, { id = '', revision = '' } = {}) {
-  return rest(`/store/query?${search({ ...storeOf(store), id, revision })}`);
+function askQuery(rest, file, { id = '', revision = '' } = {}) {
+  return rest(`/file/query?${search({ ...fileOf(file), id, revision })}`);
 }
 
 /**
- * POST /store/mutate.
+ * POST /file/mutate.
  *
  * @param rest The backend call.
- * @param {Store} store The store.
+ * @param {ProjectFile} file The file.
  * @param {Operation} operation The operation.
  */
-function askMutate(rest, store, operation) {
-  const body = { ...storeOf(store), ...operation };
-  return rest('/store/mutate', { method: 'POST', body });
+function askMutate(rest, file, operation) {
+  const body = { ...fileOf(file), ...operation };
+  return rest('/file/mutate', { method: 'POST', body });
 }
 
 /**
- * The fields of a store the routes take, and nothing else.
+ * The fields of a file the routes take, and nothing else.
  *
- * @param {Store} store The store.
+ * @param {ProjectFile} file The file.
  */
-function storeOf({ kind, root, source }) {
+function fileOf({ kind, root, source }) {
   return { kind, root, source };
 }
 

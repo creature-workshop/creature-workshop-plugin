@@ -1,4 +1,4 @@
-"""The plan store: fills the Store contract for a plan file under .ops/data/.
+"""The plan kind: fills the Files contract for a plan file under .ops/data/.
 
 Each ticket is a record whose id is the ticket's key and whose values are
 the rest of the ticket as the file has it. A ticket's revision is the sha256
@@ -10,19 +10,19 @@ blockers of every other ticket.
 
 import json
 
-from workshop.stores.contract import Store
-from workshop.stores.outcomes import Stale, Unchanged
-from workshop.stores.plan.checks import BLOCKED_BY, check_change, check_new
-from workshop.stores.plan.document import default_state, load, next_key, save, ticket_of, tickets_of
-from workshop.stores.plan.schema import schema_for
-from workshop.stores.revision import revision_of
+from workshop.files.contract import Files
+from workshop.files.outcomes import Stale, Unchanged
+from workshop.files.plan.checks import BLOCKED_BY, check_change, check_new
+from workshop.files.plan.document import default_state, load, next_key, save, ticket_of, tickets_of
+from workshop.files.plan.schema import schema_for
+from workshop.files.revision import revision_of
 
 KEY = "key"
 
 STATE = "state"
 
 
-class PlanStore(Store):
+class PlanFiles(Files):
   """A plan file under .ops/data/ as one record per ticket, described by a schema that names the plan's states."""
 
   def describe(self, root, source):

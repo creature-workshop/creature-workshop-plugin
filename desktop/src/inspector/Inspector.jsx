@@ -28,7 +28,7 @@ export function Inspector({ binding, missing = null }) {
   return (
     <FieldGroup title={binding.title}>
       <InspectorFields
-        bind={{ ...binding.store, record: binding.record }}
+        bind={{ ...binding.file, record: binding.record }}
         binding={binding}
         failed={(error, reread) => <InspectorFailed binding={binding} missing={missing} error={error} onRetry={reread} />}
       />

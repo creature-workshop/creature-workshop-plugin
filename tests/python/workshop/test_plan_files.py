@@ -1,5 +1,5 @@
-"""Covers workshop.stores.plan: the plan store passes the store contract suite,
-and over the plan of workshop/stores/plan/plan.fixture.yaml, in a copy of the
+"""Covers workshop.files.plan: the plan kind passes the Files contract suite,
+and over the plan of workshop/files/plan/plan.fixture.yaml, in a copy of the
 golden case `installed`, it lists a ticket per record, creates a ticket
 under the next key in the default state, changes one ticket without making
 another stale, refuses what a ticket does not take without touching the
@@ -12,16 +12,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests.python.workshop.store_contract import StoreContract
+from tests.python.workshop.files_contract import FilesContract
 from workshop.project.yaml_loader import load_yaml
-from workshop.stores import kinds, registry
-from workshop.stores.contract import Change
-from workshop.stores.outcomes import NotFound, Refused, Stale, StoreFailure
-from workshop.stores.plan.document import next_key
-from workshop.stores.plan.store import PlanStore
+from workshop.files import kinds, registry
+from workshop.files.contract import Change
+from workshop.files.outcomes import NotFound, Refused, Stale, FileFailure
+from workshop.files.plan.document import next_key
+from workshop.files.plan.files import PlanFiles
 
 REPOSITORY = Path(__file__).resolve().parents[3]
-FIXTURE = REPOSITORY / "workshop" / "stores" / "plan" / "plan.fixture.yaml"
+FIXTURE = REPOSITORY / "workshop" / "files" / "plan" / "plan.fixture.yaml"
 INSTALLED = Path(__file__).parent / "goldens" / "cases" / "installed" / "input"
 PLAN = "data/plan.yaml"
 
@@ -34,7 +34,7 @@ class AProject(unittest.TestCase):
     self.file = self.root / ".ops" / "data" / "plan.yaml"
     self.file.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy(FIXTURE, self.file)
-    self.store = PlanStore()
+    self.files = PlanFiles()
     self.source = PLAN
 
   def tearDown(self):
@@ -43,8 +43,8 @@ class AProject(unittest.TestCase):
   def change(self, key, change):
     """Applies one change to the ticket key at its current revision and answers the record after it."""
 
-    record = self.store.read(self.root, PLAN, key)
-    return self.store.write(self.root, PLAN, key, change, record["revision"])
+    record = self.files.read(self.root, PLAN, key)
+    return self.files.write(self.root, PLAN, key, change, record["revision"])
 
   def on_disk(self):
     """The plan file as it parses now."""
@@ -52,7 +52,7 @@ class AProject(unittest.TestCase):
     return load_yaml(self.file.read_text())
 
 
-class PlanStoreContract(StoreContract, AProject):
+class PlanFilesContract(FilesContract, AProject):
   creates_records = True
 
   def accepted_change(self):
@@ -73,56 +73,56 @@ class PlanStoreContract(StoreContract, AProject):
 
 class Registering(unittest.TestCase):
   def test_the_routes_serve_it_as_the_kind_plan(self):
-    self.assertIs(registry.store_for("plan"), kinds.PLAN)
+    self.assertIs(registry.files_of("plan"), kinds.PLAN)
 
 
 class Describing(AProject):
   def test_the_state_is_one_of_the_default_states_and_starts_as_todo(self):
-    state = self.store.describe(self.root, PLAN)["properties"]["state"]
+    state = self.files.describe(self.root, PLAN)["properties"]["state"]
     self.assertEqual(state["enum"], ["backlog", "todo", "in_progress", "in_review", "done", "cancelled"])
     self.assertEqual(state["default"], "todo")
 
   def test_a_plan_that_names_its_states_has_those_and_starts_in_its_first_of_type_todo(self):
     self.file.write_text("states:\n  - {name: Idea, type: backlog}\n  - {name: Next, type: todo}\n  - {name: Shipped, type: done}\n")
-    state = self.store.describe(self.root, PLAN)["properties"]["state"]
+    state = self.files.describe(self.root, PLAN)["properties"]["state"]
     self.assertEqual((state["enum"], state["default"]), (["Idea", "Next", "Shipped"], "Next"))
 
   def test_a_ticket_needs_only_a_title(self):
-    self.assertEqual(self.store.describe(self.root, PLAN)["required"], ["title"])
+    self.assertEqual(self.files.describe(self.root, PLAN)["required"], ["title"])
 
 
 class Reading(AProject):
   def test_lists_one_record_per_ticket_in_the_files_order_with_the_key_as_the_id(self):
-    records = self.store.list(self.root, PLAN)
+    records = self.files.list(self.root, PLAN)
     self.assertEqual([record["id"] for record in records], ["PLAN-1", "PLAN-2", "PLAN-3"])
     self.assertEqual(records[1]["values"], {"title": "Post the video", "state": "todo", "blocked_by": ["PLAN-1"]})
 
   def test_a_project_with_no_plan_file_has_an_empty_plan(self):
     self.file.unlink()
-    self.assertEqual(self.store.list(self.root, PLAN), [])
+    self.assertEqual(self.files.list(self.root, PLAN), [])
     with self.assertRaises(NotFound):
-      self.store.read(self.root, PLAN, "PLAN-1")
+      self.files.read(self.root, PLAN, "PLAN-1")
 
-  def test_a_plan_that_does_not_parse_is_a_store_failure(self):
+  def test_a_plan_that_does_not_parse_is_a_file_failure(self):
     self.file.write_text("tickets: [unclosed\n")
-    with self.assertRaises(StoreFailure):
-      self.store.list(self.root, PLAN)
+    with self.assertRaises(FileFailure):
+      self.files.list(self.root, PLAN)
 
 
 class Creating(AProject):
   def test_a_new_ticket_takes_the_next_key_and_the_default_state_and_goes_last(self):
-    record = self.store.create(self.root, PLAN, {"title": "Thank the judges"})
+    record = self.files.create(self.root, PLAN, {"title": "Thank the judges"})
     self.assertEqual((record["id"], record["values"]), ("PLAN-4", {"state": "todo", "title": "Thank the judges"}))
     self.assertEqual(self.on_disk()["tickets"][-1], {"key": "PLAN-4", "state": "todo", "title": "Thank the judges"})
-    self.assertEqual(self.store.read(self.root, PLAN, "PLAN-4"), record)
+    self.assertEqual(self.files.read(self.root, PLAN, "PLAN-4"), record)
 
   def test_a_new_ticket_keeps_the_state_and_the_blockers_it_names(self):
-    record = self.store.create(self.root, PLAN, {"title": "Celebrate", "state": "backlog", "blocked_by": ["PLAN-3"]})
+    record = self.files.create(self.root, PLAN, {"title": "Celebrate", "state": "backlog", "blocked_by": ["PLAN-3"]})
     self.assertEqual(record["values"], {"state": "backlog", "title": "Celebrate", "blocked_by": ["PLAN-3"]})
 
   def test_the_first_ticket_of_a_project_creates_the_plan_file(self):
     shutil.rmtree(self.file.parent)
-    record = self.store.create(self.root, PLAN, {"title": "Start"})
+    record = self.files.create(self.root, PLAN, {"title": "Start"})
     self.assertEqual(record["id"], "PLAN-1")
     self.assertEqual(self.on_disk(), {"tickets": [{"key": "PLAN-1", "state": "todo", "title": "Start"}]})
 
@@ -130,7 +130,7 @@ class Creating(AProject):
     before = self.file.read_text()
     for values in ({}, {"title": "  "}, {"title": "x", "state": "someday"}, {"title": "x", "colour": "red"}, {"title": "x", "blocked_by": ["PLAN-9"]}):
       with self.assertRaises(Refused):
-        self.store.create(self.root, PLAN, values)
+        self.files.create(self.root, PLAN, values)
 
     self.assertEqual(self.file.read_text(), before)
 
@@ -148,16 +148,16 @@ class Writing(AProject):
     self.assertEqual((tickets[0]["title"], tickets[2]["blocked_by"], self.on_disk()["prefix"]), ("Record the demo", ["PLAN-2"], "PLAN"))
 
   def test_a_change_to_one_ticket_does_not_make_a_write_to_another_stale(self):
-    other = self.store.read(self.root, PLAN, "PLAN-3")
+    other = self.files.read(self.root, PLAN, "PLAN-3")
     self.change("PLAN-2", Change("set", "state", "done"))
-    after = self.store.write(self.root, PLAN, "PLAN-3", Change("set", "state", "in_progress"), other["revision"])
+    after = self.files.write(self.root, PLAN, "PLAN-3", Change("set", "state", "in_progress"), other["revision"])
     self.assertEqual(after["values"]["state"], "in_progress")
 
   def test_a_write_at_an_old_revision_of_the_same_ticket_is_stale(self):
-    old = self.store.read(self.root, PLAN, "PLAN-2")
+    old = self.files.read(self.root, PLAN, "PLAN-2")
     self.change("PLAN-2", Change("set", "state", "done"))
     with self.assertRaises(Stale):
-      self.store.write(self.root, PLAN, "PLAN-2", Change("set", "title", "Post it"), old["revision"])
+      self.files.write(self.root, PLAN, "PLAN-2", Change("set", "title", "Post it"), old["revision"])
 
   def test_a_clear_reads_back_as_null_and_a_reset_as_absent(self):
     self.assertIsNone(self.change("PLAN-1", Change("clear", "estimate"))["values"]["estimate"])
@@ -199,20 +199,20 @@ class Blocking(AProject):
 
 class Deleting(AProject):
   def test_a_delete_removes_the_ticket_and_drops_it_from_every_tickets_blockers(self):
-    record = self.store.read(self.root, PLAN, "PLAN-2")
-    self.store.delete(self.root, PLAN, "PLAN-2", record["revision"])
-    self.assertEqual([record["id"] for record in self.store.list(self.root, PLAN)], ["PLAN-1", "PLAN-3"])
-    self.assertNotIn("blocked_by", self.store.read(self.root, PLAN, "PLAN-3")["values"])
+    record = self.files.read(self.root, PLAN, "PLAN-2")
+    self.files.delete(self.root, PLAN, "PLAN-2", record["revision"])
+    self.assertEqual([record["id"] for record in self.files.list(self.root, PLAN)], ["PLAN-1", "PLAN-3"])
+    self.assertNotIn("blocked_by", self.files.read(self.root, PLAN, "PLAN-3")["values"])
 
   def test_a_delete_at_an_old_revision_is_stale_and_removes_nothing(self):
-    old = self.store.read(self.root, PLAN, "PLAN-2")
+    old = self.files.read(self.root, PLAN, "PLAN-2")
     self.change("PLAN-2", Change("set", "state", "done"))
     with self.assertRaises(Stale):
-      self.store.delete(self.root, PLAN, "PLAN-2", old["revision"])
+      self.files.delete(self.root, PLAN, "PLAN-2", old["revision"])
 
-    self.assertEqual(len(self.store.list(self.root, PLAN)), 3)
+    self.assertEqual(len(self.files.list(self.root, PLAN)), 3)
 
   def test_a_deleted_key_is_not_given_to_the_next_ticket_while_a_higher_one_remains(self):
-    record = self.store.read(self.root, PLAN, "PLAN-2")
-    self.store.delete(self.root, PLAN, "PLAN-2", record["revision"])
-    self.assertEqual(self.store.create(self.root, PLAN, {"title": "New"})["id"], "PLAN-4")
+    record = self.files.read(self.root, PLAN, "PLAN-2")
+    self.files.delete(self.root, PLAN, "PLAN-2", record["revision"])
+    self.assertEqual(self.files.create(self.root, PLAN, {"title": "New"})["id"], "PLAN-4")

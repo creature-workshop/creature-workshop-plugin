@@ -1,4 +1,4 @@
-"""The plan store: a project's plan, kept in a YAML file under its .ops/data/, as
+"""The plan kind: a project's plan, kept in a YAML file under its .ops/data/, as
 one record per ticket.
 
 The file is the one shellops' file tracker reads and writes, so `ops plan`
@@ -16,6 +16,6 @@ and the pane show the same plan:
 
 location.py turns a source into the file, document.py reads and writes it
 and knows its states and keys, schema.py describes a ticket, checks.py
-decides whether a ticket takes a change, and store.py fills the Store
+decides whether a ticket takes a change, and files.py fills the Files
 contract with them.
 """

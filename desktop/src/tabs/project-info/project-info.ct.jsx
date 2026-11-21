@@ -2,7 +2,7 @@
  * @file Editing the Project Info fields: the pencil opens a field with its
  * value, Enter or Save keeps the change, Escape or Cancel drops it, a
  * required field cannot be emptied, an unset field reads Not set and can be
- * filled in, a save the store refuses keeps the editor open with the store's
+ * filled in, a save the backend refuses keeps the editor open with the backend's
  * reason, a save over a change made outside the pane says so and shows
  * the current value, a change made to the manifest outside the pane shows
  * by itself within 5 seconds, and a project with no manifest gets Create
@@ -100,7 +100,7 @@ test('the read-only releases have an (i) too', async ({ mount, page }) => {
   await expect(component.getByRole('button', { name: 'About Latest' })).toBeVisible();
 });
 
-test('a save the store refuses keeps the editor open and says why', async ({ mount }) => {
+test('a save the backend refuses keeps the editor open and says why', async ({ mount }) => {
   const component = await mount(<Refusing />);
 
   await component.getByRole('button', { name: 'Edit Name' }).click();

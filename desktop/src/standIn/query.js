@@ -1,6 +1,6 @@
 /**
  * @file The stand-in's record list: what every stand-in backend does for
- * GET /store/query when it names no record. A story answers the query with
+ * GET /file/query when it names no record. A story answers the query with
  * the one record its file holds, as `{data: {record}}`, whichever way it
  * is asked. The backend answers a query without an id with every record,
  * as `{data: {records}}`, so the stand-in turns the story's one record into
@@ -14,7 +14,7 @@ api.register(routes);
 
 /** The record list's route for one stand-in. */
 export function routes() {
-  return [['/store/query', (request, backend) => queried(request, backend)]];
+  return [['/file/query', (request, backend) => queried(request, backend)]];
 }
 
 /**

@@ -9,7 +9,7 @@ dashboard/plugin_api.py mounts one router without knowing which routes exist.
     async def about():
       ...
 
-    @api.register("/store/mutate", Answer, method="POST")
+    @api.register("/file/mutate", Answer, method="POST")
     async def mutate(body: MutateBody):
       ...
 """

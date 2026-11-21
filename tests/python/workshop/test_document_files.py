@@ -1,8 +1,8 @@
-"""Covers workshop.stores.file: the file store passes the store contract suite,
-and a change to recording-rig's manifest (workshop/stores/file/manifest.fixture.yaml,
+"""Covers workshop.files.document: the document kind passes the Files contract suite,
+and a change to recording-rig's manifest (workshop/files/document/manifest.fixture.yaml,
 in a copy of the golden case `installed` with the plugin's pinned shellops
 schemas), and to a flags document described by
-workshop/stores/file/flags.fixture.schema.json, rewrites only its own line, keeps comments and the other keys,
+workshop/files/document/flags.fixture.schema.json, rewrites only its own line, keeps comments and the other keys,
 quotes a value only when it must, keeps untouched, cleared and set apart, and
 refuses what the schema does not take without touching the file.
 """
@@ -12,16 +12,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests.python.workshop.store_contract import StoreContract
+from tests.python.workshop.files_contract import FilesContract
 from workshop.project.yaml_loader import load_yaml
-from workshop.stores.contract import Change
-from workshop.stores.file.schema import schema_for
-from workshop.stores.file.store import FileStore
-from workshop.stores.outcomes import NotFound, Refused, StoreFailure
+from workshop.files.contract import Change
+from workshop.files.document.schema import schema_for
+from workshop.files.document.files import DocumentFiles
+from workshop.files.outcomes import NotFound, Refused, FileFailure
 
 REPOSITORY = Path(__file__).resolve().parents[3]
-FIXTURE = REPOSITORY / "workshop" / "stores" / "file" / "manifest.fixture.yaml"
-FLAGS_SCHEMA = REPOSITORY / "workshop" / "stores" / "file" / "flags.fixture.schema.json"
+FIXTURE = REPOSITORY / "workshop" / "files" / "document" / "manifest.fixture.yaml"
+FLAGS_SCHEMA = REPOSITORY / "workshop" / "files" / "document" / "flags.fixture.schema.json"
 INSTALLED = Path(__file__).parent / "goldens" / "cases" / "installed" / "input"
 MANIFEST = "config/manifest.yaml"
 
@@ -40,7 +40,7 @@ class AProject(unittest.TestCase):
   def setUp(self):
     self.scratch = tempfile.mkdtemp()
     self.root = project_copy(self.scratch)
-    self.store = FileStore()
+    self.files = DocumentFiles()
     self.source = MANIFEST
     self.manifest = self.root / ".ops" / "config" / "manifest.yaml"
 
@@ -50,8 +50,8 @@ class AProject(unittest.TestCase):
   def change(self, op, key, value=None):
     """Applies one change at the current revision and answers the record after it."""
 
-    record = self.store.read(self.root, MANIFEST, "document")
-    return self.store.write(self.root, MANIFEST, "document", Change(op, key, value), record["revision"])
+    record = self.files.read(self.root, MANIFEST, "document")
+    return self.files.write(self.root, MANIFEST, "document", Change(op, key, value), record["revision"])
 
   def lines(self):
     """The manifest's lines as they are on disk now."""
@@ -59,7 +59,7 @@ class AProject(unittest.TestCase):
     return self.manifest.read_text().splitlines()
 
 
-class FileStoreContract(StoreContract, AProject):
+class DocumentFilesContract(FilesContract, AProject):
   def accepted_change(self):
     """Sets the description."""
 
@@ -90,18 +90,18 @@ class Describing(AProject):
     self.assertEqual(schema["properties"]["command-name"]["type"], ["string", "null"])
 
   def test_a_document_without_a_schema_describes_as_empty(self):
-    self.assertEqual(self.store.describe(self.root, "config/nothing.yaml"), {})
+    self.assertEqual(self.files.describe(self.root, "config/nothing.yaml"), {})
 
 
 class Reading(AProject):
   def test_a_missing_document_is_not_found(self):
     with self.assertRaises(NotFound):
-      self.store.read(self.root, "config/lint.yaml", "document")
+      self.files.read(self.root, "config/lint.yaml", "document")
 
-  def test_a_document_that_does_not_parse_is_a_store_failure(self):
+  def test_a_document_that_does_not_parse_is_a_file_failure(self):
     self.manifest.write_text("name: [unclosed\n")
-    with self.assertRaises(StoreFailure):
-      self.store.read(self.root, MANIFEST, "document")
+    with self.assertRaises(FileFailure):
+      self.files.read(self.root, MANIFEST, "document")
 
 
 class Writing(AProject):
@@ -162,8 +162,8 @@ class TheThreeStates(AProject):
   def flag(self, op, key, value=None):
     """Applies one change to the flags document and answers its values after it."""
 
-    record = self.store.read(self.root, "config/flags.yaml", "document")
-    return self.store.write(self.root, "config/flags.yaml", "document", Change(op, key, value), record["revision"])["values"]
+    record = self.files.read(self.root, "config/flags.yaml", "document")
+    return self.files.write(self.root, "config/flags.yaml", "document", Change(op, key, value), record["revision"])["values"]
 
   def test_false_and_zero_are_values(self):
     self.assertIs(self.flag("set", "ship", False)["ship"], False)

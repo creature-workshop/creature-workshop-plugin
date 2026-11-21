@@ -1,21 +1,21 @@
-"""The /store routes, which serve every registered store the same way, named
+"""The /file routes, which serve every kind of file the same way, named
 and shaped after GraphQL's operations so that a GraphQL endpoint can replace
 them later:
 
-- GET /store/introspect?kind=&root=&source=: the JSON Schema of the records,
+- GET /file/introspect?kind=&root=&source=: the JSON Schema of the records,
   as `{data: {schema}}`.
-- GET /store/query?kind=&root=&source=&id=&revision=: one record as
+- GET /file/query?kind=&root=&source=&id=&revision=: one record as
   `{data: {record}}`, or every record as `{data: {records}}` when there is no
   id. With the revision the caller has, the UNCHANGED error when nothing
   changed since.
-- POST /store/mutate: one operation (a MutateBody). set, clear and reset
+- POST /file/mutate: one operation (a MutateBody). set, clear and reset
   answer `{data: {record}}` after the change; create answers it with HTTP
   201; delete answers `{data: {deleted: {id}}}`.
 
-`kind` names the store (workshop.stores.registry) and `source` what it reads,
-such as config/manifest.yaml for the file store. `root` must be the root of
+`kind` names the kind of file (workshop.files.registry) and `source` the
+file under .ops/, such as config/manifest.yaml for the document kind. `root` must be the root of
 a shellops project. An outcome other than a plain success answers its own
-status, with `{data: null, errors: [...]}` as workshop.stores.outcomes
+status, with `{data: null, errors: [...]}` as workshop.files.outcomes
 shapes it. A 3xx outcome answers HTTP 200 with its own status in the error's
 extensions, since Desktop's transport drops a 3xx before the plugin sees it.
 """
@@ -26,11 +26,11 @@ from fastapi import Query
 from fastapi.responses import JSONResponse
 
 from workshop import api
-from workshop.models.store import Answer, MutateBody
+from workshop.models.file import Answer, MutateBody
 from workshop.project.declaration import find_project
-from workshop.stores import kinds, registry
-from workshop.stores.contract import Change
-from workshop.stores.outcomes import Refused, StoreOutcome
+from workshop.files import kinds, registry
+from workshop.files.contract import Change
+from workshop.files.outcomes import Refused, FileOutcome
 
 NEEDS = {
   "set": ("id", "revision", "key"),
@@ -41,36 +41,36 @@ NEEDS = {
 }
 
 
-@api.register("/store/introspect", Answer)
+@api.register("/file/introspect", Answer)
 async def introspect(kind: str = Query(), root: str = Query(), source: str = Query()):
   """The JSON Schema of the records in source."""
 
-  return answered(lambda store, project: Answer(data={"schema": store.describe(project, source)}), kind, root)
+  return answered(lambda files, project: Answer(data={"schema": files.describe(project, source)}), kind, root)
 
 
-@api.register("/store/query", Answer)
+@api.register("/file/query", Answer)
 async def query(kind: str = Query(), root: str = Query(), source: str = Query(), id: str = Query(default=""), revision: str = Query(default="")):
   """One record when id is given, every record otherwise."""
 
-  def asked(store, project):
+  def asked(files, project):
     """The record or the records."""
 
     if not id:
-      return Answer(data={"records": store.list(project, source)})
+      return Answer(data={"records": files.list(project, source)})
 
-    return Answer(data={"record": store.read(project, source, id, revision or None)})
+    return Answer(data={"record": files.read(project, source, id, revision or None)})
 
   return answered(asked, kind, root)
 
 
-@api.register("/store/mutate", Answer, method="POST")
+@api.register("/file/mutate", Answer, method="POST")
 async def mutate(body: MutateBody):
   """One operation on the records in body.source."""
 
-  return answered(lambda store, project: mutated(store, project, body), body.kind, body.root)
+  return answered(lambda files, project: mutated(files, project, body), body.kind, body.root)
 
 
-def mutated(store, project, body):
+def mutated(files, project, body):
   """The answer of body's operation, once the body carries what the operation needs."""
 
   missing = [field for field in NEEDS[body.op] if not getattr(body, field)]
@@ -78,36 +78,36 @@ def mutated(store, project, body):
     raise Refused(f"A {body.op} needs {', '.join(missing)}.")
 
   operations = {"create": created, "delete": deleted}
-  return operations.get(body.op, changed)(store, project, body)
+  return operations.get(body.op, changed)(files, project, body)
 
 
-def changed(store, project, body):
+def changed(files, project, body):
   """A set, clear or reset: the record after it."""
 
   change = Change(op=body.op, key=body.key, value=body.value)
-  return Answer(data={"record": store.write(project, body.source, body.id, change, body.revision)})
+  return Answer(data={"record": files.write(project, body.source, body.id, change, body.revision)})
 
 
-def created(store, project, body):
+def created(files, project, body):
   """A create: the new record, with HTTP 201."""
 
-  record = store.create(project, body.source, body.values)
+  record = files.create(project, body.source, body.values)
   return JSONResponse(status_code=201, content={"data": {"record": record}})
 
 
-def deleted(store, project, body):
+def deleted(files, project, body):
   """A delete: the id of the record removed."""
 
-  store.delete(project, body.source, body.id, body.revision)
+  files.delete(project, body.source, body.id, body.revision)
   return Answer(data={"deleted": {"id": body.id}})
 
 
 def answered(act, kind, root):
-  """act(store, project root) for the store of kind and the project rooted at root, or the answer for the outcome it raised."""
+  """act(files, project root) for the Files of kind and the project rooted at root, or the answer for the outcome it raised."""
 
   try:
-    return act(registry.store_for(kind), project_root(root))
-  except StoreOutcome as outcome:
+    return act(registry.files_of(kind), project_root(root))
+  except FileOutcome as outcome:
     return JSONResponse(status_code=http_status(outcome.status), content=outcome.body())
 
 

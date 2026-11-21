@@ -1,11 +1,11 @@
-"""Where a file store source lives: `config/<name>.yaml` under the project's .ops/.
+"""Where a document's source is: `config/<name>.yaml` under the project's .ops/.
 
     document_path(root, "config/manifest.yaml")  ->  root/.ops/config/manifest.yaml
 """
 
 import re
 
-from workshop.stores.outcomes import Refused
+from workshop.files.outcomes import Refused
 
 SOURCE = re.compile(r"^config/[a-z0-9][a-z0-9-]*\.yaml$")
 
@@ -13,10 +13,10 @@ RECORD_ID = "document"
 
 
 def document_path(root, source):
-  """The file under root/.ops/ that source names; raises outcomes.Refused for a source the file store does not read."""
+  """The file under root/.ops/ that source names; raises outcomes.Refused for a source that is not a document."""
 
   if not SOURCE.match(source):
-    raise Refused(f"{source} is not a file the file store reads: it reads config/<name>.yaml under .ops/.")
+    raise Refused(f"{source} is not a document: a document is config/<name>.yaml under .ops/.")
 
   return root / ".ops" / source
 

@@ -8,8 +8,8 @@ the whole file, so a comment in it is not kept.
 """
 
 from workshop.project.yaml_loader import dump_yaml, load_yaml
-from workshop.stores.outcomes import NotFound, StoreFailure
-from workshop.stores.plan.location import plan_path
+from workshop.files.outcomes import NotFound, FileFailure
+from workshop.files.plan.location import plan_path
 
 DEFAULT_STATES = ("backlog", "todo", "in_progress", "in_review", "done", "cancelled")
 
@@ -19,7 +19,7 @@ TODO = "todo"
 
 
 def load(root, source):
-  """The plan file of source as a mapping, {} when the project has none yet; raises outcomes.StoreFailure when it does not parse to a mapping."""
+  """The plan file of source as a mapping, {} when the project has none yet; raises outcomes.FileFailure when it does not parse to a mapping."""
 
   path = plan_path(root, source)
   if not path.is_file():
@@ -30,13 +30,13 @@ def load(root, source):
   except ImportError:
     raise
   except Exception as error:
-    raise StoreFailure(f".ops/{source} does not parse: {error}") from error
+    raise FileFailure(f".ops/{source} does not parse: {error}") from error
 
   if loaded is None:
     return {}
 
   if not isinstance(loaded, dict):
-    raise StoreFailure(f".ops/{source} does not hold a mapping of keys to values.")
+    raise FileFailure(f".ops/{source} does not hold a mapping of keys to values.")
 
   return loaded
 

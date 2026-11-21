@@ -70,7 +70,7 @@ async function resultOf(request, args) {
 
 /**
  * The result of an answer that arrived. A GraphQL-shaped body, which has a
- * `data` key, is a failure when it carries errors, as the store's 3xx
+ * `data` key, is a failure when it carries errors, as the /file routes' 3xx
  * outcomes do, and its data otherwise; any other body is the data itself.
  *
  * @param body The answer's body.

@@ -16,7 +16,7 @@ import { WorkshopProvider } from '../workshop/WorkshopProvider.jsx';
 const ROOT = '/home/someone/notes';
 
 /** The name in the manifest, as a binding. */
-const NAME = Object.freeze({ kind: 'file', source: 'config/manifest.yaml', record: 'document', key: 'name' });
+const NAME = Object.freeze({ kind: 'document', source: 'config/manifest.yaml', record: 'document', key: 'name' });
 
 /** The manifest as the backend first answers it. */
 const MANIFEST = Object.freeze({ id: 'document', revision: 'r1', values: { name: 'Notes' } });
@@ -28,7 +28,7 @@ const READS = Object.freeze([
   ['/repos', { start: ROOT, inside: true, checkout: ROOT, repos: [{ root: ROOT, name: 'notes' }], refresh_seconds: 20 }],
   ['/project/setup', { root: ROOT, state: 'ready' }],
   ['/project', { found: true, root: ROOT, name: 'Notes', summary: '', declaration: {}, release: { latest: '', stable: '' }, declared: [], refresh_seconds: 20 }],
-  ['/store/introspect', { data: { schema: { properties: { name: { type: 'string' } } } } }],
+  ['/file/introspect', { data: { schema: { properties: { name: { type: 'string' } } } } }],
 ]);
 
 /**
@@ -58,7 +58,7 @@ function NameBox({ value, onChange, saving, error }) {
  * each write and hands its body to `onWrite`.
  *
  * @param props The story's props.
- * @param {(body: object) => void} [props.onWrite] Takes the body of each POST /store/mutate.
+ * @param {(body: object) => void} [props.onWrite] Takes the body of each POST /file/mutate.
  */
 export function BoundToAKey({ onWrite = () => {} }) {
   const [rest] = useState(() => standIn(keepingBackend(onWrite)));
@@ -90,7 +90,7 @@ function framed(rest) {
  * A backend call that answers the reads, and applies each write to its own
  * copy of the manifest under a new revision.
  *
- * @param {(body: object) => void} onWrite Takes the body of each POST /store/mutate.
+ * @param {(body: object) => void} onWrite Takes the body of each POST /file/mutate.
  */
 function keepingBackend(onWrite) {
   let manifest = MANIFEST;
@@ -100,14 +100,14 @@ function keepingBackend(onWrite) {
       manifest = { ...manifest, revision: `${manifest.revision}+`, values: { ...manifest.values, [options.body.key]: options.body.value } };
       return { data: { record: manifest } };
     }
-    return path.startsWith('/store/query') ? { data: { record: manifest } } : answerTo(path);
+    return path.startsWith('/file/query') ? { data: { record: manifest } } : answerTo(path);
   };
 }
 
 /** A backend call that answers every read but the manifest's, which never reaches the backend. */
 function unreadableBackend() {
   return async (path) => {
-    if (path.startsWith('/store/query')) {
+    if (path.startsWith('/file/query')) {
       throw new Error('never reached the backend');
     }
     return answerTo(path);

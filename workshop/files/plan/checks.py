@@ -6,11 +6,11 @@ other tickets of the plan, each named once, with no ticket ending up blocked
 by itself through the tickets that block it.
 """
 
-from workshop.stores.contract import Change
-from workshop.stores.file.checks import check_clear, check_in_enum, check_reset, check_type
-from workshop.stores.outcomes import Refused
-from workshop.stores.plan.document import tickets_of
-from workshop.stores.plan.schema import schema_for
+from workshop.files.contract import Change
+from workshop.files.document.checks import check_clear, check_in_enum, check_reset, check_type
+from workshop.files.outcomes import Refused
+from workshop.files.plan.document import tickets_of
+from workshop.files.plan.schema import schema_for
 
 TITLE = "title"
 

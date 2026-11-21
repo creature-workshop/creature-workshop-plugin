@@ -12,7 +12,7 @@ import { create } from './synced.js';
 import { STALE_MESSAGE } from './writeMessage.js';
 
 /** The manifest. */
-const MANIFEST = Object.freeze({ kind: 'file', source: 'config/manifest.yaml' });
+const MANIFEST = Object.freeze({ kind: 'document', source: 'config/manifest.yaml' });
 
 /** The plan. */
 const PLAN = Object.freeze({ kind: 'plan', source: 'data/plan.yaml' });

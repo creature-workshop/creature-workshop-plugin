@@ -5,7 +5,7 @@
  * `{kind, source}`; one record of it, with `record`; or one key of that
  * record, with `record` and `key`.
  *
- *     {kind: 'file', source: 'config/manifest.yaml', record: 'document', key: 'name'}
+ *     {kind: 'document', source: 'config/manifest.yaml', record: 'document', key: 'name'}
  *
  * names the `name` key of `.ops/config/manifest.yaml`.
  */

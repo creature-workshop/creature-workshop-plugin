@@ -21,5 +21,5 @@ export function InspectorFailed({ binding, missing, error, onRetry }) {
     return missing(onRetry);
   }
 
-  return <FailureNotice what={`I couldn't read the ${binding.title} fields from ${binding.store.source}.`} error={error} onRetry={onRetry} />;
+  return <FailureNotice what={`I couldn't read the ${binding.title} fields from ${binding.file.source}.`} error={error} onRetry={onRetry} />;
 }

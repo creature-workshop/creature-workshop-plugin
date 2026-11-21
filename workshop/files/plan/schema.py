@@ -3,7 +3,7 @@
     schema_for({})["properties"]["state"]["enum"]  ->  ["backlog", "todo", "in_progress", "in_review", "done", "cancelled"]
 """
 
-from workshop.stores.plan.document import default_state, states_of
+from workshop.files.plan.document import default_state, states_of
 
 TEXT = ["string", "null"]
 

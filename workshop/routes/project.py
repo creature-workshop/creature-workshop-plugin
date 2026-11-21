@@ -24,7 +24,7 @@ form's values, committing it on its own when asked; it refuses a checkout
 that already has .ops/config.
 
 The pane reads and changes the project's files, such as its manifest,
-through the /store routes.
+through the /file routes.
 """
 
 import asyncio

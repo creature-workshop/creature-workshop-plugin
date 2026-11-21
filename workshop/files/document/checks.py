@@ -1,14 +1,14 @@
 """Whether a document's schema takes a change to one top-level key.
 
-The file store writes single values on one line, so it refuses a list or a
+The document kind writes single values on one line, so it refuses a list or a
 mapping, and a string with a line break. Otherwise the schema decides: the
 key must be one it describes, a set value must be of a type the key allows
 and in its enum when it has one, a clear needs the null type, and a reset
 needs the key not to be required.
 """
 
-from workshop.stores.file.types import allowed_types, types_of
-from workshop.stores.outcomes import Refused
+from workshop.files.document.types import allowed_types, types_of
+from workshop.files.outcomes import Refused
 
 
 def check_change(schema, change):
@@ -23,7 +23,7 @@ def check_change(schema, change):
 
 
 def check_set(schema, definition, change):
-  """Raises unless the value is one the file store writes and the key's definition allows."""
+  """Raises unless the value is one the document kind writes and the key's definition allows."""
 
   check_writable(change.key, change.value)
   check_type(definition, change.key, change.value)
@@ -46,10 +46,10 @@ def check_reset(schema, definition, change):
 
 
 def check_writable(key, value):
-  """Raises for a value the file store cannot write on one line: a list, a mapping, or a string with a line break."""
+  """Raises for a value the document kind cannot write on one line: a list, a mapping, or a string with a line break."""
 
   if types_of(value) & {"array", "object"}:
-    raise Refused(f"{key} holds a list or a mapping, and the file store only writes single values.")
+    raise Refused(f"{key} holds a list or a mapping, and only single values can be written to this file.")
 
   if isinstance(value, str) and "\n" in value:
     raise Refused(f"{key} must be one line.")

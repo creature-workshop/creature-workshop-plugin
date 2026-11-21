@@ -1,6 +1,6 @@
-"""What a store answers other than a plain success, each with a code and the HTTP status it stands for.
+"""What a kind of file answers other than a plain success, each with a code and the HTTP status it stands for.
 
-A store raises one of these, and the /store routes answer it the way a
+A kind raises one of these, and the /file routes answer it the way a
 GraphQL server answers an error: `data` is null, and `errors` holds one error
 whose `message` is the reason and whose `extensions` carry the code, the
 status and anything else the outcome carries, such as the current record.
@@ -9,13 +9,13 @@ as HTTP 200 with its own status in the extensions; every other outcome uses
 its status as the HTTP status too.
 
 A 4xx means the request was wrong and the user can fix it; a 5xx means the
-store or the service behind it failed and the user cannot.
+backend or the service behind it failed and the user cannot.
 """
 
-class StoreOutcome(Exception):
+class FileOutcome(Exception):
   """An outcome other than a plain success: its code, its HTTP status, the reason for the user, and anything else it carries."""
 
-  code = "STORE_FAILURE"
+  code = "FILE_FAILURE"
   status = 500
 
   def __init__(self, reason, **carried):
@@ -32,14 +32,14 @@ class StoreOutcome(Exception):
     return {"data": None, "errors": [{"message": self.reason, "extensions": extensions}]}
 
 
-class Unchanged(StoreOutcome):
+class Unchanged(FileOutcome):
   """A read that named the revision the caller already has, when nothing changed since."""
 
   code = "UNCHANGED"
   status = 304
 
 
-class Moved(StoreOutcome):
+class Moved(FileOutcome):
   """The record or key moved; carries `source`, `id` and `key` where it lives now. A write that moved is a 308."""
 
   code = "MOVED"
@@ -52,50 +52,50 @@ class MovedForWrite(Moved):
   status = 308
 
 
-class Refused(StoreOutcome):
+class Refused(FileOutcome):
   """The schema or the request says no; the reason says why."""
 
   code = "REFUSED"
   status = 400
 
 
-class NotFound(StoreOutcome):
+class NotFound(FileOutcome):
   """The record does not exist."""
 
   code = "NOT_FOUND"
   status = 404
 
 
-class Unsupported(StoreOutcome):
-  """The store does not do this operation, such as creating a record in a single-document store."""
+class Unsupported(FileOutcome):
+  """The kind does not do this operation, such as creating a record in a file that is one document."""
 
   code = "UNSUPPORTED"
   status = 405
 
 
-class Stale(StoreOutcome):
+class Stale(FileOutcome):
   """The record changed since the revision the write named; carries the current `record`."""
 
   code = "STALE"
   status = 409
 
 
-class Gone(StoreOutcome):
+class Gone(FileOutcome):
   """The record or key was removed and has no successor."""
 
   code = "GONE"
   status = 410
 
 
-class StoreFailure(StoreOutcome):
-  """The store itself failed: a file it cannot read, a disk error, a bug."""
+class FileFailure(FileOutcome):
+  """The backend itself failed: a file it cannot read, a disk error, a bug."""
 
-  code = "STORE_FAILURE"
+  code = "FILE_FAILURE"
   status = 500
 
 
-class Upstream(StoreOutcome):
-  """The service behind a network store failed (502), is unavailable (503) or timed out (504)."""
+class Upstream(FileOutcome):
+  """The service a kind reads its files from failed (502), is unavailable (503) or timed out (504)."""
 
   code = "UPSTREAM"
   status = 502

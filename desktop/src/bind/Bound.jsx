@@ -23,7 +23,7 @@ import { targetOf } from './target.js';
  * When the data could not be read it draws `failed(error, reread)`, or,
  * when none is given, a notice that names the file with Try again.
  *
- *     <TextField label="Name" bind={{kind: 'file', source: 'config/manifest.yaml', record: 'document', key: 'name'}} />
+ *     <TextField label="Name" bind={{kind: 'document', source: 'config/manifest.yaml', record: 'document', key: 'name'}} />
  *
  * @param props The wrapper's props, and the component's own.
  * @param props.bound The component to draw.

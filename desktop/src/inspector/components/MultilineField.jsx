@@ -7,7 +7,7 @@ import { StringField } from './StringField.jsx';
 
 /**
  * A string key edited in a text area that wraps. Enter still saves, since
- * the stores write one line.
+ * the backend writes a value on one line.
  *
  * @param {object} props The props that fieldProps builds.
  */

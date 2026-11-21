@@ -1,4 +1,4 @@
-"""The file store: fills the Store contract for a shellops document under .ops/config/.
+"""The document kind: fills the Files contract for a shellops document under .ops/config/.
 
 The document is one record, `document`; it cannot be created or deleted, since
 shellops owns the file. A write rewrites only the changed key's lines, parses
@@ -7,18 +7,18 @@ says. The revision is the sha256 of the file's bytes.
 """
 
 from workshop.project.yaml_loader import load_yaml
-from workshop.stores.contract import Store
-from workshop.stores.file.checks import check_change
-from workshop.stores.file.lines import changed_lines
-from workshop.stores.file.location import RECORD_ID, document_path
-from workshop.stores.file.schema import schema_for
-from workshop.stores.outcomes import NotFound, Refused, Stale, StoreFailure, Unchanged
-from workshop.stores.revision import revision_of
+from workshop.files.contract import Files
+from workshop.files.document.checks import check_change
+from workshop.files.document.lines import changed_lines
+from workshop.files.document.location import RECORD_ID, document_path
+from workshop.files.document.schema import schema_for
+from workshop.files.outcomes import NotFound, Refused, Stale, FileFailure, Unchanged
+from workshop.files.revision import revision_of
 
 ABSENT = object()
 
 
-class FileStore(Store):
+class DocumentFiles(Files):
   """A shellops document under .ops/config/ as one record, described by the project's pinned shellops schema."""
 
   def describe(self, root, source):
@@ -58,11 +58,11 @@ class FileStore(Store):
 
 
 def record_at(root, source, record_id):
-  """The document as a record; raises outcomes.NotFound for another id or a missing file, and StoreFailure when it does not parse."""
+  """The document as a record; raises outcomes.NotFound for another id or a missing file, and FileFailure when it does not parse."""
 
   path = document_path(root, source)
   if record_id != RECORD_ID:
-    raise NotFound(f"The file store holds one record, {RECORD_ID}, not {record_id}.")
+    raise NotFound(f"A document holds one record, {RECORD_ID}, not {record_id}.")
 
   if not path.is_file():
     raise NotFound(f"The project has no .ops/{source}.")
@@ -72,20 +72,20 @@ def record_at(root, source, record_id):
 
 
 def values_in(text, source):
-  """The mapping in text; {} for an empty file. Raises outcomes.StoreFailure when it does not parse to a mapping."""
+  """The mapping in text; {} for an empty file. Raises outcomes.FileFailure when it does not parse to a mapping."""
 
   try:
     loaded = load_yaml(text)
   except ImportError:
     raise
   except Exception as error:
-    raise StoreFailure(f".ops/{source} does not parse: {error}") from error
+    raise FileFailure(f".ops/{source} does not parse: {error}") from error
 
   if loaded is None:
     return {}
 
   if not isinstance(loaded, dict):
-    raise StoreFailure(f".ops/{source} does not hold a mapping of keys to values.")
+    raise FileFailure(f".ops/{source} does not hold a mapping of keys to values.")
 
   return loaded
 

@@ -28,7 +28,7 @@ const CHANGES = Object.freeze({ set: withKey, clear: withNull, reset: withoutKey
  *
  * @param {import('./opsFileSnapshot.js').OpsFileSnapshot | null} snapshot What the last sync answered, or null before the first.
  * @param {object | null} failure Why the sync failed, as client/api.js flattens an error, or null.
- * @param {import('../../client/store.js').Operation[]} operations The file's writes in flight, oldest first.
+ * @param {import('../../client/file.js').Operation[]} operations The file's writes in flight, oldest first.
  */
 export function viewOf(snapshot, failure, operations) {
   if (!snapshot) {
@@ -44,7 +44,7 @@ export function viewOf(snapshot, failure, operations) {
  * The records after one operation in flight.
  *
  * @param {object[]} records The records.
- * @param {import('../../client/store.js').Operation} operation The operation.
+ * @param {import('../../client/file.js').Operation} operation The operation.
  */
 function applied(records, operation) {
   if (operation.op === 'delete') {

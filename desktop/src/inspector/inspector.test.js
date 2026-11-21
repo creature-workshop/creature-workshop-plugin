@@ -37,12 +37,12 @@ describe('bindings', () => {
     const binding = bindings.register({
       id: 'test/one',
       title: 'One',
-      store: { kind: 'file', source: 'config/x.yaml' },
+      file: { kind: 'document', source: 'config/x.yaml' },
       record: 'document',
       fields: [{ key: 'a', component: 'text' }],
     });
     assert.equal(bindings.registered('test/one'), binding);
-    assert.ok(Object.isFrozen(binding.fields[0]) && Object.isFrozen(binding.store));
+    assert.ok(Object.isFrozen(binding.fields[0]) && Object.isFrozen(binding.file));
     assert.equal(binding.fields[0].readOnly, false);
   });
 

@@ -12,7 +12,7 @@ import { targetOf } from './target.js';
 import { wrapped } from './wrap.js';
 
 /** The manifest. */
-const MANIFEST = Object.freeze({ kind: 'file', source: 'config/manifest.yaml' });
+const MANIFEST = Object.freeze({ kind: 'document', source: 'config/manifest.yaml' });
 
 /** The record the file's view holds. */
 const RECORD = Object.freeze({ id: 'document', revision: 'r1', values: { name: 'Notes', org: null } });
