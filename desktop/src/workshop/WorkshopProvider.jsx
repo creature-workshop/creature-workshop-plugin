@@ -13,7 +13,10 @@
  * - `project`: the shellops project of that checkout, read again every 5
  *   seconds so a change to its declaration made outside the pane shows;
  * - `setup`: whether that checkout has a workshop, read again every 5
- *   seconds so a workshop added or deleted outside the pane shows.
+ *   seconds so a workshop added or deleted outside the pane shows;
+ * - `synced`: that checkout's files under .ops/, as synced/synced.js keeps them: each
+ *   file a part follows is read again every 5 seconds, and every write to
+ *   one goes through its queue.
  *
  * `about`, `repos`, `project` and `setup` are remote data, as remote.js
  * describes: loading, failure or success. `retry` asks for one of them
@@ -28,15 +31,17 @@ import { useProject } from './useProject.js';
 import { useRetry } from './useRetry.js';
 import { useSetup } from './useSetup.js';
 import { useSetupFollower } from './useSetupFollower.js';
+import { useSynced } from './useSynced.js';
 
 /** The shared state; null outside a WorkshopProvider. */
 const WorkshopContext = createContext(null);
 
 /**
- * How often the pane re-reads the checkout's setup and its project, in
- * seconds. It is its own, shorter than pane_refresh_seconds, because both
- * reads only look at files under .ops, while that setting paces the git
- * status.
+ * How often the pane re-reads the checkout's setup, its project and its
+ * followed files, in seconds. It is its own, shorter than
+ * pane_refresh_seconds, because these reads only look at files under .ops
+ * and ask git about those files alone, while that setting paces the git
+ * status of the whole repository.
  */
 const SETUP_REFRESH_SECONDS = 5;
 
@@ -45,8 +50,8 @@ const SETUP_REFRESH_SECONDS = 5;
  *
  * It connects the client to `rest` before anything renders, then holds one
  * piece per concern, each in its own hook: `about`; the repositories and
- * the selected checkout; that checkout's `project` and `setup`; and
- * `retry`, which asks for one of the four remote pieces again.
+ * the selected checkout; that checkout's `project`, `setup` and `synced`
+ * files; and `retry`, which asks for one of the four remote pieces again.
  *
  * @param props The component's props.
  * @param props.rest The backend call, taking a path under the plugin's API.
@@ -61,13 +66,14 @@ export function WorkshopProvider({ rest, subject, children }) {
   const project = useProject(rest, checkout.selected, retried.project, SETUP_REFRESH_SECONDS);
   const setup = useSetup(rest, checkout.selected, retried.setup, SETUP_REFRESH_SECONDS);
   useSetupFollower(checkout.selected, setup, retry);
-  const value = useMemo(() => ({ about, subject, ...checkout, project, setup, retry }), [about, subject, checkout, project, setup, retry]);
+  const synced = useSynced(rest, checkout.selected, SETUP_REFRESH_SECONDS);
+  const value = useMemo(() => ({ about, subject, ...checkout, project, setup, synced, retry }), [about, subject, checkout, project, setup, synced, retry]);
 
   return <WorkshopContext.Provider value={value}>{children}</WorkshopContext.Provider>;
 }
 
 /**
- * Returns the pane's shared state: `{about, subject, repos, repo, selected, select, selectWorktree, project, setup, retry}`.
+ * Returns the pane's shared state: `{about, subject, repos, repo, selected, select, selectWorktree, project, setup, synced, retry}`.
  *
  * - `about` is GET /about's answer, as remote data.
  * - `repos` is GET /repos's answer, as remote data.
@@ -79,6 +85,8 @@ export function WorkshopProvider({ rest, subject, children }) {
  *   remote data; loading while no repository is selected.
  * - `setup` is GET /project/setup's answer for the selected checkout, as
  *   remote data; loading while no repository is selected.
+ * - `synced` is the selected checkout's files, as synced/synced.js
+ *   describes them: `follow`, `view`, `write`, `read` and `every`.
  * - `retry(name)` asks for `about`, `repos`, `project` or `setup` again.
  */
 export function useWorkshop() {
