@@ -1,0 +1,7 @@
+#!/bin/sh
+# Sourced by every git hook lefthook installs (lefthook.yml's rc) before the
+# hook's commands run, so each command and everything it starts runs under
+# the per-process memory cap and a runaway dies alone.
+. "$PWD/lib/stdout/api.sh"
+. "$PWD/lib/process/memory_cap.sh"
+process__memory_cap__apply

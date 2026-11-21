@@ -1,0 +1,21 @@
+{
+  "$comment": "Canonical code-review (PR/MR) shape that every forge backend flattens its responses to.",
+  "number": 42,
+  "title": "feat: example",
+  "body": "Description text",
+  "state": "open | closed | merged",
+  "draft": false,
+  "head": "feat/branch-name",
+  "base": "main",
+  "url": "https://forge.example.com/org/repo/pulls/42",
+  "labels": [
+    { "name": "bug", "color": "#d73a4a", "description": "Something is broken" }
+  ],
+  "assignees": [
+    { "username": "jerrod", "name": "Jerrod" }
+  ],
+  "author": {
+    "username": "jerrod",
+    "name": "Jerrod"
+  }
+}

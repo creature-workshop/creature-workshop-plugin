@@ -1,0 +1,17 @@
+{
+  "exclude": [
+    "shell/.ops",
+    "shell/.scan"
+  ],
+  "added_only": [
+    "inline-comment",
+    "raw-jq",
+    "argv-accumulation",
+    "spelling-tests",
+    "private-name",
+    "private-file"
+  ],
+  "decisions": {
+    "form": "one-page"
+  }
+}

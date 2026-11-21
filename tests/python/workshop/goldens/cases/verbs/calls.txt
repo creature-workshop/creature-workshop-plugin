@@ -1,5 +1,0 @@
-workshop_test {"verb": "plan", "paths": ["lib/a.sh", "lib/b.sh"]}
-workshop_test {"verb": "all"}
-workshop_test {"verb": "nope"}
-workshop_lint {"paths": ["lib"]}
-workshop_lint {}

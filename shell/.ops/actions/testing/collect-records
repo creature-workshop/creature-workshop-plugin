@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/forge/api.sh" \
+  "$SHELLOPS_DIR/lib/testing/metrics/api.sh" \
+  "$SHELLOPS_DIR/lib/time/api.sh"
+
+USAGE="$(cat <<HELP
+Fills the metrics directory with the run records the reviews merged into a
+branch over a window left in their pipelines' archives, so a scorecard read
+after this reports the rollout across those reviews rather than this run
+alone. Records already in the directory stay, and a review they already
+cover is not read again, so a directory carried between pipelines costs each
+only the reviews merged since.
+
+A pipeline without an admin token is a no-op skip: the rollout is a report,
+and a report that cannot be assembled is not a failed run. A merged review
+whose record cannot be read is counted and named in a warning. A collection
+that cannot be made at all, the merged reviews failing to list or the branch
+unknown, exits 2: the advisory status, so a gate that runs this first still
+scores the mapping and passes with a warning rather than blocking on the
+forge.
+
+Usage: action testing collect-records [--since <ISO-8601>] [--branch <name>] [-h,--help]
+
+Flags:
+  --since <ISO-8601>  Read the reviews merged at or after this time. Defaults
+                      to thirty days before now.
+  --branch <name>     The branch they were merged into. Defaults to the forge's
+                      default branch.
+  -h, --help          Show this help text.
+
+Environment:
+  FORGE_ADMIN_TOKEN   Lists the merged reviews and reads their archives. Unset,
+                      the action skips.
+HELP
+)"
+
+__collect_records__WINDOW_DAYS=30
+
+: <<'CONST'
+The exit status of a collection that could not be made: the advisory
+status the scorecard's gate shares, so a job passes on it with a warning.
+CONST
+__collect_records__UNAVAILABLE=2
+
+ARG_SINCE=""
+ARG_BRANCH=""
+
+main() {
+  parse_args "$@"
+  if ! @defined "${FORGE_ADMIN_TOKEN:-}"; then
+    log "FORGE_ADMIN_TOKEN not set, skipping."
+    return 0
+  fi
+
+  __main__since="$(since)"
+  __main__branch="$(branch)" || return "$__collect_records__UNAVAILABLE"
+  @obj __main__options '.token' "$FORGE_ADMIN_TOKEN"
+  __main__tally="$(testing__metrics__collect \
+    "$__main__options" \
+    "$__main__since" \
+    "$__main__branch"
+  )" || return "$__collect_records__UNAVAILABLE"
+
+  report "$__main__tally" "$__main__since" "$__main__branch"
+}
+
+: <<'FUN'
+The start of the window: --since, else the default window's worth of days
+before now.
+FUN
+since() {
+  if @defined "$ARG_SINCE"; then
+    println "$ARG_SINCE"
+    return 0
+  fi
+  time__utc_timestamp_days_ago "$__collect_records__WINDOW_DAYS"
+}
+
+: <<'FUN'
+The branch the reviews were merged into: --branch, else the forge's default.
+FUN
+branch() {
+  if @defined "$ARG_BRANCH"; then
+    println "$ARG_BRANCH"
+    return 0
+  fi
+  forge__default_branch
+}
+
+: <<'FUN'
+Logs what the collection found.
+
+  $1 tally ({reviews, records, held, skipped})   $2 since   $3 branch
+FUN
+report() {
+  @let "$1" __report__ reviews records held skipped
+  log "Collected $__report__records record(s) from $__report__reviews review(s) merged into '$3' since $2; $__report__held already held, $__report__skipped skipped."
+  @unlet __report__ reviews records held skipped
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      --since) ARG_SINCE="${2:?--since requires a value}"; shift ;;
+      --branch) ARG_BRANCH="${2:?--branch requires a value}"; shift ;;
+      *)
+        error "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  */testing/collect-records) main "$@" ;;
+esac

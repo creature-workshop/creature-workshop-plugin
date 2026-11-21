@@ -1,0 +1,30 @@
+# Rust
+target/
+engine/target/
+
+# Coverage
+.coverage/
+
+# What shellops generates and nothing tracks: the tooling cache `ops install`
+# provisions and the compiled trees beside it (.ops/cache, carried between CI
+# jobs), the test-selection metrics records, the trace maps and the
+# full-suite junit reports (CI keeps them as artifacts, outside the cache),
+# and the compiled tree, the link into the cache .envrc derives from the
+# sources, and the reference `ops docs` renders from it, which the trunk's
+# pipeline keeps as an artifact (ADR 000047). Anchored to the project root, because in a consuming
+# repo `.ops` is also the submodule mount point.
+/.ops/cache/
+/.ops/testing-metrics/
+/.ops/testing-trace/
+/.ops/__compiled__*
+/.ops/docs/
+
+# What terraform init writes beside .ops/infra: the provider binaries and the
+# backend configuration, which carries the state address of the last run.
+/.ops/infra/.terraform/
+
+# Toolchain homes. The CI presets point CARGO_HOME and RUSTUP_HOME here and
+# cache them between jobs, so a job that provisions rust leaves them untracked.
+/.cargo/
+/.rustup/
+__pycache__/

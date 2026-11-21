@@ -1,0 +1,258 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+USAGE="$(cat <<HELP
+Intelligently bump the git version based on the latest version tag.
+
+Usage: "ops git-bump [flags...]"
+
+Flags:
+  -h, --help       Show this help text
+  -M, --major      Bump the major release version (0.9.9 -> 1.0.0)
+  -m, --minor      Bump the minor release version (0.0.9 -> 0.1.0)
+  -p, --patch      Bump the patch release version (0.0.9 -> 0.0.10)
+  -d, --dev        Start (or increment) the pre-release dev version (1.0.0 -> 1.0.1-dev.1 -> 1.0.1-dev.2)
+  -a, --alpha      Start (or increment) the pre-release alpha version (1.0.0 -> 1.0.1-alpha.1 -> 1.0.1-alpha.2)
+  -b, --beta       Start (or increment) the pre-release beta version (1.0.0 -> 1.0.1-beta.1 -> 1.0.1-beta.2)
+  -c, --rc         Start (or increment) the pre-release rc version (1.0.0 -> 1.0.1-rc.1 -> 1.0.1-rc.2)
+  -r, --release    Transition from pre-release to release (1.0.0-rc.1 -> 1.0.0)
+  --dry-run        Output the planned version bump without creating a tag
+  --from-plan <v>  Use an already-planned version <v> verbatim: validate it
+                   against existing tags and echo it, bypassing manifest/auto-bump
+                   inference. --dry-run only.
+  --confidence-gate <ch>  Minimum channel for release without warning (default: beta)
+  --strict-release        Treat below-gate releases as errors instead of warnings
+
+Notes:
+  When using a pre-release flag on an existing release version, you can also pair it with --major or --minor for the version you're planning on targeting with the bump; otherwise, --patch is assumed. Pre-release versions always target a future release version.
+
+  Running the script without any flags always gravitates toward the dev
+  track. Non-dev prerelease channels revert to dev; promoting to a higher
+  channel (alpha, beta, rc) requires an explicit flag. A clean version opens
+  the next patch on manifest.json's default-channel: a dev prerelease when it
+  is dev or absent, the clean patch when it is stable.
+
+  Without flags:
+    - 1.0.0 --> 1.0.1-dev.1            (default-channel dev)
+    - 1.0.0 --> 1.0.1                  (default-channel stable)
+    - 1.0.0-dev.1 --> 1.0.0-dev.2
+    - 1.0.0-alpha.1 --> 1.0.0-dev.N  (reverts to dev track)
+    - 1.0.0-rc.1 --> 1.0.0-dev.N     (reverts to dev track)
+HELP
+)"
+
+import \
+  "$SHELLOPS_DIR/lib/bump/api.sh"
+
+
+@false FLAG_MAJOR
+@false FLAG_MINOR
+@false FLAG_PATCH
+@false FLAG_DEV
+@false FLAG_ALPHA
+@false FLAG_BETA
+@false FLAG_RC
+@false FLAG_RELEASE
+@false FLAG_DRY_RUN
+FLAG_CONFIDENCE_GATE=""
+@false FLAG_STRICT_RELEASE
+FLAG_FROM_PLAN=""
+
+main() {
+  parse_args "$@"
+
+  if ! from_plan_bump; then
+    exit 0
+  fi
+
+  if @is_false "$(release_flags_valid)"; then
+    log "Only one release flag may be specified at a time. Use --help for more information."
+    exit 1
+  fi
+
+  if @is_false "$(prerelease_flags_valid)"; then
+    log "Only one pre-release flag may be specified at a time. Use --help for more information."
+    exit 1
+  fi
+
+  if ! needs_version_bump; then
+    log "HEAD is already tagged with version '$(versions__tag_at HEAD)'"
+    exit 1
+  fi
+
+  if ! __main__planned_version="$(bump__plan_bump "$(bump_options)")"; then
+    exit 1
+  fi
+
+  if @is_true "$FLAG_DRY_RUN"; then
+    echo "$__main__planned_version"
+    exit 0
+  fi
+
+  perform_bump "$__main__planned_version"
+
+  exit 0
+}
+
+: <<'FUN'
+  --from-plan short-circuit. With --from-plan set, validates the supplied
+  version against existing tags (the orphan-tag collision guard) and echoes it,
+  then returns 1 so main exits without further inference. Returns 0 when
+  --from-plan is absent, so main falls through to flag/auto inference.
+  See USAGE for the flag itself.
+FUN
+from_plan_bump() {
+  [ -n "$FLAG_FROM_PLAN" ] || return 0
+
+  if @is_false "$FLAG_DRY_RUN"; then
+    log "--from-plan requires --dry-run"
+    exit 1
+  fi
+  if ! versions__is_valid_semver "$FLAG_FROM_PLAN"; then
+    log "Invalid --from-plan version: $FLAG_FROM_PLAN"
+    exit 1
+  fi
+
+  __from_plan_bump__version="$(__bump__ensure_tag_available "$FLAG_FROM_PLAN" "$(bump_options)")" || exit 1
+  echo "$__from_plan_bump__version"
+  return 1
+}
+
+: <<'FUN'
+  Parses CLI flags.
+  See USAGE for flag descriptions.
+FUN
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -M|--major)   @true __parse_args__true_1; FLAG_MAJOR="$__parse_args__true_1";;
+      -m|--minor)   @true __parse_args__true_2; FLAG_MINOR="$__parse_args__true_2";;
+      -p|--patch)   @true __parse_args__true_3; FLAG_PATCH="$__parse_args__true_3";;
+      -d|--dev)     @true __parse_args__true_4; FLAG_DEV="$__parse_args__true_4";;
+      -a|--alpha)   @true __parse_args__true_5; FLAG_ALPHA="$__parse_args__true_5";;
+      -b|--beta)    @true __parse_args__true_6; FLAG_BETA="$__parse_args__true_6";;
+      -c|--rc)       @true __parse_args__true_7; FLAG_RC="$__parse_args__true_7";;
+      -r|--release) @true __parse_args__true_8; FLAG_RELEASE="$__parse_args__true_8";;
+      --dry-run) @true __parse_args__true_9; FLAG_DRY_RUN="$__parse_args__true_9";;
+      --from-plan) FLAG_FROM_PLAN="$2"; shift;;
+      --confidence-gate) FLAG_CONFIDENCE_GATE="$2"; shift;;
+      --strict-release) @true __parse_args__true_10; FLAG_STRICT_RELEASE="$__parse_args__true_10";;
+      -h|--help)  log "$USAGE" && exit 0;;
+      *)
+        log "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+
+: <<'FUN'
+  Checks if the repository should actually skip this attempt to bump.
+
+  Returns false if there is already a valid semver tag at HEAD, OR if any flags are passed into the script, implying user intent beyond typical CI/CD flows. Returns true otherwise.
+FUN
+needs_version_bump() {
+  # Always bump when specific flags are provided.
+  if is_bumping_prerelease || is_bumping_release || @is_true "$FLAG_RELEASE"; then
+    return 0
+  fi
+
+  if @defined "$(versions__tag_at HEAD)"; then
+    return 1
+  fi
+
+  return 0
+}
+
+release_flags_valid() {
+  at_most_one_set "$FLAG_MAJOR" "$FLAG_MINOR" "$FLAG_PATCH"
+}
+
+prerelease_flags_valid() {
+  at_most_one_set "$FLAG_DEV" "$FLAG_ALPHA" "$FLAG_BETA" "$FLAG_RC"
+}
+
+: <<'FUN'
+  Prints the struct boolean for whether at most one of the given flags is set,
+  which is how the validators spot two flags of one family given together.
+FUN
+at_most_one_set() {
+  @arr __at_most_one_set__arr_11 "$@"
+  @filter __at_most_one_set__on "$__at_most_one_set__arr_11" silt__text_is . true
+  @len __at_most_one_set__len_12 "$__at_most_one_set__on"
+  @succeeds __at_most_one_set__out [ "$__at_most_one_set__len_12" -le 1 ]
+  println "$__at_most_one_set__out"
+}
+
+bump_options() {
+  @obj __bump_options__out \
+    '.release_type' "$(get_release_flag)" \
+    '.prerelease_type' "$(get_prerelease_flag)" \
+    '.release' "$FLAG_RELEASE" \
+    '.confidence_gate' "$FLAG_CONFIDENCE_GATE" \
+    '.strict_release' "$FLAG_STRICT_RELEASE"
+  println "$__bump_options__out"
+}
+
+is_bumping_release() {
+  @is_true "$FLAG_MAJOR" ||
+    @is_true "$FLAG_MINOR" ||
+    @is_true "$FLAG_PATCH"
+}
+
+is_bumping_prerelease() {
+  @is_true "$FLAG_DEV" ||
+    @is_true "$FLAG_ALPHA" ||
+    @is_true "$FLAG_BETA" ||
+    @is_true "$FLAG_RC"
+}
+
+get_prerelease_flag() {
+  if @is_true "$FLAG_DEV"; then
+    echo "dev"
+    return 0
+  elif @is_true "$FLAG_ALPHA"; then
+    echo "alpha"
+    return 0
+  elif @is_true "$FLAG_BETA"; then
+    echo "beta"
+    return 0
+  elif @is_true "$FLAG_RC"; then
+    echo "rc"
+    return 0
+  fi
+
+  echo ""
+  return 1
+}
+
+get_release_flag() {
+  if @is_true "$FLAG_MAJOR"; then
+    echo "major"
+    return 0
+  elif @is_true "$FLAG_MINOR"; then
+    echo "minor"
+    return 0
+  elif @is_true "$FLAG_PATCH"; then
+    echo "patch"
+    return 0
+  fi
+
+  echo ""
+  return 1
+}
+
+: <<'FUN'
+Executes the planned version bump, creating a new git tag.
+FUN
+perform_bump() {
+  __perform_bump__version="v$1"
+  git tag -a "$__perform_bump__version" -m "$__perform_bump__version"
+  echo "Bumped to version '$__perform_bump__version'"
+}
+
+main "$@"

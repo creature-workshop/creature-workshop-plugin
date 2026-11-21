@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+name="${1:?usage: git-config <name> <email>}"
+email="${2:?usage: git-config <name> <email>}"
+
+git config user.name "$name"
+git config user.email "$email"

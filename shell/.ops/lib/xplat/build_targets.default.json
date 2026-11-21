@@ -1,0 +1,13 @@
+[
+  {
+    "os": "darwin",
+    "vendor": "apple",
+    "archs": ["x86_64", "aarch64"]
+  },
+  {
+    "os": "linux",
+    "vendor": "unknown",
+    "abi": "gnu",
+    "archs": ["x86_64", "aarch64"]
+  }
+]

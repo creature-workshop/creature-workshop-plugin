@@ -1,0 +1,341 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2119  # bare @arr is the structs empty constructor
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+import "$SHELLOPS_DIR/lib/cargo/api.sh"
+import "$SHELLOPS_DIR/lib/xplat/api.sh"
+import "$SHELLOPS_DIR/lib/zigbuild/api.sh"
+import "$SHELLOPS_DIR/lib/tarball/api.sh"
+
+USAGE="$(cat <<HELP
+Cross-compiles release binaries for all configured platform/arch targets,
+strips debug symbols, and bundles into tarballs.
+
+Expects zig and cargo-zigbuild to already be installed (declare them in
+ops.lock and run \`shell/install\` first).
+
+Usage: action rust build-release --bin <name> [--bin <name2> ...] --version <version> [options] [-- cargo-flags...]
+
+Options:
+  --bin <name>         Binary to build and package. Repeatable; first is the tarball name.
+  --bins <names>       Whitespace-separated binary names ("api worker"). Only
+                       ASCII whitespace separates names. Empty skips the build.
+                       Names use only letters, digits, - and _, and do not
+                       start with -.
+  --version <ver>      Release version for tarball naming (required).
+  --outdir <dir>       Output directory for tarballs. Defaults to ./dist.
+  --crate-path <dir>   Directory to run the build from. Defaults to the current directory.
+  -h, --help           Show this help text.
+
+Everything after -- is forwarded to cargo zigbuild (e.g. --no-default-features).
+HELP
+)"
+
+: <<'FUN'
+Append the binary names in $1 onto the struct array $2. Any run of ASCII
+whitespace separates two names -- space, tab, newline, carriage return, form
+feed, vertical tab -- so leading, trailing and repeated separators yield no
+empty name. Nothing else separates them: a comma-delimited list, or names
+joined by a Unicode space such as U+00A0, arrive as a single name for
+validation to reject.
+
+  append_bin_names "foo bar" '[]'      ->  ["foo","bar"]
+  append_bin_names "  foo  bar " '[]'  ->  ["foo","bar"]
+  append_bin_names "foo,bar" '[]'      ->  ["foo,bar"]
+FUN
+append_bin_names() {
+  __append_bin_names__spaced="$(printf '%s' "$1" | tr '\t\n\r\f\v' '     ')"
+  @split __append_bin_names__added "$__append_bin_names__spaced" ' '
+  @concat __append_bin_names__out "$2" "$__append_bin_names__added"
+  println "$__append_bin_names__out"
+}
+
+: <<'FUN'
+Print true when $1 contains list punctuation (a comma, colon or semicolon) --
+the shape of a delimited list handed to --bins, which separates names on
+whitespace alone -- and false otherwise.
+
+  bin_name_looks_like_list api,worker  ->  true
+  bin_name_looks_like_list api.worker  ->  false
+FUN
+bin_name_looks_like_list() {
+  case "$1" in
+    *[',;:']*) @true __bin_name_looks_like_list__out; println "$__bin_name_looks_like_list__out" ;;
+    *) @false __bin_name_looks_like_list__out; println "$__bin_name_looks_like_list__out" ;;
+  esac
+}
+
+: <<'FUN'
+Print a {name, input} entry pairing one binary name with the --bin/--bins
+input that supplied it, for validate_args to cite when it rejects the name.
+
+  bin_source api '--bin api'  ->  {"name":"api","input":"--bin api"}
+FUN
+bin_source() {
+  @wrap __bin_source__wrap_1 "$1"
+  @wrap __bin_source__wrap_2 "$2"
+  @obj __bin_source__out \
+    '.name' "$__bin_source__wrap_1" \
+    '.input' "$__bin_source__wrap_2"
+  println "$__bin_source__out"
+}
+
+: <<'FUN'
+Append one {name, input} entry per name in the struct array $2 onto the
+sources array $1, all citing $3 as the input the names came from.
+
+  append_bin_sources '[]' '["api"]' '--bins "api"'
+    ->  [{"name":"api","input":"--bins \"api\""}]
+FUN
+append_bin_sources() {
+  @map __append_bin_sources__added __build_release__name_source "$2" "$3"
+  @concat __append_bin_sources__out "$1" "$__append_bin_sources__added"
+  println "$__append_bin_sources__out"
+}
+
+: <<'FUN'
+@map callback: pair one wrapped binary name with the --bins input in $2.
+FUN
+__build_release__name_source() {
+  @unwrap __build_release__name_source__unwrap_3 "$1"
+  bin_source "$__build_release__name_source__unwrap_3" "$2"
+}
+
+: <<'FUN'
+Print $1 resolved against the current working directory when it is relative,
+and create the directory.
+
+  resolve_outdir ./dist  ->  /abs/cwd/dist
+FUN
+resolve_outdir() {
+  __resolve_outdir__dir="$1"
+  case "$__resolve_outdir__dir" in
+    /*) ;;
+    *) __resolve_outdir__dir="$PWD/${__resolve_outdir__dir#./}" ;;
+  esac
+  mkdir -p "$__resolve_outdir__dir"
+  println "$__resolve_outdir__dir"
+}
+
+: <<'FUN'
+Change into $1 when it is set. Relative paths resolve against $2 so the
+caller can resolve outdir at the repo root first.
+
+  enter_crate_path crates/app /repo
+FUN
+enter_crate_path() {
+  __enter_crate_path__path="$1"
+  __enter_crate_path__root="$2"
+  [ -n "$__enter_crate_path__path" ] || return 0
+
+  case "$__enter_crate_path__path" in
+    /*) cd "$__enter_crate_path__path" ;;
+    *) cd "$__enter_crate_path__root/$__enter_crate_path__path" ;;
+  esac
+}
+
+main() {
+  parse_args "$@"
+  shift "$__parse_args__consumed"
+
+  validate_args \
+    "$__parse_args__bin_sources" \
+    "$__parse_args__version" \
+    "$__parse_args__bins_list"
+
+  __main__start="$PWD"
+  __main__outdir="$(resolve_outdir "$__parse_args__outdir")"
+  if @len __main__len_4 "$__parse_args__bin_names"; [ "$__parse_args__bins_list" -eq 1 ] && [ "$__main__len_4" -eq 0 ]; then
+    log "--bins is empty: nothing to build"
+    exit 0
+  fi
+
+  enter_crate_path "$__parse_args__crate_path" "$__main__start"
+
+  @first __main__first "$__parse_args__bin_names"
+  @unwrap __main__primary_name "$__main__first"
+
+  build_all \
+    "$__parse_args__bin_names" \
+    "$__main__primary_name" \
+    "$__parse_args__version" \
+    "$__main__outdir" \
+    "$@"
+
+  @apply \
+    tarball__save_artifacts \
+    "$__main__outdir" \
+    "$__build_all__artifacts_json"
+  log "wrote ${__main__outdir}/artifacts.json"
+}
+
+: <<'FUN'
+Parse the action argv: flags are consumed, --bin/--bins names accumulate with
+the input each came from, and -- stops the loop so everything after it is
+left for cargo zigbuild. POSIX sh has no arrays to return one, so the parsed
+state lands in __parse_args__* globals:
+
+  __parse_args__bin_names    The binary names, in argv order (struct array)
+  __parse_args__bin_sources  One {name, input} entry per name, for
+                             validate_args to report against (struct array)
+  __parse_args__version      The --version value ("" when absent)
+  __parse_args__outdir       The --outdir value (defaults to ./dist)
+  __parse_args__crate_path   The --crate-path value ("" when absent)
+  __parse_args__bins_list    1 when --bins was passed, 0 otherwise
+  __parse_args__consumed     Arguments consumed; the caller shifts this many
+                             to stand on the cargo zigbuild pass-through argv
+FUN
+parse_args() {
+  @arr __parse_args__bin_names
+  @arr __parse_args__bin_sources
+  __parse_args__version=""
+  __parse_args__outdir="./dist"
+  __parse_args__crate_path=""
+  __parse_args__bins_list=0
+  __parse_args__total="$#"
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      --bin)
+        @wrap __parse_args__wrap_5 "$2"
+        @push __parse_args__bin_names "$__parse_args__bin_names" "$__parse_args__wrap_5"
+        @push __parse_args__bin_sources "$__parse_args__bin_sources" "$(bin_source "$2" "--bin $2")"
+        shift
+        ;;
+      --bins)
+        __parse_args__bins_list=1
+        @arr __parse_args__arr_6
+        __parse_args__added="$(append_bin_names "$2" "$__parse_args__arr_6")"
+        @concat __parse_args__bin_names "$__parse_args__bin_names" "$__parse_args__added"
+        __parse_args__bin_sources="$(append_bin_sources "$__parse_args__bin_sources" "$__parse_args__added" "--bins \"$2\"")"
+        shift
+        ;;
+      --version) __parse_args__version="$2"; shift ;;
+      --outdir) __parse_args__outdir="$2"; shift ;;
+      --crate-path) __parse_args__crate_path="$2"; shift ;;
+      --) shift; break ;;
+      -*)
+        error "Unknown option: $1"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+
+  __parse_args__consumed=$((__parse_args__total - $#))
+}
+
+: <<'FUN'
+Build every binary across all configured target triples in a scratch
+directory, bundle the staged results into tarballs in the outdir, and leave
+the artifacts JSON array in __build_all__artifacts_json -- the result rides
+a global because stdout belongs to the build tools while cargo runs.
+
+args:
+  $1  The binary names (struct array)
+  $2  The primary binary name; the tarballs take it
+  $3  The release version
+  $4  The output directory (absolute)
+
+Arguments past the fourth are forwarded to cargo zigbuild.
+FUN
+build_all() {
+  __build_all__bin_names="$1"
+  __build_all__primary_name="$2"
+  __build_all__version="$3"
+  __build_all__outdir="$4"
+  shift 4
+
+  __build_all__triples="$(xplat__build_triples)"
+  __build_all__build_dir="$(mktemp -d)"
+
+  @foreach __build_release__build_one \
+    "$__build_all__bin_names" \
+    "$__build_all__triples" \
+    "$__build_all__build_dir" \
+    "$@"
+
+  __build_all__artifacts_json="$(tarball__create_all \
+    "$__build_all__build_dir" \
+    "$__build_all__primary_name" \
+    "$__build_all__version" \
+    "$__build_all__outdir"
+  )"
+
+  rm -rf "$__build_all__build_dir"
+}
+
+: <<'FUN'
+@foreach callback: build, strip, and stage one binary across all triples;
+trailing args are the cargo zigbuild pass-through flags.
+FUN
+__build_release__build_one() {
+  @unwrap __build_release__build_one__bin_name "$1"
+  __build_release__build_one__triples="$2"
+  __build_release__build_one__build_dir="$3"
+  shift 3
+
+  zigbuild__build_all "$__build_release__build_one__triples" --bin "$__build_release__build_one__bin_name" "$@"
+  zigbuild__strip_all "$__build_release__build_one__bin_name" "$__build_release__build_one__triples"
+  tarball__stage_all "$__build_release__build_one__build_dir" "$__build_release__build_one__triples" __cargo_release_path "$__build_release__build_one__bin_name"
+}
+
+: <<'FUN'
+Require --version, require at least one binary unless --bins was passed (an
+empty --bins list is a no-op after validate), and reject any accumulated
+binary name cargo would refuse, citing the --bin/--bins input it came from.
+
+args:
+  $1  The {name, input} source entries, one per accumulated binary name
+  $2  The --version value
+  $3  1 when --bins was passed, 0 otherwise
+FUN
+validate_args() {
+  __validate_args__sources="$1"
+  __validate_args__version="$2"
+  __validate_args__bins_list="$3"
+
+  if @len __validate_args__len_7 "$__validate_args__sources"; [ "$__validate_args__bins_list" -eq 0 ] && [ "$__validate_args__len_7" -eq 0 ]; then
+    error "--bin is required"
+    log "$USAGE"
+    exit 1
+  fi
+
+  if [ -z "$__validate_args__version" ]; then
+    error "--version is required"
+    log "$USAGE"
+    exit 1
+  fi
+
+  @foreach __build_release__reject_bad_name "$__validate_args__sources"
+}
+
+: <<'FUN'
+@foreach callback: exit 1 when the name in a {name, input} entry is not a
+name cargo accepts for a binary, citing the --bin/--bins input the name came
+from. A name holding list punctuation earns a hint showing the whitespace
+form --bins expects.
+FUN
+__build_release__reject_bad_name() {
+  @let "$1" __build_release__reject_bad_name__ name input
+  if @is_true "$(cargo__bin_name_is_valid "$__build_release__reject_bad_name__name")"; then
+    return 0
+  fi
+
+  error "invalid binary name '${__build_release__reject_bad_name__name}' (from ${__build_release__reject_bad_name__input}): binary names use only letters, digits, - and _, and do not start with -"
+  if @is_true "$(bin_name_looks_like_list "$__build_release__reject_bad_name__name")"; then
+    hint 'whitespace separates binary names: --bins "api worker"'
+  fi
+  @unlet __build_release__reject_bad_name__ name input
+  exit 1
+}
+
+__cargo_release_path() {
+  echo "target/${1}/release/${2}"
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *build-release) main "$@" ;;
+esac

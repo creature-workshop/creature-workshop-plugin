@@ -1,0 +1,23 @@
+query($projectPath: ID!, $iid: String!, $cursor: String) {
+  project(fullPath: $projectPath) {
+    issue(iid: $iid) {
+      notes(first: 50, after: $cursor) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        nodes {
+          id
+          body
+          author {
+            username
+            name
+          }
+          createdAt
+          updatedAt
+          system
+        }
+      }
+    }
+  }
+}

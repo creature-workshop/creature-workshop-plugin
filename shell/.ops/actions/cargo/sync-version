@@ -1,0 +1,408 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+import \
+  "$SHELLOPS_DIR/lib/args/api.sh" \
+  "$SHELLOPS_DIR/lib/cargo/api.sh" \
+  "$SHELLOPS_DIR/lib/releases/record/api.sh" \
+  "$SHELLOPS_DIR/lib/rust/api.sh" \
+  "$SHELLOPS_DIR/lib/versions/api.sh"
+
+USAGE="$(cat <<HELP
+Syncs Cargo.toml and Cargo.lock to a given version.
+
+Updates the package version in Cargo.toml (and workspace dependency pins
+for workspace crates), then runs cargo update --workspace to ensure
+Cargo.lock reflects the new versions.
+
+Usage: action cargo sync-version [options] [<version>]
+
+Arguments:
+  version          Semver version (e.g., 1.2.3 or 1.0.0-rc.1).
+                   Required unless --from-manifest is set.
+
+Options:
+  --from-manifest       Use the recorded latest version, from the lock, as the version.
+                        Writes nothing and exits 0 when .latest is empty.
+
+  --crate <name>        Target a specific crate by package name.
+                        Defaults to manifest command-name.
+
+  --workspace [true|false]
+                        Update the workspace-level version
+                        ([workspace.package] in root Cargo.toml).
+                        Bare --workspace means true. Defaults to false.
+
+  --cargo-path <path>   Path to a Cargo.toml to start from.
+                        Defaults to project root.
+
+  --push [<branch>]     Commit the synced manifests and lockfile and push them
+                        to <branch>. The token after --push is the branch
+                        unless it is a flag or the version, so bare --push
+                        falls back to CI_MERGE_REQUEST_SOURCE_BRANCH_NAME.
+
+  -h, --help            Show this help text.
+
+Pushing is opt-in. Without --push the action only writes, which is what a
+caller that commits the sync itself needs -- a release flow that tags its own
+bump would otherwise get that bump split across two commits, with the tag on
+the wrong one.
+
+Under --push, committer identity and push credentials are the caller's to
+arrange, via 'action git config' and 'action git auth', and the working tree
+must already be on the target branch at its current tip.
+
+Environment:
+  CI_MERGE_REQUEST_SOURCE_BRANCH_NAME  Default push target.
+HELP
+)"
+
+ARG_VERSION=""
+ARG_CRATE=""
+@false ARG_WORKSPACE
+ARG_CARGO_PATH=""
+@false ARG_FROM_MANIFEST
+@false ARG_PUSH
+ARG_BRANCH="${CI_MERGE_REQUEST_SOURCE_BRANCH_NAME:-}"
+
+main() {
+  parse_args "$@"
+
+  # Before the first write, so a misconfigured job cannot leave behind a synced
+  # crate it has no way to push.
+  assert_push_target
+
+  if @is_true "$ARG_FROM_MANIFEST"; then
+    resolve_version_from_manifest
+    if ! @defined "$ARG_VERSION"; then
+      log "no latest version is recorded; nothing to sync."
+      return 0
+    fi
+  fi
+
+  rustup__prepare_cargo
+  write_package_version
+  refresh_lockfile
+
+  if @is_true "$ARG_PUSH"; then
+    commit_and_push
+  fi
+}
+
+: <<'FUN'
+Reads the recorded latest version, from the lock, into ARG_VERSION.
+
+Fails when the field cannot be read. An empty .latest is success: the caller
+treats that as nothing to sync. A non-empty value must be semver.
+
+Usage: resolve_version_from_manifest
+FUN
+resolve_version_from_manifest() {
+  if ! ARG_VERSION="$(releases__record__get_latest)"; then
+    error "could not read the recorded latest version (see log above)"
+    exit 1
+  fi
+
+  if @defined "$ARG_VERSION"; then
+    assert_semver "$ARG_VERSION"
+  fi
+}
+
+: <<'FUN'
+Writes ARG_VERSION into the crate or the workspace package table.
+
+Usage: write_package_version
+FUN
+write_package_version() {
+  if @is_true "$ARG_WORKSPACE"; then
+    write_workspace_version
+  else
+    write_crate_version
+  fi
+}
+
+: <<'FUN'
+Writes ARG_VERSION into [workspace.package].
+
+Usage: write_workspace_version
+FUN
+write_workspace_version() {
+  cargo__set_workspace_version "$ARG_VERSION" "$ARG_CARGO_PATH"
+}
+
+: <<'FUN'
+Writes ARG_VERSION into the targeted crate's package table.
+
+Usage: write_crate_version
+FUN
+write_crate_version() {
+  __write_crate_version__package="${ARG_CRATE}"
+  if ! @defined "$__write_crate_version__package"; then
+    __write_crate_version__package="$(manifest__get command_name)"
+  fi
+  cargo__set_crate_version \
+    "$__write_crate_version__package" \
+    "$ARG_VERSION" \
+    "$ARG_CARGO_PATH"
+}
+
+: <<'FUN'
+Refreshes Cargo.lock so it matches the version just written.
+
+Usage: refresh_lockfile
+FUN
+refresh_lockfile() {
+  if @defined "$ARG_CARGO_PATH"; then
+    cargo update --workspace --manifest-path "$ARG_CARGO_PATH"
+  else
+    cargo update --workspace
+  fi
+}
+
+: <<'FUN'
+Fails when push mode has no branch to push to. A no-op in write-only mode, which
+has nothing to push.
+
+Usage: assert_push_target
+FUN
+assert_push_target() {
+  if @is_false "$ARG_PUSH"; then
+    return 0
+  fi
+
+  if ! @defined "$ARG_BRANCH"; then
+    error "no branch to push to; pass one to --push or set CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
+    exit 1
+  fi
+}
+
+: <<'FUN'
+Commits every manifest this run synced plus the refreshed lockfile and pushes
+them to ARG_BRANCH.
+
+The files are named explicitly rather than passing --all, which runs
+`git add -A` and would sweep whatever the job's own setup left untracked in the
+tree (.ops/cache/env.sh, build output) into the bot's commit.
+
+Usage: commit_and_push
+FUN
+commit_and_push() {
+  __commit_and_push__files="$(synced_files)"
+
+  @apply \
+    "$SHELLOPS_DIR/cli/git-commit" \
+    -m "chore: sync crate version [skip ci]" \
+    -- \
+    "$__commit_and_push__files"
+  git push origin "HEAD:$ARG_BRANCH"
+}
+
+: <<'FUN'
+The files this run wrote, as an array: every synced manifest plus the
+refreshed lockfile.
+
+Usage: synced_files
+FUN
+synced_files() {
+  __synced_files__manifests="$(synced_manifests)"
+  __synced_files__lockfile="$(synced_lockfile_path)"
+
+  @wrap __synced_files__wrap_1 "$__synced_files__lockfile"
+  @push __synced_files__out "$__synced_files__manifests" "$__synced_files__wrap_1"
+  println "$__synced_files__out"
+}
+
+: <<'FUN'
+The manifests this run synced, as an array. A workspace sync writes the
+workspace manifest plus every member manifest that pins an internal dep; a
+crate sync writes the target manifest alone.
+
+Usage: synced_manifests
+FUN
+synced_manifests() {
+  if @is_true "$ARG_WORKSPACE"; then
+    cargo__workspace_sync_manifests "$ARG_CARGO_PATH"
+  else
+    @arr __synced_manifests__out "$(synced_manifest_path)"
+    println "$__synced_manifests__out"
+  fi
+}
+
+: <<'FUN'
+Prints the path of the Cargo.toml this run was aimed at.
+
+Usage: synced_manifest_path
+FUN
+synced_manifest_path() {
+  if @defined "$ARG_CARGO_PATH"; then
+    println "$ARG_CARGO_PATH"
+  else
+    println "$CARGO_MANIFEST_FILE"
+  fi
+}
+
+: <<'FUN'
+Prints the path of the Cargo.lock this run refreshes.
+
+The lockfile sits beside the manifest it locks, so a nested workspace keeps its
+own rather than sharing the project root's.
+
+Usage: synced_lockfile_path
+FUN
+synced_lockfile_path() {
+  __synced_lockfile_path__manifest="$(synced_manifest_path)"
+  __synced_lockfile_path__dir="$(dirname "$__synced_lockfile_path__manifest")"
+  printf '%s/Cargo.lock\n' "$__synced_lockfile_path__dir"
+}
+
+: <<'FUN'
+Fails unless $1 is a semver this action accepts.
+
+Usage: assert_semver <version>
+FUN
+assert_semver() {
+  if ! versions__is_valid_semver "$1"; then
+    fail_usage "Invalid semver: $1"
+  fi
+}
+
+: <<'FUN'
+Reports <message> against the usage text and stops.
+
+Usage: fail_usage <message>
+FUN
+fail_usage() {
+  error "$1"
+  log "$USAGE"
+  exit 1
+}
+
+: <<'FUN'
+Parses CLI arguments.
+See USAGE for flag descriptions.
+FUN
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE" && exit 0 ;;
+      --from-manifest) @true __parse_args__true_2; ARG_FROM_MANIFEST="$__parse_args__true_2" ;;
+      --crate)
+        assert_flag_value "$@"
+        ARG_CRATE="$2"
+        shift
+        ;;
+      --workspace)
+        take_workspace_arg "${2:-}"
+        if @is_true "$__take_workspace_arg__consumed"; then
+          shift
+        fi
+        ;;
+      --cargo-path)
+        assert_flag_value "$@"
+        ARG_CARGO_PATH="$2"
+        shift
+        ;;
+      --push)
+        @true ARG_PUSH
+        take_push_target "${2:-}"
+        if @is_true "$__take_push_target__consumed"; then
+          shift
+        fi
+        ;;
+      -*) fail_usage "Unknown option: $1" ;;
+      *)
+        assert_semver "$1"
+        ARG_VERSION="$1"
+        ;;
+    esac
+    shift
+  done
+
+  assert_version_source
+}
+
+: <<'FUN'
+Fails when flag $1 is the last token, so a value-taking flag reports itself
+against the usage rather than tripping over an unset $2.
+
+Usage: assert_flag_value <flag> [<rest>...]
+FUN
+assert_flag_value() {
+  if ! @is_true "$(args__has_value "$@")"; then
+    fail_usage "$1 requires a value"
+  fi
+}
+
+: <<'FUN'
+Sets ARG_WORKSPACE from the next token when that token is a struct boolean.
+
+A following true or false is consumed, and is already the value it stands for.
+Any other token is left for the caller, and the bare flag means true.
+
+Usage: take_workspace_arg [<token>]
+FUN
+take_workspace_arg() {
+  if @is_true "${1:-}" || @is_false "${1:-}"; then
+    @true __take_workspace_arg__consumed
+    ARG_WORKSPACE="$1"
+  else
+    @false __take_workspace_arg__consumed
+    @true ARG_WORKSPACE
+  fi
+}
+
+: <<'FUN'
+Sets ARG_BRANCH from the next token when that token is a branch name.
+
+A branch is consumed. Any other token is left for the caller, and the bare flag
+keeps the CI default.
+
+Usage: take_push_target [<token>]
+FUN
+take_push_target() {
+  @false __take_push_target__consumed
+
+  if @is_true "$(token_is_push_target "${1:-}")"; then
+    ARG_BRANCH="$1"
+    @true __take_push_target__consumed
+  fi
+}
+
+: <<'FUN'
+Prints true when <token> is a branch name --push can take.
+
+A semver is the positional version, so it claims its own token rather than being
+swallowed as a branch. The cost is that a branch whose name is itself a semver
+has to arrive through CI_MERGE_REQUEST_SOURCE_BRANCH_NAME.
+
+Usage: token_is_push_target <token>
+FUN
+token_is_push_target() {
+  if @is_true "$(args__is_positional "$1")" && ! versions__is_valid_semver "$1"; then
+    @true __token_is_push_target__out
+    println "$__token_is_push_target__out"
+  else
+    @false __token_is_push_target__out
+    println "$__token_is_push_target__out"
+  fi
+}
+
+: <<'FUN'
+Fails when the version source is missing or given twice.
+
+Usage: assert_version_source
+FUN
+assert_version_source() {
+  if @is_true "$ARG_FROM_MANIFEST" && @defined "$ARG_VERSION"; then
+    fail_usage "--from-manifest and a positional version are mutually exclusive"
+  fi
+
+  if @is_false "$ARG_FROM_MANIFEST" && ! @defined "$ARG_VERSION"; then
+    fail_usage "version not supplied"
+  fi
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *sync-version) main "$@" ;;
+esac

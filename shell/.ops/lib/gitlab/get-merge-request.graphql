@@ -1,0 +1,32 @@
+query($projectPath: ID!, $iid: String!) {
+  project(fullPath: $projectPath) {
+    mergeRequest(iid: $iid) {
+      iid
+      title
+      description
+      state
+      diffHeadSha
+      sourceBranch
+      targetBranch
+      webUrl
+      draft
+      labels {
+        nodes {
+          title
+          color
+          description
+        }
+      }
+      assignees {
+        nodes {
+          username
+          name
+        }
+      }
+      author {
+        username
+        name
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+mutation($noteId: NoteID!, $body: String!) {
+  updateNote(input: {
+    id: $noteId
+    body: $body
+  }) {
+    note {
+      id
+      body
+    }
+    errors
+  }
+}

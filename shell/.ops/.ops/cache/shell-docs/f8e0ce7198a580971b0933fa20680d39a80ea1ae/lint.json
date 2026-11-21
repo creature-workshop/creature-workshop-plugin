@@ -1,0 +1,9 @@
+{
+  "exclude": [
+    "test/fixtures",
+    "shell/.tree"
+  ],
+  "decisions": {
+    "form": "one-page"
+  }
+}

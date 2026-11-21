@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/deployment/api.sh" \
+  "$SHELLOPS_DIR/lib/forge/api.sh" \
+  "$SHELLOPS_DIR/lib/structs/api.sh"
+
+USAGE="$(cat <<HELP
+Deploys the project as a short-lived preview on every deployment target the
+repository declares, once their programs are on the PATH, and posts a comment on the code review pointing at each
+preview URL, a new one on every run so the latest is always the last thing
+on the thread. A run without a review or a forge token still deploys; the
+comment is extra, never a gate.
+
+Usage: action deployment preview [-h,--help] [project-dir]
+
+Arguments:
+  project-dir    Directory containing the deployable project. Defaults to current directory.
+
+Flags:
+  -h, --help     Show this help text.
+
+Environment:
+  SHELLOPS_DEPLOY_TARGET   One target in place of the declaration's list
+                           (default: the targets of .ops/config/deployment.yaml,
+                           else vercel).
+  FORGE_REVIEW_IID         The review to comment on; absent, the forge names
+                           the review its run is building, and no comment when
+                           it is building a branch.
+  FORGE_REVIEW_PROJECT     The project that review is in, as the forge spells
+                           its path; absent, the project this run builds.
+  FORGE_PR_TOKEN           Write-scoped token (falls back to FORGE_ADMIN_TOKEN).
+HELP
+)"
+
+__preview__MARKER="<!-- shellops:deployment-preview -->"
+
+main() {
+  __main__project_dir="."
+
+  parse_args "$@"
+
+  __main__targets="$(deployment__targets)" || exit 1
+  @foreach deploy_preview "$__main__targets" "$__main__project_dir"
+}
+
+:<<'FUN'
+Deploys the project as a preview on one target, once its programs are on
+the PATH, and posts the preview's location on the review. A deploy whose
+output names no location leaves the review alone.
+
+usage: deploy_preview <target> <project-dir>, the target wrapped as
+@foreach hands it over
+FUN
+deploy_preview() {
+  @unwrap __deploy_preview__target "$1"
+  deployment__assert_needs "$__deploy_preview__target" || return 1
+  __deploy_preview__output="$(deployment__preview "$__deploy_preview__target" "$2" | tee /dev/stderr)"
+  __deploy_preview__url="$(deployment__preview_url "$__deploy_preview__target" "$__deploy_preview__output")"
+
+  if ! @defined "$__deploy_preview__url"; then
+    log "No preview URL in the $__deploy_preview__target deploy output; leaving the review comment alone."
+    return 0
+  fi
+
+  post_preview_comment "$__deploy_preview__url" "$__deploy_preview__target"
+}
+
+:<<'FUN'
+Posts a comment on the review pointing at URL, marked as the preview's so a
+reader or a tool can tell it from the conversation, and naming the target
+when one is given. A pipeline without a review or a token skips quietly, so
+local runs and branch pipelines still deploy.
+
+usage: post_preview_comment "$url" ["$target"]
+FUN
+post_preview_comment() {
+  __post_preview_comment__review="${FORGE_REVIEW_IID:-$(forge__current_review)}"
+  if ! @defined "$__post_preview_comment__review"; then
+    log "No code review context; skipping the preview comment."
+    return 0
+  fi
+
+  __post_preview_comment__token="${FORGE_PR_TOKEN:-${FORGE_ADMIN_TOKEN:-}}"
+  if ! @defined "$__post_preview_comment__token"; then
+    log "No forge token; skipping the preview comment."
+    return 0
+  fi
+
+  @obj __post_preview_comment__options \
+    '.review_number' "$__post_preview_comment__review" \
+    '.token' "$__post_preview_comment__token"
+  __post_preview_comment__options="$(review_project_options "$__post_preview_comment__options")"
+  __post_preview_comment__text="$(comment_body "$1" "${2:-}")"
+  __post_preview_comment__body="$(printf '%s\n%s' "$__preview__MARKER" "$__post_preview_comment__text")"
+  forge__create_review_comment \
+    "$__post_preview_comment__options" \
+    "$__post_preview_comment__body" \
+    > /dev/null || return 1
+
+  log "Preview comment posted for $1"
+}
+
+:<<'FUN'
+Adds the owner and the repository of FORGE_REVIEW_PROJECT to the forge
+options, so the comment lands on a review in another project, the one a
+trigger named; leaves the options alone when it is unset, so the forge
+takes the project this run builds. The path's last segment is the
+repository and the rest its owner, which for a nested group is a path.
+
+usage: review_project_options "$options"
+FUN
+review_project_options() {
+  if ! @defined "${FORGE_REVIEW_PROJECT:-}"; then
+    println "$1"
+    return 0
+  fi
+  @set __review_project_options__set_1 "$1" '.owner' "${FORGE_REVIEW_PROJECT%/*}"
+  @set __review_project_options__out \
+    "$__review_project_options__set_1" \
+    '.repo' "${FORGE_REVIEW_PROJECT##*/}"
+  println "$__review_project_options__out"
+}
+
+:<<'FUN'
+The comment's body: the preview URL, the commit it serves, read from the
+checkout itself rather than any CI platform's variable, and the target when
+one is given.
+
+usage: comment_body "$url" ["$target"]
+FUN
+comment_body() {
+  __comment_body__sha="$(git rev-parse --short HEAD 2>/dev/null || true)"
+  __comment_body__where=""
+  if @defined "${2:-}"; then
+    __comment_body__where=" on $2"
+  fi
+
+  printf '%s\n\n%s\n' \
+    "**Preview deployed:** $1" \
+    "Serving \`${__comment_body__sha:-the latest push}\`$__comment_body__where."
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      -*)
+        error "Unknown option: $1"
+        exit 1
+        ;;
+      *)
+        __main__project_dir="$1"
+        ;;
+    esac
+    shift
+  done
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *preview) main "$@" ;;
+esac

@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+USAGE="$(cat <<'HELP'
+Signs every commit and tag this checkout makes with the SSH private key $1,
+written to a file only this user can read. Given no key, signs nothing and
+says so: a job whose signing key is not set commits unsigned rather than
+refusing, so the variable is optional wherever the job runs.
+
+Usage: action git sign "${BLIZZ_SIGNING_KEY:-}"
+HELP
+)"
+
+main() {
+  case "${1:-}" in
+    -h|--help)
+      log "$USAGE"
+      exit 0
+      ;;
+  esac
+
+  if [ -z "${1:-}" ]; then
+    log "git sign: no signing key given; commits and tags stay unsigned."
+    return 0
+  fi
+
+  __main__key_file="$(write_key "$1")"
+  sign_with "$__main__key_file"
+}
+
+: <<'FUN'
+Writes the key $1 to a file only this user can read, and prints its path.
+FUN
+write_key() {
+  __write_key__file="$(mktemp)"
+  println "$1" > "$__write_key__file"
+  chmod 600 "$__write_key__file"
+  println "$__write_key__file"
+}
+
+: <<'FUN'
+Points git at the key file $1 and turns signing on for commits and tags.
+FUN
+sign_with() {
+  git config gpg.format ssh
+  git config user.signingkey "$1"
+  git config commit.gpgsign true
+  git config tag.gpgsign true
+}
+
+main "$@"

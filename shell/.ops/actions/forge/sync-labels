@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/manifest/api.sh" \
+  "$SHELLOPS_DIR/lib/labels/api.sh" \
+  "$SHELLOPS_DIR/lib/forge/api.sh"
+
+USAGE="$(cat <<HELP
+Synchronizes labels with the label manifest on the active forge.
+
+Creates the labels the manifest names and the forge lacks, updates drifted
+colors and descriptions, and retires the ones the manifest dropped -- archiving
+them on Forgejo, deleting them on GitLab, which is as close as each forge gets.
+
+Usage: action forge sync-labels [-h,--help] [-n,--dry-run]
+
+Flags:
+  -n, --dry-run   Preview changes without applying them.
+  -h, --help      Show this help text.
+
+Environment:
+  FORGE_ADMIN_TOKEN   Required. API token for label management.
+  SHELLOPS_FORGE      Active forge ("forgejo" or "gitlab"; default gitlab).
+
+HELP
+)"
+
+@false FLAG_DRY_RUN
+
+main() {
+  parse_args "$@"
+
+  if [ -z "${FORGE_ADMIN_TOKEN:-}" ]; then
+    error "FORGE_ADMIN_TOKEN is not set"
+    exit 1
+  fi
+
+  @set __main__options "$(forge__new_label_options)" '.token' "${FORGE_ADMIN_TOKEN:-}"
+  __main__desired="$(load_desired)"
+  __main__actual="$(forge__list_labels "$__main__options")"
+  __main__diff="$(labels__diff_labels "$__main__desired" "$__main__actual")"
+
+  if is_in_sync "$__main__diff"; then
+    log "Labels are in sync."
+    exit 0
+  fi
+
+  print_summary "$__main__diff"
+
+  if @is_true "$FLAG_DRY_RUN"; then
+    log "(dry run -- no changes applied)"
+    exit 0
+  fi
+
+  apply_changes "$__main__options" "$__main__diff"
+  log "Label sync complete."
+}
+
+load_desired() {
+  labels__flatten_labels "$(manifest__get labels)"
+}
+
+is_in_sync() {
+  @let "$1" __is_in_sync__ create update archive
+  @len __is_in_sync__len_1 "$__is_in_sync__create"
+  @len __is_in_sync__len_2 "$__is_in_sync__update"
+  @len __is_in_sync__len_3 "$__is_in_sync__archive"
+  __is_in_sync__total=$(( __is_in_sync__len_1 \
+          + __is_in_sync__len_2 \
+          + __is_in_sync__len_3 ))
+  @unlet __is_in_sync__ create update archive
+
+  [ "$__is_in_sync__total" -eq 0 ]
+}
+
+print_summary() {
+  @let "$1" __print_summary__ create update archive
+  print_section "Create" "$__print_summary__create" '.name'
+  print_section "Update" "$__print_summary__update" '.name'
+  print_section "Archive/Delete" "$__print_summary__archive" '.name'
+  @unlet __print_summary__ create update archive
+}
+
+print_section() {
+  @len __print_section__count "$2"
+  if [ "$__print_section__count" -eq 0 ]; then
+    return
+  fi
+
+  log ""
+  log "$1 ($__print_section__count):"
+  @foreach __sync_labels__print_item "$2" "$3"
+}
+
+__sync_labels__print_item() {
+  @get __sync_labels__print_item__get_4 "$1" "$2"
+  log "  $__sync_labels__print_item__get_4"
+}
+
+apply_changes() {
+  @let "$2" __apply_changes__ create update archive
+  @foreach __sync_labels__apply_create "$__apply_changes__create" "$1"
+  @foreach __sync_labels__apply_update "$__apply_changes__update" "$1"
+  @foreach __sync_labels__apply_archive "$__apply_changes__archive" "$1"
+  @unlet __apply_changes__ create update archive
+}
+
+__sync_labels__apply_create() {
+  @get __sync_labels__apply_create__get_5 "$1" '.name'
+  log "  Creating $__sync_labels__apply_create__get_5"
+  forge__create_label "$2" "$1" > /dev/null
+}
+
+__sync_labels__apply_update() {
+  @let "$1" __sync_labels__apply_update__ id name
+  @set __sync_labels__apply_update__edit_options "$2" '.label_id' "$__sync_labels__apply_update__id"
+
+  log "  Updating $__sync_labels__apply_update__name"
+  @unlet __sync_labels__apply_update__ id name
+  forge__edit_label "$__sync_labels__apply_update__edit_options" "$1" > /dev/null
+}
+
+__sync_labels__apply_archive() {
+  @let "$1" __sync_labels__apply_archive__ id name
+  @set __sync_labels__apply_archive__edit_options "$2" '.label_id' "$__sync_labels__apply_archive__id"
+
+  log "  Removing $__sync_labels__apply_archive__name"
+  @unlet __sync_labels__apply_archive__ id name
+  forge__edit_label "$__sync_labels__apply_archive__edit_options" '{"is_archived":true}' > /dev/null
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE" && exit 0 ;;
+      -n|--dry-run) @true __parse_args__true_6; FLAG_DRY_RUN="$__parse_args__true_6" ;;
+      -*)
+        log "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+      *)
+        log "Unexpected argument: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+main "$@"

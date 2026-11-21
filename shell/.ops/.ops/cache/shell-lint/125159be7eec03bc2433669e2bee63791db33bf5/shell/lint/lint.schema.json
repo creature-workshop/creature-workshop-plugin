@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitlab.creature-workshop.com/ksoft/shell-lint/shell/lint/lint.schema.json",
+  "title": "Lint config",
+  "description": "Configuration for ops lint, read from $PROJ/lint.json: the indentation rules, the directories that mark a test tree, the paths no check visits, the checks held to new lines only, the checks turned off, the directories the repository keeps its own checks under, where decision records live and the form they keep, and which files are component templates and what the template checks need to know about them.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "indent": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Indentation rules applied to every shell source in scope (heredoc bodies exempt).",
+      "properties": {
+        "tabs": {
+          "type": "boolean",
+          "description": "Whether leading tabs are allowed. false rejects any hard tab in leading whitespace. Defaults to false when omitted."
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Required leading-space multiple: a leading run of spaces must be a multiple of this width. Defaults to 2 when omitted."
+        }
+      }
+    },
+    "tests": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Directory names that mark a test tree: a source with one of these as a path component is in the tests scope, which a check reads only when it declares it. Matched by component, wherever it sits. Defaults to [\"test\", \"tests\"] when omitted."
+    },
+    "exclude": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Repo-relative directory paths no check visits, beyond the always-pruned .git and submodules (e.g. \".coverage\", \"planning\", \"engine\"). Each is matched as a top-level prune path under $PROJ."
+    },
+    "library_roots": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Repo-relative directories a library file sits under: a shell file under one is a module, its namespace the path under the root, and the label, name and reach checks hold it to that. Replaces the default list when given. Defaults to [\"scripts\", \"shell\", \"src\"], the homes a consumer keeps its shell in, when omitted; a root lib/ is the product's until named here (ADR 000045). shellops itself defaults to [\"lib\", \"interpreter\"]."
+    },
+    "checks": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Repo-relative directories the repository keeps its own lint checks under: every <name>.check.op.sh beneath one is loaded after the checks shell-lint and shellops ship, in the order listed. Empty when omitted."
+    },
+    "added_only": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Names of registered checks that run only under --added-only. List a check here when its pre-existing findings are a tracked backlog: new lines are still held to it, while a full sweep leaves it out rather than failing on the backlog."
+    },
+    "disabled": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Names of registered checks that never run in this repository. List a check here when it polices an API the repository does not use, so its findings are not a backlog and will never be worked off; a run names the checks it left out."
+    },
+    "templates": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The CI component templates in this repository, and what the template checks need to know about them.",
+      "properties": {
+        "glob": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Pattern naming the template files, relative to the repository root. A yaml file it does not match is not a template. Defaults to \"templates/*/template.yml\"."
+        },
+        "base": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The base template, relative to the repository root: the one template allowed to define before_script. When omitted, every template is held to the rule."
+        },
+        "mark": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The landing mark as the templates' rules spell it: the text every rule that matches a merge-request pipeline must contain. When omitted, the job-lands-once check is off."
+        },
+        "every_push": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Templates that run on every push to a merge request, marked or not, relative to the repository root: governance checks and previews. Empty when omitted."
+        }
+      }
+    },
+    "decisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Where the repository keeps its decision records, and the form they are held to.",
+      "properties": {
+        "folder": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repo-relative directory that holds the records. A record is either a file named <number>-<slug>.md in it, or the file adr.md in a directory named <number>-<slug> in it. Defaults to \"docs/decisions\" when omitted."
+        },
+        "form": {
+          "type": "string",
+          "enum": ["one-page"],
+          "description": "The form every record is held to. \"one-page\" is a title that carries the record's number, Status, Date and Merge request header lines, the sections Context, Decision and Consequences in that order, every citation written ADR.<n>@<repository> as a link, and prose within page_words. A table the record keeps is a file beside it, <number>-<slug>/tables/<name>.md: an H1, a summary of a quarter to half of page_words, a Glossary section and one table, referenced from the record as [Table <k>: <title>](tables/<name>.md). No form is checked when omitted."
+        },
+        "page_words": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many words of prose a one-page record may spend from its Context heading to its end; fenced examples and figure lines are free. Defaults to 450 when omitted."
+        }
+      }
+    }
+  }
+}

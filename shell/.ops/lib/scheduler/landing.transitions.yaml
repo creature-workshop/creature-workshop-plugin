@@ -1,0 +1,37 @@
+# The landing queue's topology: the discipline that orders it, and one row
+# per event a tick judges of a merge request, naming the state it goes to
+# and the actions the adaptor performs. lib/scheduler/_landing.sh says what
+# the events, states and actions mean; transitions.schema.json says the shape.
+queue: landing
+discipline: priority
+transitions:
+  - event: stacked
+    to: scheduler/reviewing
+    actions: [cancel_run]
+  - event: unapproved
+    to: scheduler/reviewing
+    actions: [cancel_run]
+  - event: conflicts
+    to: scheduler/reviewing
+    actions: [cancel_run]
+  - event: red
+    to: scheduler/reviewing
+    actions: [cancel_run]
+  - event: behind
+    to: scheduler/awaiting-merge
+    actions: [cancel_run]
+  - event: off-base
+    to: scheduler/next-merge
+    actions: [cancel_stale_run, rebase]
+  - event: unrun
+    to: scheduler/next-merge
+    actions: [cancel_stale_run, start_run]
+  - event: running
+    to: scheduler/next-merge
+    actions: []
+  - event: green
+    to: scheduler/next-merge
+    actions: [merge]
+  - event: canceled
+    to: scheduler/next-merge
+    actions: [start_run]

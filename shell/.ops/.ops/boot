@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+: <<'VAR'
+shellops' own boot: the hand-off to its install, which compiles and puts
+the toolchain on the path (ADR 000047). A consumer's boot is written by
+init from lib/self/boot.template.sh; this one boots the checkout it sits
+in. This is the checkout's root.
+VAR
+here="$(cd "$(dirname "$0")/.." && pwd)"
+exec env SHELLOPS_DIR="$here" PROJ="$here" "$here/cli/install" "$@"

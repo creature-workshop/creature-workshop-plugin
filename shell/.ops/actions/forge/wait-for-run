@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import "$SHELLOPS_DIR/lib/forge/api.sh"
+
+USAGE="$(cat <<HELP
+Waits until a forge carries a commit and has finished running it, then prints
+the outcome as JSON: {"state": "success" | "failure" | "none", "url": ...},
+where "none" means the forge ran nothing on it. The state is data for the
+caller to act on; the exit status reports only whether the wait itself failed,
+on a timeout or a forge that could not be asked.
+
+Usage: action forge wait-for-run --sha <sha> [--forge <name>] [--owner <o>] [--repo <r>] [--host <url>]
+                                  [--timeout <s>] [--interval <s>] [--grace <s>] [--token-env <NAME>]
+
+Flags:
+  --sha <sha>         Required. The commit to wait on.
+  --forge <name>      gitlab, forgejo or github. Defaults to the active forge.
+  --owner <o>         Repository owner on that forge. Defaults to the manifest's org.
+  --repo <r>          Repository name on that forge. Defaults to the manifest's repo.
+  --host <url>        The server the repository is on, for a forge like GitLab
+                      CE that can have many instances. Defaults to the forge's
+                      own base.
+  --timeout <s>       Seconds the whole wait may take (default 1800).
+  --interval <s>      Seconds between two looks (default 15).
+  --grace <s>         Seconds a carried commit may show no run before that is
+                      the answer (default 120).
+  --token-env <NAME>  Environment variable holding the token to ask with.
+                      Defaults to the name the forge answers to: the stable
+                      forge token for the forge this run is on, and the name
+                      the adaptor declares for a forge asked by name. An unset
+                      one asks unauthenticated, which a public repository
+                      allows.
+  -h, --help          Show this help text.
+HELP
+)"
+
+ARG_SHA=""
+ARG_FORGE=""
+ARG_OWNER=""
+ARG_REPO=""
+ARG_HOST=""
+ARG_TIMEOUT=""
+ARG_INTERVAL=""
+ARG_GRACE=""
+ARG_TOKEN_ENV=""
+
+main() {
+  parse_args "$@"
+  validate_args
+
+  __main__options="$(run_options)"
+  @let "$__main__options" __main__ forge owner repo
+  log "Waiting for $__main__forge to run $ARG_SHA on $__main__owner/$__main__repo..."
+  @unlet __main__ forge owner repo
+  forge__wait_for_run "$__main__options"
+}
+
+: <<'FUN'
+Builds the run options from the flags, leaving every unset one at the
+default forge__new_run_options gives it. The forge is resolved here so the
+token can be picked for it.
+FUN
+run_options() {
+  __run_options__forge="$ARG_FORGE"
+  if ! @defined "$__run_options__forge"; then
+    __run_options__forge="$(forge__selected)"
+  fi
+
+  @patch __run_options__out "$(forge__new_run_options)" \
+    '.forge'    "$__run_options__forge" \
+    '.owner'    "$ARG_OWNER" \
+    '.repo'     "$ARG_REPO" \
+    '.host'     "$ARG_HOST" \
+    '.sha'      "$ARG_SHA" \
+    '.timeout_seconds'  "$ARG_TIMEOUT" \
+    '.interval_seconds' "$ARG_INTERVAL" \
+    '.grace_seconds'    "$ARG_GRACE" \
+    '.token'    "$(forge__token_for "$__run_options__forge" "$ARG_TOKEN_ENV")"
+  println "$__run_options__out"
+}
+
+validate_args() {
+  if ! @defined "$ARG_SHA"; then
+    error "--sha is required"
+    log "$USAGE"
+    exit 1
+  fi
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      --sha) ARG_SHA="${2:?--sha requires a value}"; shift ;;
+      --forge) ARG_FORGE="${2:?--forge requires a value}"; shift ;;
+      --owner) ARG_OWNER="${2:?--owner requires a value}"; shift ;;
+      --repo) ARG_REPO="${2:?--repo requires a value}"; shift ;;
+      --host) ARG_HOST="${2:?--host requires a value}"; shift ;;
+      --timeout) ARG_TIMEOUT="${2:?--timeout requires a value}"; shift ;;
+      --interval) ARG_INTERVAL="${2:?--interval requires a value}"; shift ;;
+      --grace) ARG_GRACE="${2:?--grace requires a value}"; shift ;;
+      --token-env) ARG_TOKEN_ENV="${2:?--token-env requires a value}"; shift ;;
+      *)
+        error "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  */forge/wait-for-run) main "$@" ;;
+esac

@@ -1,0 +1,12 @@
+[submodule "test/lib/bats-core"]
+	path = test/lib/bats-core
+	url = https://gitlab.creature-workshop.com/ksoft/bats-core.git
+[submodule "test/lib/bats-support"]
+	path = test/lib/bats-support
+	url = https://gitlab.creature-workshop.com/ksoft/bats-support.git
+[submodule "test/lib/bats-assert"]
+	path = test/lib/bats-assert
+	url = https://gitlab.creature-workshop.com/ksoft/bats-assert.git
+[submodule "shell/.logs"]
+	path = shell/.logs
+	url = ../shell-logs.git

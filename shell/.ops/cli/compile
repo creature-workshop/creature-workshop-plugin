@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/args/api.sh" \
+  "$SHELLOPS_DIR/lib/compile/api.sh"
+
+USAGE="$(cat <<HELP
+Writes .ops/__compiled__, the compiled tree, by hand: every type plugin git
+tracks under \$PROJ/lib lowered to its plain functions, and every library
+module's tree, compiled afresh and linked as the tree for the sources' key
+(ADR 000047). .envrc derives the same tree on its own whenever the sources'
+index entries change; this command is for a change the index does not see,
+an edit not yet staged, and for a file named by hand.
+
+A type plugin, <name>.type.op.sh, declares @type.<name>() with its roles as
+inner @<role>() functions, and lowers to <name>_<role>() at its own path
+with .op.sh as .sh. A library module lowers to its tree at the same path
+with .sh as .tree.json, and is still imported from its source until the
+engine compiles it. A plugin of another kind is loaded by its kind, so it
+is not compiled (OPS-621). The tree is derived and never tracked; the cache
+it links into, .ops/cache/compiled/, holds one entry per owner.
+
+Usage: ops compile [-h,--help] [files...]
+
+With no files, the tree is rebuilt from every module and type plugin git
+tracks under \$PROJ/lib, so a source whose file is gone leaves it. With
+files, those are compiled into the tree as it stands, tracked or not, and
+stand until the sources' key changes; a plugin of another kind is refused.
+
+Flags:
+  -h, --help  Show this help text
+HELP
+)"
+
+__cli__NL="
+"
+
+main() {
+  parse_args "$@"
+  cd "$PROJ"
+  if @defined "$INPUT_FILES"; then
+    compile__named "$INPUT_FILES" || exit 1
+    report_compiled "$INPUT_FILES"
+  else
+    compile__rebuild || exit 1
+    report_compiled "$(compile__sources "$PROJ")"
+  fi
+  report_tree
+}
+
+: <<'FUN'
+Collects the flags, and the file arguments into the INPUT_FILES
+newline-separated global, as paths relative to PROJ.
+FUN
+parse_args() {
+  INPUT_FILES=""
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help)
+        log "$USAGE"
+        exit 0
+        ;;
+      -*)
+        error "Unknown option: $1"
+        exit 1
+        ;;
+      *)
+        require_compilable "$1"
+        INPUT_FILES="$INPUT_FILES$(relative_to_proj "$1")$__cli__NL"
+        ;;
+    esac
+    shift
+  done
+}
+
+: <<'FUN'
+Names each source of <files>, one per line, with the path it compiled to,
+for a type plugin and for a module with a tree.
+FUN
+report_compiled() {
+  while IFS= read -r __report_compiled__file; do
+    @defined "$__report_compiled__file" || continue
+    report_source "$__report_compiled__file"
+  done <<EOF_FILES
+$1
+EOF_FILES
+}
+
+: <<'FUN'
+Names the source <file> with the path it compiled to, when it compiles to
+one.
+FUN
+report_source() {
+  case "$(compile__source_kind "$1")" in
+    "$__compile__sources__KIND_TYPE") log "compiled $1 -> $(compile__compiled_path "$1")" ;;
+    "$__compile__sources__KIND_MODULE") report_module "$1" ;;
+  esac
+}
+
+: <<'FUN'
+Names the module <file> with its tree's path when it has a tree.
+FUN
+report_module() {
+  if @is_true "$(compile__has_tree "$1")"; then
+    log "compiled $1 -> $(compile__tree_path "$1")"
+  fi
+}
+
+: <<'FUN'
+Says where the tree stands, or that PROJ has none to stand.
+FUN
+report_tree() {
+  import__compiled_root "$PROJ"
+  if [ -d "$__import__compiled_root__path" ]; then  # private-name-check: allow -- import__compiled_root answers in this variable so nothing forks
+    log "wrote ${__import__compiled_root__path#"$PROJ"/}"  # private-name-check: allow -- import__compiled_root answers in this variable so nothing forks
+  else
+    log "ops compile: nothing under lib/ to compile; PROJ has no tree"
+  fi
+}
+
+: <<'FUN'
+Exits when <path> is a plugin of another kind: its kind loads it until the
+engine compiles it. A module and a type plugin compile.
+FUN
+require_compilable() {
+  case "$(compile__source_kind "$1")" in
+    "$__compile__sources__KIND_PLUGIN") refuse_plugin "$1" ;;
+  esac
+}
+
+: <<'FUN'
+Exits naming the plugin <path>, whose kind loads it as it is.
+FUN
+refuse_plugin() {
+  error "ops compile lowers the type kind only: $1"
+  hint "A plugin of another kind compiles with the engine (OPS-621)."
+  exit 1
+}
+
+: <<'FUN'
+Prints <path> relative to PROJ when it sits under it, as given otherwise.
+FUN
+relative_to_proj() {
+  case "$1" in
+    "$PROJ"/*) printf '%s\n' "${1#"$PROJ"/}" ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  */compile|compile) main "$@" ;;
+esac

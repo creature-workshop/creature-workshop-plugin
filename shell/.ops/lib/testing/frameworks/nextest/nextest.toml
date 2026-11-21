@@ -1,0 +1,9 @@
+# The nextest profile a TIA suite runs under. The runner hands this file to
+# nextest as a tool config, which sits beneath the repository's own
+# .config/nextest.toml: a repository that defines the same profile there wins
+# key by key, and one that defines nothing gets the JUnit report regardless.
+#
+# nextest writes the report under its store directory for the profile, so the
+# path below lands at target/nextest/tia/junit.xml.
+[profile.tia.junit]
+path = "junit.xml"

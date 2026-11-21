@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/creature-workshop/shellops/lib/profile/profiling.schema.json",
+  "title": "Profiling declaration",
+  "description": "A repository's profiling declaration, .ops/config/profiling.yaml: the commands it measures under each profiler and the most each may cost. One object per profiler, keyed by the profiler's name; under it one object per command, keyed by the command's cli words; under that one integer per measure, named as the profiler's @totals names it. Which profilers exist and which measures each reports is the profile kind's to check, not this schema's.",
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "description": "The commands measured under one profiler, keyed by their cli words.",
+    "additionalProperties": {
+      "type": "object",
+      "description": "The most one command may cost, one integer per measure the profiler reports.",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    }
+  }
+}

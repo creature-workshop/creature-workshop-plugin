@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+import "$SHELLOPS_DIR/lib/versions/api.sh"
+
+USAGE="$(cat <<HELP
+Decide whether <tag> may be cut as this repository's next release.
+
+The verdict is the exit status, so a pipeline step can gate on it: 0 when the
+tag may be cut, non-zero when it may not.
+
+A tag may be cut when its version advances past the newest version the
+repository already releases, and when no tag of that name is already there.
+The comparison is on versions rather than names, so a repository that writes
+its tags one way and plans them the other is judged on what the versions say:
+a bare 3.0.0-dev.33 planned against a v3.0.0-dev.34 history does not advance
+and is refused.
+
+Usage: action git version-guard <tag>
+
+Arguments:
+  <tag>  The tag the release would cut, bare or v-prefixed (3.1.0, v3.1.0).
+
+Options:
+  -h, --help    Show this help text.
+HELP
+)"
+
+main() {
+  parse_args "$@"
+
+  __main__planned="$(versions__bare_version "$ARG_TAG")"
+  versions__version_assert "$__main__planned" "refusing to cut it." || exit 1
+
+  __main__latest="$(versions__latest_version)"
+
+  if @is_true "$(versions__tag_exists "$ARG_TAG")"; then
+    error "Tag $ARG_TAG already exists; nothing to cut."
+    exit 1
+  fi
+
+  if @is_true "$(versions__version_is_newer "$__main__planned" "$__main__latest")"; then
+    log "$__main__planned advances past the latest release $__main__latest."
+  else
+    error "$__main__planned does not advance past the latest release $__main__latest; refusing to cut $ARG_TAG."
+    exit 1
+  fi
+}
+
+parse_args() {
+  ARG_TAG=""
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      -*)
+        error "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+      *) ARG_TAG="$1" ;;
+    esac
+    shift
+  done
+
+  if ! @defined "$ARG_TAG"; then
+    error "usage: action git version-guard <tag>"
+    exit 1
+  fi
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *version-guard) main "$@" ;;
+esac

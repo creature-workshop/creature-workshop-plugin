@@ -1,0 +1,246 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+USAGE="$(cat <<HELP
+Commits cargo-fuzz crash artifacts to the corpus and opens a Forgejo PR.
+
+Usage: action rust submit-fuzz-crashes [-h,--help] [project-dir] [target] [base]
+
+Arguments:
+  project-dir    Directory containing the fuzz package. Defaults to engine/parser.
+  target         Fuzz target name. Defaults to lexer.
+  base           Pull request base branch. Defaults to main.
+
+Environment:
+  FORGE_ADMIN_TOKEN   Required. API token for branch push and PR creation.
+  FUZZ_CRASH_PR_ASSIGNEE  Optional. Defaults to jerrod.
+  FUZZ_CRASH_PR_LABELS    Optional comma-separated labels. Defaults to area/lexer,quality/test.
+
+Flags:
+  -h, --help     Show this help text.
+HELP
+)"
+
+DEFAULT_FUZZ_CRASH_PR_ASSIGNEE="jerrod"
+DEFAULT_FUZZ_CRASH_PR_LABELS="area/lexer,quality/test"
+
+# CONST: Newline-separated list of corpus paths added this run.
+COPIED_CRASHES=""
+
+__submit_fuzz__NL="
+"
+
+main() {
+  __main__project_dir="engine/parser"
+  __main__target="lexer"
+  __main__base="main"
+
+  parse_args "$@"
+
+  __main__corpus_dir="$__main__project_dir/fuzz/corpus/$__main__target"
+  __main__artifacts_dir="$__main__project_dir/fuzz/artifacts/$__main__target"
+
+  copy_crashes_to_corpus "$__main__artifacts_dir" "$__main__corpus_dir"
+  [ -z "$COPIED_CRASHES" ] && exit 0
+  require_token
+
+  __main__branch="$(fuzz_crash_branch "$__main__target")"
+  git switch -c "$__main__branch"
+
+  # Rebuild the git-add argv from the newline-separated list.
+  set -f
+  IFS="$__submit_fuzz__NL"
+  # shellcheck disable=SC2086
+  set -- $COPIED_CRASHES
+  unset IFS
+  set +f
+  git add "$@"
+
+  if git diff --cached --quiet; then
+    log "No new fuzz crash corpus entries to submit."
+    exit 0
+  fi
+
+  cli/git-commit -m "test: add $__main__target fuzz crash regression [skip ci]"
+  git push -u origin "$__main__branch"
+  create_crash_pr "$__main__target" "$__main__branch" "$__main__base" "$__main__corpus_dir"
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      -*)
+        error "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+      *)
+        __main__project_dir="$1"
+        shift
+        if [ "$#" -gt 0 ]; then __main__target="$1"; shift; fi
+        if [ "$#" -gt 0 ]; then __main__base="$1"; shift; fi
+        ;;
+    esac
+  done
+}
+
+require_token() {
+  if [ -z "${FORGE_ADMIN_TOKEN:-}" ]; then
+    error "FORGE_ADMIN_TOKEN is not set"
+    exit 1
+  fi
+}
+
+copy_crashes_to_corpus() {
+  __copy_crashes_to_corpus__corpus_dir="$2"
+
+  # Glob into the positional parameters; an unmatched glob stays literal,
+  # which the -e test below detects (POSIX has no nullglob).
+  set -- "$1"/crash-*
+  if [ ! -e "$1" ]; then
+    log "No fuzz crash artifacts found."
+    exit 0
+  fi
+
+  mkdir -p "$__copy_crashes_to_corpus__corpus_dir"
+
+  for __copy_crashes_to_corpus__artifact in "$@"; do
+    copy_crash_to_corpus "$__copy_crashes_to_corpus__artifact" "$__copy_crashes_to_corpus__corpus_dir"
+  done
+}
+
+copy_crash_to_corpus() {
+  __copy_crash_to_corpus__hash="$(sha256sum "$1" | awk '{print $1}')"
+  __copy_crash_to_corpus__destination="$2/$__copy_crash_to_corpus__hash"
+
+  if [ -f "$__copy_crash_to_corpus__destination" ]; then
+    log "Crash already exists in corpus: $__copy_crash_to_corpus__hash"
+    return
+  fi
+
+  cp "$1" "$__copy_crash_to_corpus__destination"
+  COPIED_CRASHES="${COPIED_CRASHES}${__copy_crash_to_corpus__destination}${__submit_fuzz__NL}"
+  log "Added fuzz crash corpus entry: $__copy_crash_to_corpus__hash"
+}
+
+fuzz_crash_branch() {
+  echo "automation/fuzz-$1-${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1}"
+}
+
+create_crash_pr() {
+  import "$SHELLOPS_DIR/lib/forgejo/api.sh"
+
+  __create_crash_pr__title="test: add $1 fuzz crash regression"
+  __create_crash_pr__body="$(crash_pr_body "$1" "$4")"
+  __create_crash_pr__assignees="$(fuzz_crash_pr_assignees)"
+  __create_crash_pr__labels="$(fuzz_crash_pr_labels "$FORGE_ADMIN_TOKEN")"
+
+  @set __create_crash_pr__options "$(forge__new_create_review_options)" \
+    '.title' "$__create_crash_pr__title" \
+    '.head' "$2" \
+    '.base' "$3" \
+    '.body' "$__create_crash_pr__body" \
+    '.assignees' "$__create_crash_pr__assignees" \
+    '.labels' "$__create_crash_pr__labels" \
+    '.token' "$FORGE_ADMIN_TOKEN"
+
+  __create_crash_pr__result="$(forgejo_create_review "$__create_crash_pr__options")"
+  @get __create_crash_pr__url "$__create_crash_pr__result" '.html_url' '.url' ''
+  log "Opened fuzz crash PR: $__create_crash_pr__url"
+}
+
+fuzz_crash_pr_assignees() {
+  __fuzz_crash_pr_assignees__assignee="${FUZZ_CRASH_PR_ASSIGNEE:-$DEFAULT_FUZZ_CRASH_PR_ASSIGNEE}"
+
+  if [ -z "$__fuzz_crash_pr_assignees__assignee" ]; then
+    @arr __fuzz_crash_pr_assignees__out
+    println "$__fuzz_crash_pr_assignees__out"
+    return
+  fi
+
+  @arr __fuzz_crash_pr_assignees__out "$__fuzz_crash_pr_assignees__assignee"
+  println "$__fuzz_crash_pr_assignees__out"
+}
+
+fuzz_crash_pr_labels() {
+  __fuzz_crash_pr_labels__names="${FUZZ_CRASH_PR_LABELS:-$DEFAULT_FUZZ_CRASH_PR_LABELS}"
+
+  if [ -z "$__fuzz_crash_pr_labels__names" ]; then
+    @arr __fuzz_crash_pr_labels__out
+    println "$__fuzz_crash_pr_labels__out"
+    return
+  fi
+
+  @set __fuzz_crash_pr_labels__label_options "$(forge__new_label_options)" '.token' "$1"
+  __fuzz_crash_pr_labels__labels="$(forgejo_list_labels "$__fuzz_crash_pr_labels__label_options")"
+  @arr __fuzz_crash_pr_labels__ids
+
+  # Split the comma-separated names into the positional parameters (they
+  # are function-scoped, so the caller's argv is untouched).
+  set -f
+  IFS=','
+  # shellcheck disable=SC2086
+  set -- $__fuzz_crash_pr_labels__names
+  unset IFS
+  set +f
+
+  for __fuzz_crash_pr_labels__name in "$@"; do
+    __fuzz_crash_pr_labels__name="$(trim_label_name "$__fuzz_crash_pr_labels__name")"
+    ! @defined "$__fuzz_crash_pr_labels__name" && continue
+
+    __fuzz_crash_pr_labels__id="$(label_id_by_name "$__fuzz_crash_pr_labels__labels" "$__fuzz_crash_pr_labels__name")"
+    if ! @defined "$__fuzz_crash_pr_labels__id"; then
+      warn "Skipping unknown Forgejo label: $__fuzz_crash_pr_labels__name"
+      continue
+    fi
+
+    @push __fuzz_crash_pr_labels__ids "$__fuzz_crash_pr_labels__ids" "$__fuzz_crash_pr_labels__id"
+  done
+
+  echo "$__fuzz_crash_pr_labels__ids"
+}
+
+trim_label_name() {
+  __trim_label_name__name="$1"
+  __trim_label_name__name="${__trim_label_name__name#"${__trim_label_name__name%%[![:space:]]*}"}"
+  __trim_label_name__name="${__trim_label_name__name%"${__trim_label_name__name##*[![:space:]]}"}"
+  echo "$__trim_label_name__name"
+}
+
+label_id_by_name() {
+  @find __label_id_by_name__match __label_named "$1" "$2"
+  [ "$__label_id_by_name__match" = "null" ] && return 0
+  @scalar __label_id_by_name__out "$__label_id_by_name__match" '.id'
+  println "$__label_id_by_name__out"
+}
+
+__label_named() {
+  @scalar __label_named__scalar_1 "$1" '.name'
+  [ "$__label_named__scalar_1" = "$2" ]
+}
+
+crash_pr_body() {
+  __crash_pr_body__run_url="$(workflow_run_url)"
+
+  printf '%s\n\n' "\`cargo-fuzz\` found a crash for the \`$1\` target."
+  printf '%s\n\n' "This PR commits the crash artifact into \`$2\` so fuzz replay catches the regression."
+  if @defined "$__crash_pr_body__run_url"; then
+    println "Workflow run: $__crash_pr_body__run_url"
+  fi
+}
+
+workflow_run_url() {
+  if [ -z "${GITHUB_SERVER_URL:-}" ] || [ -z "${GITHUB_REPOSITORY:-}" ] || [ -z "${GITHUB_RUN_ID:-}" ]; then
+    echo ""
+    return
+  fi
+
+  echo "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *submit-fuzz-crashes) main "$@" ;;
+esac

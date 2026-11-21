@@ -1,0 +1,382 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+import \
+  "$SHELLOPS_DIR/lib/releases/candidate.sh" \
+  "$SHELLOPS_DIR/lib/releases/github.sh" \
+  "$SHELLOPS_DIR/lib/releases/prepare.sh" \
+  "$SHELLOPS_DIR/lib/releases/reach.sh" \
+  "$SHELLOPS_DIR/lib/releases/tap.sh" \
+  "$SHELLOPS_DIR/lib/sites/api.sh"
+
+USAGE="$(cat <<HELP
+Runs the release pipeline: the landing tagged on the default branch, or the
+candidate proven on the forges its rung reaches and the version record and
+its tag cut there, then the forge release for the tag and the tag promoted
+to every deployment site its rung reaches.
+
+Usage: action release [prepare|publish] [-h,--help]
+       action release publish [--artifacts <file>]
+       action release publish --github [--artifacts <file>] [--github-repo <owner/repo>]
+                              [--confidence-gate <channel>] [--timeout <s>]
+       action release publish --tap <url> [--artifacts <file>] [--confidence-gate <channel>]
+                              [--asset-url <url>] [--artifact-name <name>]
+       action release candidate <sha> <version>
+       action release move-branch <remote> <branch> <target>
+       action release move-branches <site> <version>
+       action release promote <version>
+
+Subcommands:
+  (none)    Run prepare then publish (single-shot; publishes only if a release
+            was actually cut). Preserves local/manual behavior.
+  prepare   Sync labels, then release the default branch's tip. Where the
+            version format names what the trunk holds, the version and dev
+            alone (ADR 000044), tag the landing at the tip the version's next
+            dev, pushed on its own, and commit nothing; lib/releases/_land.sh
+            says what each outcome means. Otherwise plan the version, sync the manifest (and the
+            crate, when the repository has one), commit, tag, push. Retries
+            the push onto a moved default branch; exits 0 when no bump is
+            due or the version is already tagged. lib/releases/prepare.sh
+            says what each outcome means and what brings it about.
+  publish   Create the forge release for the tag recorded in the manifest,
+            attaching the files --artifacts names, the artifacts.json a build
+            wrote beside its outputs. With --github, publish that tag to the
+            GitHub mirror instead: wait for the push mirror to carry the tag,
+            then create the release with those files and their SHA256SUMS,
+            opening at --confidence-gate (beta) and flagged prerelease below
+            stable. The repository is the manifest's org and repo unless
+            --github-repo says otherwise; --timeout caps the wait for the tag
+            (420s, the mirror's own window). lib/releases/github.sh says what
+            a second run of the same tag does. An artifacts file that does
+            not exist publishes the release with no assets: a build with
+            nothing to ship writes none. With --tap, write the tag's Homebrew
+            formula to the tap at <url> instead: the formula at stable and
+            nothing below, since Homebrew orders versions by rules of its
+            own; --confidence-gate lowers the gate to a tier, whose -pre
+            formula is written from there up.
+            The formula downloads the tarballs beside --artifacts from the
+            tag's GitHub release unless --asset-url names another base, and
+            names them by the manifest's command-name unless --artifact-name
+            says otherwise. The push carries FORGE_ADMIN_TOKEN.
+  candidate Prove <sha> as the candidate for <version> before its tag is
+            minted (ADR 000025): stage it at every deployment site the
+            version's rung reaches on the promotion ladder manifest.json
+            declares, then wait for each site's verdicts. A forges site
+            pushes it to each forge's candidate branch and records each
+            forge's run on the commit here under <site>/<forge>.
+            Red anywhere is a red exit, so no tag follows. A stable
+            version, a rung no site runs a candidate for, or no version at
+            all has nothing to prove and says so.
+  move-branch
+            Force-move <branch> on <remote> to <target>, a commit this clone
+            holds, the way a rung's branch follows its tag (ADR 000020): the
+            commit put at the branch as a branch site in the worktree
+            repository on the remote. The branch is created when the remote
+            has none. Before an existing branch
+            moves, the provenance rule has to vouch for every commit it holds
+            and the target does not (ADR 000021); one it cannot stops the
+            move, named with its SHA. A branch already at the target is left
+            alone.
+  move-branches
+            Reach every target at <site> that the tag recording <version>
+            points to on the promotion ladder manifest.json declares (ADR
+            000020); on the default ladder at forge, staging from beta,
+            preview from rc, released at stable, and nothing for a dev or
+            alpha tag. The site is reached the way its kind says; at a
+            forges site the tag is pushed to every forge first and each
+            target reached there, so the provenance check guards every
+            move.
+  promote   Reach every site a tag at <version>'s rung points at on the
+            ladder, in the ladder's order, the way move-branches reaches
+            one: on shellops's own ladder the internal and staging duos
+            from beta and the public duo from rc carry the tag and the
+            branches that follow it (ADRs 000026, 000027).
+
+Environment:
+  RELEASE_BUMP           Bump type ("auto" by default; or major/minor/patch/...).
+  RELEASE_PUSH_ATTEMPTS  Max push attempts when the branch keeps moving (default 5).
+  PLANNED_VERSION        Optional: a version an earlier job planned. Unset, the
+                         version is planned here.
+  FORGE_ADMIN_TOKEN      Required. Bot token for label sync, push, and publish.
+  GITHUB_TOKEN           Required with --github. Token for the GitHub release.
+  <token_env>            Required by candidate and promote for each forge
+                         with a host at a forges site: the variable that
+                         forge names on the ladder holds the token pushes
+                         and asks carry.
+HELP
+)"
+
+@false PUBLISH_GITHUB
+PUBLISH_TAP=""
+PUBLISH_ARTIFACTS=""
+PUBLISH_OWNER=""
+PUBLISH_REPO=""
+PUBLISH_GATE=""
+PUBLISH_TIMEOUT=""
+PUBLISH_ASSET_URL=""
+PUBLISH_ARTIFACT_NAME=""
+
+main() {
+  case "${1:-}" in
+    -h|--help) print_usage ;;
+    prepare) shift; run_prepare "$@" ;;
+    publish) shift; run_publish "$@" ;;
+    candidate) shift; run_candidate "$@" ;;
+    move-branch) shift; run_move_branch "$@" ;;
+    move-branches) shift; run_move_branches "$@" ;;
+    promote) shift; run_promote "$@" ;;
+    "") run_prepare_then_publish ;;
+    *) refuse_usage "Unknown subcommand: $1" ;;
+  esac
+}
+
+: <<'FUN'
+Parses prepare's arguments: it takes none but --help, so anything else is
+refused with the usage text.
+FUN
+parse_prepare_args() {
+  [ "$#" -eq 0 ] && return 0
+
+  case "$1" in
+    -h|--help) print_usage ;;
+    *) refuse_usage "Unknown option: $1" ;;
+  esac
+}
+
+: <<'FUN'
+Parses publish's arguments into the PUBLISH_* globals; anything unknown is
+refused with the usage text.
+FUN
+parse_publish_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) print_usage ;;
+      --github) @true __parse_publish_args__true_1; PUBLISH_GITHUB="$__parse_publish_args__true_1" ;;
+      --tap) PUBLISH_TAP="${2:?--tap requires a value}"; shift ;;
+      --artifacts) PUBLISH_ARTIFACTS="${2:?--artifacts requires a value}"; shift ;;
+      --asset-url) PUBLISH_ASSET_URL="${2:?--asset-url requires a value}"; shift ;;
+      --artifact-name) PUBLISH_ARTIFACT_NAME="${2:?--artifact-name requires a value}"; shift ;;
+      --github-repo) set_github_repo "${2:?--github-repo requires a value}"; shift ;;
+      --confidence-gate) PUBLISH_GATE="${2:?--confidence-gate requires a value}"; shift ;;
+      --timeout) PUBLISH_TIMEOUT="${2:?--timeout requires a value}"; shift ;;
+      *) refuse_usage "Unknown option: $1" ;;
+    esac
+    shift
+  done
+}
+
+: <<'FUN'
+Splits the --github-repo value $1 into PUBLISH_OWNER and PUBLISH_REPO, and
+refuses one that is not owner/repo.
+
+  set_github_repo creature-workshop/insights  ->  PUBLISH_OWNER=creature-workshop PUBLISH_REPO=insights
+FUN
+set_github_repo() {
+  case "$1" in
+    */*) ;;
+    *) refuse_usage "--github-repo expects <owner>/<repo>, got '$1'." ;;
+  esac
+
+  PUBLISH_OWNER="${1%%/*}"
+  PUBLISH_REPO="${1#*/}"
+}
+
+: <<'FUN'
+Stops when --github was asked for without the token it publishes with.
+FUN
+require_github_token() {
+  if ! @defined "${GITHUB_TOKEN:-}"; then
+    error "GITHUB_TOKEN is not set. Cannot create the GitHub release."
+    exit 1
+  fi
+}
+
+: <<'FUN'
+Stops when --tap was asked for without the token the push carries.
+FUN
+require_tap_token() {
+  if ! @defined "${FORGE_ADMIN_TOKEN:-}"; then
+    error "FORGE_ADMIN_TOKEN is not set. Cannot push the formula to the tap."
+    exit 1
+  fi
+}
+
+: <<'FUN'
+Parses candidate's arguments: a commit, and the version planned for it,
+which may be empty when nothing was planned.
+FUN
+parse_candidate_args() {
+  case "${1:-}" in
+    -h|--help) print_usage ;;
+  esac
+
+  if [ "$#" -ne 2 ]; then
+    refuse_usage "release candidate: expected <sha> <version>, got $# argument(s)."
+  fi
+}
+
+: <<'FUN'
+Parses promote's arguments, exactly a version.
+FUN
+parse_promote_args() {
+  case "${1:-}" in
+    -h|--help) print_usage ;;
+  esac
+
+  if [ "$#" -ne 1 ]; then
+    refuse_usage "release promote: expected <version>, got $# argument(s)."
+  fi
+}
+
+: <<'FUN'
+Parses move-branch's arguments, exactly a remote, a branch and a target.
+FUN
+parse_move_branch_args() {
+  case "${1:-}" in
+    -h|--help) print_usage ;;
+  esac
+
+  if [ "$#" -ne 3 ]; then
+    refuse_usage "release move-branch: expected <remote> <branch> <target>, got $# argument(s)."
+  fi
+}
+
+: <<'FUN'
+Parses move-branches' arguments, exactly a site and a version.
+FUN
+parse_move_branches_args() {
+  case "${1:-}" in
+    -h|--help) print_usage ;;
+  esac
+
+  if [ "$#" -ne 2 ]; then
+    refuse_usage "release move-branches: expected <site> <version>, got $# argument(s)."
+  fi
+}
+
+: <<'FUN'
+The prepare arm: the arguments checked, then the release prepared.
+FUN
+run_prepare() {
+  parse_prepare_args "$@"
+  releases__release_prepare
+}
+
+: <<'FUN'
+The publish arm: the arguments checked, then the forge release, or with
+--github the release on the GitHub mirror, or with --tap the formula on the
+tap.
+FUN
+run_publish() {
+  parse_publish_args "$@"
+  if @is_true "$PUBLISH_GITHUB"; then
+    require_github_token
+    releases__release_publish_github "$(publish_github_options)"
+    return
+  fi
+  if @defined "$PUBLISH_TAP"; then
+    require_tap_token
+    releases__release_publish_tap "$(publish_tap_options)"
+    return
+  fi
+
+  releases__release_publish "$PUBLISH_ARTIFACTS"
+}
+
+: <<'FUN'
+Prints the releases__release_publish_github options: what the tag pipeline describes,
+patched with the repository, gate and wait the flags name.
+FUN
+publish_github_options() {
+  __publish_github_options__pipeline="$(releases__release_github_pipeline_options "$PUBLISH_ARTIFACTS")" || exit 1
+
+  @patch __publish_github_options__out "$__publish_github_options__pipeline" \
+    '.owner'   "$PUBLISH_OWNER" \
+    '.repo'    "$PUBLISH_REPO" \
+    '.gate'    "$PUBLISH_GATE" \
+    '.timeout' "$PUBLISH_TIMEOUT"
+  println "$__publish_github_options__out"
+}
+
+: <<'FUN'
+Prints the releases__release_publish_tap options: what the tag pipeline describes,
+patched with the tap, gate, download base and artifact name the flags name.
+FUN
+publish_tap_options() {
+  __publish_tap_options__pipeline="$(releases__release_tap_pipeline_options "$PUBLISH_ARTIFACTS")" || exit 1
+
+  @patch __publish_tap_options__out "$__publish_tap_options__pipeline" \
+    '.tap'       "$PUBLISH_TAP" \
+    '.gate'      "$PUBLISH_GATE" \
+    '.asset_url' "$PUBLISH_ASSET_URL" \
+    '.artifact'  "$PUBLISH_ARTIFACT_NAME"
+  println "$__publish_tap_options__out"
+}
+
+: <<'FUN'
+The candidate arm: the arguments checked, then the commit proven as the
+version's candidate.
+FUN
+run_candidate() {
+  parse_candidate_args "$@"
+  releases__release_candidate "$@"
+}
+
+: <<'FUN'
+The promote arm: the arguments checked, then every site the version's rung
+reaches.
+FUN
+run_promote() {
+  parse_promote_args "$@"
+  releases__release_promote "$@"
+}
+
+: <<'FUN'
+The move-branch arm: the arguments checked, then the commit put at the
+branch as a branch site in the worktree repository on the remote.
+FUN
+run_move_branch() {
+  parse_move_branch_args "$@"
+  @obj run_move_branch__repository '.kind' worktree '.remote' "$1"
+  @obj run_move_branch__site '.kind' branch '.branch' "$2" '.repository' "$run_move_branch__repository"
+  @obj __run_move_branch__obj_2 '.commit' "$3"
+  sites__put "$2" "$run_move_branch__site" "$__run_move_branch__obj_2"
+}
+
+: <<'FUN'
+The move-branches arm: the arguments checked, then the site reached for the
+version.
+FUN
+run_move_branches() {
+  parse_move_branches_args "$@"
+  releases__release_reach "$@"
+}
+
+: <<'FUN'
+The bare arm: prepare, then publish only when prepare cut a release.
+FUN
+run_prepare_then_publish() {
+  releases__release_prepare
+  if @is_true "$(releases__release_prepared)"; then
+    releases__release_publish
+  fi
+}
+
+print_usage() {
+  log "$USAGE"
+  exit 0
+}
+
+: <<'FUN'
+Reports <message> against the usage text and stops.
+FUN
+refuse_usage() {
+  error "$1"
+  log "$USAGE"
+  exit 1
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  */release|release) main "$@" ;;
+esac

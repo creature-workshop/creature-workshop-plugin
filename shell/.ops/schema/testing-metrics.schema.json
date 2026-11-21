@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/creature-workshop/shellops/schema/testing-metrics.schema.json",
+  "title": "Testing metrics record",
+  "description": "One test run's selection record: what the run was allowed to select, what it actually ran, and how long that took. Written per run into the metrics directory and aggregated into the scorecard's rollout block.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run", "selection", "suites"],
+  "$defs": {
+    "count": {
+      "anyOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }],
+      "description": "A test-file count, or null for a suite whose runner has no file-level layout (a cargo suite counts packages, not files), where a file count would be a fiction."
+    },
+    "status": {
+      "enum": ["passed", "failed"],
+      "description": "Whether everything the run dispatched succeeded."
+    },
+    "suite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["suite", "runner", "selected", "total", "duration_seconds", "status"],
+      "description": "One suite's share of the run.",
+      "properties": {
+        "suite": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The suite name as the testing config spells it."
+        },
+        "runner": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The runner that executed the suite."
+        },
+        "selected": { "$ref": "#/$defs/count" },
+        "total": { "$ref": "#/$defs/count" },
+        "duration_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Wall-clock seconds this suite's run took."
+        },
+        "status": { "$ref": "#/$defs/status" },
+        "tests": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "The test files selection narrowed the run to, repo-relative. Present only when the run narrowed: a full-suite run selected everything, so listing it says nothing. An escape check joins a failing test against this list when the suite's escape_key is file-path."
+        },
+        "escape_key": {
+          "enum": ["file-path", "package"],
+          "description": "How an escape check reads a JUnit classname this suite's runner wrote: file-path, a repo-relative test file matched against tests; or package, a cargo package (with an optional ::binary suffix) matched against packages. Present on the rows of a narrowed run."
+        },
+        "packages": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "The cargo packages selection narrowed the run to. Present only on a package-keyed row whose run narrowed to some packages; a package-keyed row that ran the whole workspace carries none, and one that selected nothing carries selected 0."
+        },
+        "flaky": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Tests the run's JUnit report marked flaky: failed, then passed on a retry. Present only when the suite's runner left a report. A flaky test passed, so it is never an escape; the count is what keeps the flake visible in the scorecard."
+        }
+      }
+    }
+  },
+  "properties": {
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "started_at", "duration_seconds", "status", "dispatch"],
+      "description": "The run itself and the forge context it happened in.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier unique among concurrent runs (the CI job id, or the process id locally). Also distinguishes two records written in the same second."
+        },
+        "started_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+          "description": "When the run started, UTC."
+        },
+        "duration_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Wall-clock seconds from selection to the last suite finishing."
+        },
+        "status": { "$ref": "#/$defs/status" },
+        "dispatch": {
+          "type": "boolean",
+          "description": "Whether label-driven dispatch was enabled for the run. False records are the shadow evidence: selection was computed and measured without gating anything."
+        },
+        "review": {
+          "type": ["string", "null"],
+          "description": "The code review this run belongs to, or null outside review CI."
+        },
+        "commit": {
+          "type": ["string", "null"],
+          "description": "The commit the run tested, or null when the run is not in CI."
+        },
+        "pipeline": {
+          "type": ["string", "null"],
+          "description": "The pipeline the run belongs to, or null when the run is not in CI. Joins the record to the full-suite results an escape check reads."
+        },
+        "shard": {
+          "type": ["object", "null"],
+          "description": "The part of a sharded run this record covers, when the job ran as one of several parallel jobs: its index, counted from 1, and how many there were. The shards of one pipeline are folded into one run when the records are read. Null for a run that was one job.",
+          "properties": {
+            "index": { "type": "integer", "minimum": 1 },
+            "total": { "type": "integer", "minimum": 1 }
+          },
+          "required": ["index", "total"],
+          "additionalProperties": false
+        }
+      }
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "reason", "areas", "selected", "total"],
+      "description": "What the run decided to run, and why.",
+      "properties": {
+        "mode": {
+          "enum": ["selected", "full_suite", "none"],
+          "description": "Whether selection narrowed the run, widened it to everything, or found nothing to run."
+        },
+        "reason": {
+          "enum": [
+            "no_config",
+            "forced",
+            "config_changed",
+            "no_labels",
+            "mapping_drift",
+            "full_suite_area",
+            "net_new_with_edits",
+            "net_new_unclaimed",
+            "area_new_without_new_files",
+            "net_new",
+            "impacted_areas",
+            "untested_area",
+            "no_impacted_tests"
+          ],
+          "description": "The decision that produced the mode. Every widening reason is its own value, so a run that could have been narrow but was not is attributable rather than merely counted."
+        },
+        "areas": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "The area names selection was asked to cover."
+        },
+        "selected": { "$ref": "#/$defs/count" },
+        "total": { "$ref": "#/$defs/count" },
+        "deferred": {
+          "const": true,
+          "description": "Present only when a widened run's execution was deferred to the pipeline's dedicated full-suite jobs; the rollup keeps such runs out of the duration baseline."
+        },
+        "config_edit": {
+          "enum": ["additive", "remapping"],
+          "description": "Present when the review changed the testing config: additive when the edit only added areas, tests, or suites, or dropped tests, so the run selected as its labels asked; remapping when it changed what an area or a suite selects, so the run selected the remapped areas too, or widened to the full suite when the remapping reached everything."
+        },
+        "remapped": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Present on a remapping config edit: the classifier's phrases, one per remapping, so the record says which edit widened or reshaped the run."
+        },
+        "selectors": {
+          "type": "array",
+          "description": "Present on every run that reached selection: per selector, in load order, the confidence its answer carries, the changed files it claimed and the tests it contributed, keyed by suite, so an escape is attributable to a tier and a rollup can read recall per selector.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "confidence", "mode", "claimed", "tests"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "confidence": { "enum": ["ground_truth", "prior", "advisory"] },
+              "mode": {
+                "enum": ["active", "shadow"],
+                "description": "Whether the selector's answer was composed into the run (active) or recorded beside it and composed into nothing (shadow)."
+              },
+              "claimed": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+              "tests": {
+                "type": "object",
+                "additionalProperties": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+              }
+            }
+          }
+        },
+        "widened_by": {
+          "type": "array",
+          "description": "Present on a full_suite_area decision: the full_suite areas the review reached, each with the changed files that resolved to it, so a widened run says what would narrow it.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["area", "files"],
+            "properties": {
+              "area": { "type": "string", "minLength": 1 },
+              "files": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+            }
+          }
+        }
+      }
+    },
+    "suites": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/suite" },
+      "description": "Per-suite breakdown, in dispatch order. Empty when the run dispatched nothing."
+    },
+    "escapes": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "The would-be escapes the escape check found: failing full-suite tests the run's selection would have skipped, whether it narrowed the run or found nothing to run, under the join keys it read them by. Empty when the check found none. Present only once the check reached a verdict; a record without it carries none, and the rollup counts such a run as neither clean nor an escape."
+    },
+    "selector_escapes": {
+      "type": "object",
+      "additionalProperties": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+      "description": "Per selector on the record, the failing file-keyed tests its own answer would have skipped, whether it ran in shadow or active: how a shadow selector is judged before it may leave a test out, and how an escape is laid at a tier's door. Present with the verdict when the record names selectors."
+    }
+  }
+}

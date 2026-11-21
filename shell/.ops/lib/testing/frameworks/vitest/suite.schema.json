@@ -1,0 +1,13 @@
+{
+  "type": "object",
+  "description": "Vitest suite. What counts as a test file is vitest's own answer (the project's vitest config), asked via native discovery; TIA adds only the mapping from areas to the files their paths cover.",
+  "required": ["runner"],
+  "properties": {
+    "runner": { "const": "vitest" },
+    "project_dir": {
+      "type": "string",
+      "description": "$PROJ-relative directory holding package.json and the vitest config, for repos whose app lives below the repo root. The runner resolves its binary and runs from here. Defaults to \".\"."
+    }
+  },
+  "additionalProperties": false
+}

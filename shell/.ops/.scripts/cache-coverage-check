@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+USAGE="$(cat <<'HELP'
+Warn when an installed tool sits outside .ops/cache, where the CI cache cannot
+carry it, so it reinstalls on every job. An entry under .ops/cache counts whether
+it is spelled from ${PROJ}, as lib/self records it, or from the expanded path.
+Never fails the job.
+HELP
+)"
+
+# CONST: The directory this script sits in, which the repository root is found from.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# CONST: The shellops tree this script belongs to, which the library is loaded from.
+export SHELLOPS_DIR="${SHELLOPS_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+
+# CONST: The repository root: the caller's PROJ, or the parent of this script's directory.
+export PROJ="${PROJ:-$SHELLOPS_DIR}"
+
+source "$SHELLOPS_DIR/.envrc"
+
+main() {
+  case "${1:-}" in
+    -h|--help)
+      println "$USAGE"
+      exit 0
+      ;;
+  esac
+
+  __main__env_file="$PROJ/.ops/cache/env.sh"
+  [ -f "$__main__env_file" ] || return 0
+
+  # shellcheck disable=SC2016  # the unexpanded ${PROJ} is the spelling lib/self writes
+  __main__outside="$(grep -v '^#' "$__main__env_file" | grep -v -F -e "$PROJ/.ops/cache" -e '${PROJ}/.ops/cache' || true)"
+  if @defined "$__main__outside"; then
+    echo "WARN: provisioned PATH entries outside the ops-tools cache — these reinstall every job:" >&2
+    println "$__main__outside" >&2
+  fi
+}
+
+main "$@"

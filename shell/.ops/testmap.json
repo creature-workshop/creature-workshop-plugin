@@ -1,0 +1,1536 @@
+{
+  "dispatch": true,
+  "selectors": {
+    "trace": "shadow"
+  },
+  "suites": {
+    "unit": {
+      "runner": "bats",
+      "root": "test",
+      "glob": "*.bats",
+      "jobs": 24
+    },
+    "engine": {
+      "runner": "nextest",
+      "manifest": "engine/Cargo.toml",
+      "cargo_args": [
+        "--no-default-features",
+        "--locked"
+      ]
+    },
+    "doctest": {
+      "runner": "rust_doctest",
+      "manifest": "engine/Cargo.toml",
+      "cargo_args": [
+        "--no-default-features",
+        "--locked"
+      ]
+    }
+  },
+  "areas": {
+    "lib": {
+      "source": "lib",
+      "full_suite": true,
+      "tests": {
+        "unit": [
+          "test/import.api.bats",
+          "test/time.bats"
+        ]
+      },
+      "areas": {
+        "areas": {
+          "source": "lib/areas",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/areas.api.bats",
+              "test/areas-at-ref.bats"
+            ]
+          }
+        },
+        "args": {
+          "source": "lib/args",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/args.api.bats"
+            ]
+          }
+        },
+        "bump": {
+          "source": "lib/bump",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/bump.api.bats"
+            ]
+          }
+        },
+        "cargo": {
+          "source": "lib/cargo",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/cargo.api.bats",
+              "test/cargo-fixtures.bats",
+              "test/cargo.ecosystem.bats",
+              "test/cargo.prebuilt.bats",
+              "test/toolchain.channel.bats"
+            ]
+          }
+        },
+        "certification": {
+          "source": "lib/certification",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/certification.api.bats",
+              "test/releases.candidate.bats"
+            ]
+          },
+          "areas": {
+            "fixtures": {
+              "source": "test/fixtures/certification",
+              "full_suite": false,
+              "tests": {
+                "unit": [
+                  "test/certification.api.bats"
+                ]
+              }
+            }
+          }
+        },
+        "claude_code": {
+          "source": "lib/claude_code",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/claude_code.api.bats",
+              "test/install.bats",
+              "test/toolchain.tool.bats"
+            ]
+          }
+        },
+        "cursor_agent": {
+          "source": "lib/cursor_agent",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/cursor_agent.api.bats",
+              "test/install.bats",
+              "test/toolchain.tool.bats"
+            ]
+          }
+        },
+        "ecosystems": {
+          "source": "lib/ecosystems",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/bump.api.bats",
+              "test/cargo.ecosystem.bats",
+              "test/ecosystems.api.bats"
+            ]
+          }
+        },
+        "coverage": {
+          "source": "lib/coverage",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/coverage.api.bats"
+            ]
+          }
+        },
+        "deployment": {
+          "source": "lib/deployment",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/deployment.api.bats"
+            ]
+          }
+        },
+        "env": {
+          "source": "lib/env",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/env.api.bats"
+            ]
+          }
+        },
+        "forks": {
+          "source": "lib/forks",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/forks.api.bats",
+              "test/kinds.api.bats",
+              "test/profile-cli.bats",
+              "test/profile-report.bats",
+              "test/profile.api.bats",
+              "test/profile.measure.bats"
+            ]
+          }
+        },
+        "envrc": "lib/envrc",
+        "fingerprint": {
+          "source": "lib/fingerprint",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/fingerprint.api.bats",
+              "test/fingerprint-env.bats"
+            ]
+          }
+        },
+        "flatpak": {
+          "source": "lib/flatpak",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/flatpak.api.bats",
+              "test/toolchain.channel.bats"
+            ]
+          }
+        },
+        "forge": {
+          "source": "lib/forge",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/forge.api.bats",
+              "test/forge.managed-comment.bats",
+              "test/forge.stale.bats",
+              "test/forge.wait-for-run.bats",
+              "test/review-handback.bats",
+              "test/forge-command-class.bats",
+              "test/request-review.bats",
+              "test/pr-hygiene.bats",
+              "test/plan-version.bats",
+              "test/promote.bats",
+              "test/linear-sync-refs.bats",
+              "test/linear.mentions.bats",
+              "test/agents-sync-hat.bats",
+              "test/linear-close-mentioned-issues.bats",
+              "test/deployment-preview.bats",
+              "test/profile-report.bats",
+              "test/profile.comment.bats",
+              "test/testing-record-escapes.bats",
+              "test/testing-report-scorecard.bats",
+              "test/attach-artifacts.bats",
+              "test/forge.wait-for-run.bats",
+              "test/forge-wait-for-run.bats",
+              "test/forge-report-run.bats",
+              "test/review-run.bats",
+              "test/forge-probe.bats",
+              "test/forge.registry.bats",
+              "test/forge-review-links.bats",
+              "test/linear.reviews.bats"
+            ]
+          }
+        },
+        "forgejo": {
+          "source": "lib/forgejo",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/forgejo.api.bats",
+              "test/forgejo.packages.bats",
+              "test/forge.api.bats",
+              "test/review-handback.bats",
+              "test/forge.wait-for-run.bats",
+              "test/forge.registry.bats",
+              "test/forge-review-links.bats"
+            ]
+          }
+        },
+        "github": {
+          "source": "lib/github",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/github.api.bats",
+              "test/github.releases.bats",
+              "test/releases.github.bats",
+              "test/forge.wait-for-run.bats",
+              "test/forge.registry.bats",
+              "test/forge-review-links.bats"
+            ]
+          }
+        },
+        "git": {
+          "source": "lib/git",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/git.repository.bats",
+              "test/git.forge.bats",
+              "test/git.api.bats",
+              "test/git.index.bats",
+              "test/git-push-class.bats",
+              "test/git-invocations.bats",
+              "test/git-worktree.bats",
+              "test/git-worktree-lifecycle.bats",
+              "test/git-commits.bats",
+              "test/git-branches.bats",
+              "test/git-provenance.bats",
+              "test/git-remotes.bats",
+              "test/git-credential.bats",
+              "test/git-notes.bats",
+              "test/git-tags.bats",
+              "test/git-rebase.bats",
+              "test/git-fixtures.bats",
+              "test/sites.branch.bats",
+              "test/git.repository.bats"
+            ]
+          },
+          "areas": {
+            "attributes": {
+              "source": "lib/git/attributes",
+              "full_suite": false,
+              "tests": {
+                "unit": [
+                  "test/git-attributes.bats"
+                ]
+              }
+            },
+            "trees": {
+              "source": "lib/git/trees",
+              "full_suite": false,
+              "tests": {
+                "unit": [
+                  "test/git.trees.bats"
+                ]
+              }
+            }
+          }
+        },
+        "gitlab": {
+          "source": "lib/gitlab",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/gitlab.api.bats",
+              "test/gitlab.terraform-state.bats",
+              "test/gitlab.landing.bats",
+              "test/forge-report-run.bats",
+              "test/forge.api.bats",
+              "test/review-handback.bats",
+              "test/forge.wait-for-run.bats",
+              "test/forge.registry.bats",
+              "test/forge-review-links.bats"
+            ]
+          }
+        },
+        "graphql": {
+          "source": "lib/graphql",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/graphql.api.bats"
+            ]
+          }
+        },
+        "homebrew": {
+          "source": "lib/homebrew",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/homebrew.api.bats",
+              "test/homebrew.tap.bats",
+              "test/releases.candidate.bats",
+              "test/releases.reach.bats",
+              "test/releases.tap.bats",
+              "test/sites.api.bats"
+            ]
+          }
+        },
+        "http": {
+          "source": "lib/http",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/http_mock.bats",
+              "test/http.api.bats"
+            ]
+          }
+        },
+        "compile": {
+          "source": "lib/compile",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/compile.api.bats",
+              "test/compile-cli.bats"
+            ]
+          }
+        },
+        "kinds": {
+          "source": "lib/kinds",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/kinds.api.bats",
+              "test/kinds-lower.bats"
+            ]
+          }
+        },
+        "labels": {
+          "source": "lib/labels",
+          "full_suite": true,
+          "tests": {
+            "unit": [
+              "test/labels.api.bats",
+              "test/labels-apply.bats",
+              "test/labels-establish.bats",
+              "test/sync-labels.bats"
+            ]
+          }
+        },
+        "likec4": {
+          "source": "lib/likec4",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/likec4.api.bats"
+            ]
+          }
+        },
+        "linear": {
+          "source": "lib/linear",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/linear.tracker.bats",
+              "test/agents-sync-hat.bats",
+              "test/fingerprint.api.bats",
+              "test/linear-close-mentioned-issues.bats",
+              "test/linear-sync-refs.bats",
+              "test/linear.api.bats",
+              "test/linear-api-goldens.bats",
+              "test/linear.intake.bats",
+              "test/linear.links.bats",
+              "test/linear.mentions.bats",
+              "test/linear.refs.bats",
+              "test/linear.reviews.bats",
+              "test/linear-close-merged-issues.bats"
+            ]
+          },
+          "areas": {
+            "fixtures": {
+              "source": "test/fixtures/linear",
+              "full_suite": false,
+              "tests": {
+                "unit": [
+                  "test/gitlab.api.bats",
+                  "test/linear-close-mentioned-issues.bats",
+                  "test/linear-sync-refs.bats",
+                  "test/linear.mentions.bats",
+                  "test/linear.reviews.bats",
+                  "test/linear-close-merged-issues.bats"
+                ]
+              }
+            }
+          }
+        },
+        "hats": {
+          "source": "lib/hats",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/hats.api.bats",
+              "test/agents-sync-hat.bats"
+            ]
+          }
+        },
+        "log": {
+          "source": "lib/log",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/interpreter.bats",
+              "test/log.check.bats"
+            ]
+          }
+        },
+        "lock": {
+          "source": "lib/lock",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/lock.mutex.bats"
+            ]
+          }
+        },
+        "manifest": {
+          "source": "lib/manifest",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/manifest.api.bats"
+            ]
+          }
+        },
+        "markdown": {
+          "source": "lib/markdown",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/markdown-prose.bats",
+              "test/markdown-records.bats",
+              "test/markdown.api.bats",
+              "test/linear.links.bats",
+              "test/linear.refs.bats",
+              "test/linear.mentions.bats",
+              "test/forge.managed-comment.bats"
+            ]
+          }
+        },
+        "golang": {
+          "source": "lib/golang",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/golang.api.bats",
+              "test/install.bats"
+            ]
+          }
+        },
+        "node": {
+          "source": "lib/node",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/node.api.bats",
+              "test/node.packages.bats",
+              "test/install.bats",
+              "test/toolchain.channel.bats"
+            ]
+          }
+        },
+        "os": {
+          "source": "lib/os",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/os.api.bats"
+            ]
+          }
+        },
+        "pipelines": {
+          "source": "lib/pipelines",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/pipelines.api.bats",
+              "test/releases.candidate.bats"
+            ]
+          }
+        },
+        "queue": {
+          "source": "lib/queue",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/queue.api.bats"
+            ]
+          }
+        },
+        "tracker": {
+          "source": "lib/tracker",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/tracker.api.bats"
+            ]
+          }
+        },
+        "scheduler": {
+          "source": "lib/scheduler",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/scheduler.fixtures.bats",
+              "test/scheduler.landing.bats",
+              "test/scheduler.read.bats",
+              "test/scheduler.act.bats"
+            ]
+          }
+        },
+        "path": {
+          "source": "lib/path",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/path.api.bats"
+            ]
+          }
+        },
+        "process": {
+          "source": "lib/process",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/lefthook-rc.bats",
+              "test/process.api.bats",
+              "test/process.memory_cap.bats"
+            ]
+          }
+        },
+        "profile": {
+          "source": "lib/profile",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/profile-report.bats",
+              "test/profile.api.bats",
+              "test/profile.columns.bats",
+              "test/profile.comment.bats",
+              "test/profile.declaration.bats",
+              "test/profile.gate.bats",
+              "test/profile.measure.bats",
+              "test/profile.tables.bats"
+            ]
+          }
+        },
+        "promotion": {
+          "source": "lib/promotion",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/promotion.api.bats"
+            ]
+          },
+          "areas": {
+            "fixtures": {
+              "source": "test/fixtures/promotion",
+              "full_suite": false,
+              "tests": {
+                "unit": [
+                  "test/promotion.api.bats",
+                  "test/releases.reach.bats",
+                  "test/releases.candidate.bats"
+                ]
+              }
+            }
+          }
+        },
+        "releases": {
+          "source": "lib/releases",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/bump.api.bats",
+              "test/releases-fixtures.bats",
+              "test/releases.api.bats",
+              "test/releases.attempt.bats",
+              "test/releases.candidate.bats",
+              "test/releases.certified.bats",
+              "test/releases.files.bats",
+              "test/releases.github.bats",
+              "test/releases.land.bats",
+              "test/releases.notes.bats",
+              "test/releases.orphans.bats",
+              "test/releases.prepare.bats",
+              "test/releases.reach.bats",
+              "test/releases.record.bats",
+              "test/releases.record.commit.bats",
+              "test/releases.tap.bats",
+              "test/releases.tested.bats"
+            ]
+          }
+        },
+        "sites": {
+          "source": "lib/sites",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/sites.api.bats",
+              "test/sites.branch.bats"
+            ]
+          }
+        },
+        "rust": {
+          "source": "lib/rust",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/rust.api.bats"
+            ]
+          }
+        },
+        "rustup": {
+          "source": "lib/rustup",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/rust.api.bats"
+            ]
+          }
+        },
+        "self": {
+          "source": "lib/self",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/self.api.bats",
+              "test/self.assert.bats",
+              "test/self.boot.bats",
+              "test/self.compiled.bats",
+              "test/self.pins.bats",
+              "test/self.lock.reconcile.bats",
+              "test/self.resolve.bats",
+              "test/install.bats",
+              "test/self.config.bats",
+              "test/self.lock.bats",
+              "test/self.dependencies.bats",
+              "test/self.structs.bats",
+              "test/self.cache.bats",
+              "test/self.shellops.bats"
+            ]
+          }
+        },
+        "shell_rc": {
+          "source": "lib/shell_rc",
+          "full_suite": false
+        },
+        "stdout": {
+          "source": "lib/stdout",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/stdout.api.bats"
+            ]
+          }
+        },
+        "string": {
+          "source": "lib/string",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/string.api.bats"
+            ]
+          }
+        },
+        "structs": {
+          "source": "lib/structs",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/ci-candidate-needs.bats",
+              "test/ci-git-strategy.bats",
+              "test/ci-landing-rules.bats",
+              "test/ci-memory-cap.bats",
+              "test/ci-trace-after-script.bats",
+              "test/graphql.api.bats",
+              "test/http.api.bats",
+              "test/http_mock.bats",
+              "test/language.api.bats",
+              "test/lefthook-rc.bats",
+              "test/manifest-schema.bats",
+              "test/os.api.bats",
+              "test/structs-argv-ceiling.bats",
+              "test/structs-booleans.bats",
+              "test/structs-enums.bats",
+              "test/structs-lint-boolean-tests.bats",
+              "test/structs-lint-booleans.bats",
+              "test/structs-lint-enums.bats",
+              "test/structs-lint-jq-program.bats",
+              "test/structs-lint-spelling-tests.bats",
+              "test/structs-lint-string-tests.bats",
+              "test/structs-lint.bats",
+              "test/structs-numbers.bats",
+              "test/structs-silt-backend.bats",
+              "test/structs-types.bats",
+              "test/structs.api.bats"
+            ]
+          }
+        },
+        "system-packages": {
+          "source": "lib/system_packages",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/system_packages.api.bats",
+              "test/toolchain.channel.bats"
+            ]
+          }
+        },
+        "tags": {
+          "source": "lib/tags",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/tags.api.bats"
+            ]
+          }
+        },
+        "tarball": {
+          "source": "lib/tarball",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/tarball.api.bats"
+            ]
+          }
+        },
+        "terraform": {
+          "source": "lib/terraform",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/terraform.api.bats",
+              "test/terraform.install.bats",
+              "test/toolchain.tool.bats"
+            ]
+          }
+        },
+        "testing": {
+          "source": "lib/testing",
+          "full_suite": true,
+          "tests": {
+            "unit": [
+              "test/testing-adapter.bats",
+              "test/testing-bats-framework.bats",
+              "test/testing-cargo-discovery.bats",
+              "test/testing-cargo-framework.bats",
+              "test/testing-collect-records.bats",
+              "test/testing-config-edit.bats",
+              "test/testing-dispatch.bats",
+              "test/testing-escapes.bats",
+              "test/testing-frameworks.bats",
+              "test/testing-fuzz-commands.bats",
+              "test/testing-imports.bats",
+              "test/testing-llvm-cov-framework.bats",
+              "test/testing-metrics-aggregate.bats",
+              "test/testing-metrics-collect.bats",
+              "test/testing-metrics-display.bats",
+              "test/testing-metrics-emit.bats",
+              "test/testing-metrics-location.bats",
+              "test/testing-metrics-verdict.bats",
+              "test/testing-nextest-framework.bats",
+              "test/testing-node-test-framework.bats",
+              "test/testing-path-coverage.bats",
+              "test/testing-path-globs.bats",
+              "test/testing-path-names.bats",
+              "test/testing-playwright-framework.bats",
+              "test/testing-pytest-framework.bats",
+              "test/testing-resolve-binary.bats",
+              "test/testing-resolver-areas-for-paths.bats",
+              "test/testing-resolver-argv.bats",
+              "test/testing-resolver-attach.bats",
+              "test/testing-resolver-batch-discovery.bats",
+              "test/testing-resolver-derive.bats",
+              "test/testing-resolver-files-by-area.bats",
+              "test/testing-resolver-pick-areas.bats",
+              "test/testing-resolver-tests-for-areas.bats",
+              "test/testing-resolver-unmapped.bats",
+              "test/testing-resolver-widened-by.bats",
+              "test/testing-rust-doctest-framework.bats",
+              "test/testing-scorecard-fail-closed.bats",
+              "test/testing-scorecard-rollout.bats",
+              "test/testing-scorecard-summary.bats",
+              "test/testing-scorecard-trace.bats",
+              "test/testing-scorecard.bats",
+              "test/testing-selectors-trace-select.bats",
+              "test/testing-selectors-trace.bats",
+              "test/testing-selectors.bats",
+              "test/testing-shard.bats",
+              "test/testing-suite-schema.bats",
+              "test/testing-tarpaulin-framework.bats",
+              "test/testing-trace-audit.bats",
+              "test/testing-trace-lines.bats",
+              "test/testing-trace-location.bats",
+              "test/testing-trace-map.bats",
+              "test/testing-trace-paths.bats",
+              "test/testing-trace.bats",
+              "test/testing-unittest-framework.bats",
+              "test/testing-vitest-framework.bats",
+              "test/testmap-full-suite.bats"
+            ]
+          }
+        },
+        "tui": {
+          "source": "lib/tui",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/kinds.api.bats",
+              "test/profile-cli.bats",
+              "test/profile-report.bats",
+              "test/profile.api.bats",
+              "test/profile.tables.bats",
+              "test/tui.api.bats"
+            ]
+          }
+        },
+        "time": {
+          "source": "lib/time",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/compile.api.bats",
+              "test/time.api.bats"
+            ]
+          }
+        },
+        "toml": {
+          "source": "lib/toml",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/toml.api.bats"
+            ]
+          }
+        },
+        "toolchain": {
+          "source": "lib/toolchain",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/toolchain.api.bats",
+              "test/toolchain.tool.bats",
+              "test/toolchain.channel.bats",
+              "test/install.bats"
+            ]
+          }
+        },
+        "vercel": {
+          "source": "lib/vercel",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/vercel.api.bats"
+            ]
+          }
+        },
+        "versions": {
+          "source": "lib/versions",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/versions.api.bats",
+              "test/versions.format.bats"
+            ]
+          }
+        },
+        "violet": {
+          "source": "lib/violet",
+          "full_suite": false
+        },
+        "xplat": {
+          "source": "lib/xplat",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/xplat.api.bats"
+            ]
+          }
+        },
+        "zigbuild": {
+          "source": "lib/zigbuild",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/zigbuild.api.bats"
+            ]
+          }
+        },
+        "tectonic": {
+          "source": "lib/tectonic",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/tectonic.api.bats",
+              "test/render.bats"
+            ]
+          }
+        },
+        "pandoc": {
+          "source": "lib/pandoc",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/pandoc.api.bats",
+              "test/render.bats"
+            ]
+          }
+        },
+        "opx": {
+          "source": "lib/opx",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/opx.api.bats",
+              "test/opx.yaml.bats"
+            ]
+          }
+        },
+        "language": {
+          "source": "lib/language",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/language.api.bats"
+            ]
+          }
+        },
+        "agents": {
+          "source": "lib/agents",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/agents-run.bats",
+              "test/agents.api.bats",
+              "test/agents.claude-cli.bats",
+              "test/agents.cursor-cli.bats",
+              "test/agents.cursor.bats",
+              "test/agents.headless.bats",
+              "test/agents.incident.bats",
+              "test/ecosystems.api.bats",
+              "test/forge-publish-package.bats",
+              "test/homebrew.api.bats",
+              "test/homebrew.tap.bats",
+              "test/linear-close-mentioned-issues.bats",
+              "test/linear-sync-refs.bats",
+              "test/manifest.api.bats",
+              "test/release-prepare.bats",
+              "test/releases.github.bats",
+              "test/releases.prepare.bats",
+              "test/stale-guard-cli.bats"
+            ]
+          },
+          "areas": {
+            "claude-cli": {
+              "source": "lib/agents/claude-cli",
+              "full_suite": false,
+              "tests": {
+                "unit": [
+                  "test/agents-run.bats",
+                  "test/agents.api.bats",
+                  "test/agents.claude-cli.bats",
+                  "test/agents.cursor-cli.bats",
+                  "test/agents.cursor.bats",
+                  "test/ecosystems.api.bats",
+                  "test/forge-publish-package.bats",
+                  "test/homebrew.api.bats",
+                  "test/homebrew.tap.bats",
+                  "test/linear-close-mentioned-issues.bats",
+                  "test/linear-sync-refs.bats",
+                  "test/manifest.api.bats",
+                  "test/release-prepare.bats",
+                  "test/releases.github.bats",
+                  "test/releases.prepare.bats",
+                  "test/stale-guard-cli.bats"
+                ]
+              }
+            },
+            "cursor": {
+              "source": "lib/agents/cursor",
+              "full_suite": false,
+              "tests": {
+                "unit": [
+                  "test/agents-run.bats",
+                  "test/agents.api.bats",
+                  "test/agents.claude-cli.bats",
+                  "test/agents.cursor-cli.bats",
+                  "test/agents.cursor.bats",
+                  "test/ecosystems.api.bats",
+                  "test/forge-publish-package.bats",
+                  "test/homebrew.api.bats",
+                  "test/homebrew.tap.bats",
+                  "test/linear-close-mentioned-issues.bats",
+                  "test/linear-sync-refs.bats",
+                  "test/manifest.api.bats",
+                  "test/release-prepare.bats",
+                  "test/releases.github.bats",
+                  "test/releases.prepare.bats",
+                  "test/stale-guard-cli.bats"
+                ]
+              }
+            },
+            "cursor-cli": {
+              "source": "lib/agents/cursor-cli",
+              "full_suite": false,
+              "tests": {
+                "unit": [
+                  "test/agents-run.bats",
+                  "test/agents.api.bats",
+                  "test/agents.claude-cli.bats",
+                  "test/agents.cursor-cli.bats",
+                  "test/agents.cursor.bats",
+                  "test/ecosystems.api.bats",
+                  "test/forge-publish-package.bats",
+                  "test/homebrew.api.bats",
+                  "test/homebrew.tap.bats",
+                  "test/linear-close-mentioned-issues.bats",
+                  "test/linear-sync-refs.bats",
+                  "test/manifest.api.bats",
+                  "test/release-prepare.bats",
+                  "test/releases.github.bats",
+                  "test/releases.prepare.bats",
+                  "test/stale-guard-cli.bats"
+                ]
+              }
+            },
+            "headless": {
+              "source": "lib/agents/headless",
+              "full_suite": false,
+              "tests": {
+                "unit": [
+                  "test/agents-run.bats",
+                  "test/agents.api.bats",
+                  "test/agents.claude-cli.bats",
+                  "test/agents.cursor-cli.bats",
+                  "test/agents.cursor.bats",
+                  "test/agents.headless.bats",
+                  "test/ecosystems.api.bats",
+                  "test/forge-publish-package.bats",
+                  "test/homebrew.api.bats",
+                  "test/homebrew.tap.bats",
+                  "test/linear-close-mentioned-issues.bats",
+                  "test/linear-sync-refs.bats",
+                  "test/manifest.api.bats",
+                  "test/release-prepare.bats",
+                  "test/releases.github.bats",
+                  "test/releases.prepare.bats",
+                  "test/stale-guard-cli.bats"
+                ]
+              }
+            },
+            "kinded": {
+              "source": "lib/agents/fixtures",
+              "full_suite": false,
+              "tests": {
+                "unit": [
+                  "test/agents.api.bats"
+                ]
+              }
+            },
+            "fixtures": {
+              "source": "test/fixtures/agents",
+              "full_suite": false,
+              "tests": {
+                "unit": [
+                  "test/agents.claude-cli.bats",
+                  "test/agents.cursor-cli.bats",
+                  "test/agents.headless.bats"
+                ]
+              }
+            }
+          }
+        },
+        "intake": {
+          "source": "lib/intake",
+          "tests": {
+            "unit": [
+              "test/intake.api.bats"
+            ]
+          }
+        },
+        "regex": {
+          "source": "lib/regex",
+          "full_suite": false,
+          "tests": {
+            "unit": [
+              "test/regex.api.bats"
+            ]
+          }
+        }
+      }
+    },
+    "engine": {
+      "source": "engine",
+      "areas": {
+        "ast": "engine/ast",
+        "cache": "engine/cache",
+        "cli": "engine/cli",
+        "errors": "engine/errors",
+        "lowering": "engine/lowering",
+        "opgen": "engine/opgen",
+        "parser": "engine/parser",
+        "posix": "engine/posix",
+        "resolver": "engine/resolver"
+      }
+    },
+    "infra": {
+      "source": ".ops/infra",
+      "tests": {}
+    },
+    "cli": {
+      "source": "cli",
+      "tests": {
+        "unit": [
+          "test/cargo-sync-version-push.bats",
+          "test/compile-cli.bats",
+          "test/fingerprint-env.bats",
+          "test/fingerprint.api.bats",
+          "test/git-bump.bats",
+          "test/git-commit.bats",
+          "test/infra-cli.bats",
+          "test/intake-cli.bats",
+          "test/install.bats",
+          "test/plan-version.bats",
+          "test/pr-hygiene.bats",
+          "test/profile-cli.bats",
+          "test/promote.bats",
+          "test/publish-release.bats",
+          "test/push-trace-notes.bats",
+          "test/releases.prepare.bats",
+          "test/request-review.bats",
+          "test/shellcheck-cli.bats",
+          "test/stale-guard-cli.bats",
+          "test/sync-manifest.bats",
+          "test/test-cli.bats"
+        ]
+      }
+    },
+    "actions": {
+      "source": "actions",
+      "tests": {
+        "unit": [
+          "test/action-bootstrap.bats",
+          "test/agents-run.bats",
+          "test/agents-sync-hat.bats",
+          "test/attach-artifacts.bats",
+          "test/build-release.bats",
+          "test/cargo-publish.bats",
+          "test/cargo-sync-version-flag-values.bats",
+          "test/cargo-sync-version-manifest.bats",
+          "test/cargo-sync-version-push.bats",
+          "test/cargo-sync-version-source.bats",
+          "test/cargo-sync-version-workspace.bats",
+          "test/cargo-sync-version-write-only.bats",
+          "test/deployment-preview.bats",
+          "test/forge-probe.bats",
+          "test/forge-publish-package.bats",
+          "test/forge-report-run.bats",
+          "test/forge-wait-for-run.bats",
+          "test/git-auth.bats",
+          "test/git-credential.bats",
+          "test/git-sign.bats",
+          "test/git-tags-prune.bats",
+          "test/git-version-guard.bats",
+          "test/govern-suggest-version.bats",
+          "test/linear-close-mentioned-issues.bats",
+          "test/linear-sync-refs.bats",
+          "test/profile-report.bats",
+          "test/release-candidate.bats",
+          "test/certify.bats",
+          "test/release-move-branch.bats",
+          "test/release-move-branches.bats",
+          "test/release-prepare.bats",
+          "test/release-promote.bats",
+          "test/release-publish-tap.bats",
+          "test/render.bats",
+          "test/rust-coverage.bats",
+          "test/testing-collect-records.bats",
+          "test/testing-record-escapes.bats",
+          "test/testing-report-scorecard.bats",
+          "test/linear-close-merged-issues.bats",
+          "test/testing-coverage-action.bats"
+        ]
+      }
+    },
+    "schema": {
+      "source": "schema",
+      "tests": {
+        "unit": [
+          "test/ecosystems.api.bats",
+          "test/forge-publish-package.bats",
+          "test/homebrew.api.bats",
+          "test/homebrew.tap.bats",
+          "test/labels.api.bats",
+          "test/linear-close-mentioned-issues.bats",
+          "test/linear-sync-refs.bats",
+          "test/manifest-schema.bats",
+          "test/manifest.api.bats",
+          "test/push-trace-notes.bats",
+          "test/release-prepare.bats",
+          "test/releases.api.bats",
+          "test/releases.github.bats",
+          "test/releases.notes.bats",
+          "test/releases.prepare.bats",
+          "test/stale-guard-cli.bats",
+          "test/testing-metrics-emit.bats"
+        ]
+      }
+    },
+    "interpreter": {
+      "source": "interpreter",
+      "tests": {
+        "unit": [
+          "test/interpreter.bats"
+        ]
+      }
+    },
+    "builtins": {
+      "source": "builtins",
+      "full_suite": true
+    },
+    "tools": {
+      "source": "plugins/tools",
+      "full_suite": true
+    },
+    "docs": {
+      "source": "docs",
+      "tests": {}
+    },
+    "planning": {
+      "source": "planning",
+      "tests": {}
+    },
+    "repo": {
+      "areas": {
+        "scripts": {
+          "source": ".scripts",
+          "tests": {
+            "unit": [
+              "test/ci-git-present.bats",
+              "test/ci-jq-absent.bats",
+              "test/install.bats",
+              "test/promotion.api.bats",
+              "test/releases.candidate.bats",
+              "test/releases.reach.bats",
+              "test/review-run.bats",
+              "test/ci-staging-siblings.bats"
+            ]
+          }
+        },
+        "envrc": {
+          "source": ".envrc",
+          "tests": {}
+        },
+        "logs": {
+          "source": "shell/.logs",
+          "tests": {},
+          "inert": true
+        },
+        "gitignore": {
+          "source": ".gitignore",
+          "tests": {}
+        },
+        "gitattributes": {
+          "source": ".gitattributes",
+          "tests": {}
+        },
+        "gitmodules": {
+          "source": ".gitmodules",
+          "tests": {}
+        },
+        "graphqlrc": {
+          "source": ".graphqlrc",
+          "tests": {}
+        },
+        "shellcheckrc": {
+          "source": ".shellcheckrc",
+          "tests": {}
+        },
+        "version": {
+          "source": ".version",
+          "tests": {}
+        },
+        "readme": {
+          "source": "README.md",
+          "tests": {}
+        },
+        "licence": {
+          "source": "LICENSE",
+          "tests": {}
+        },
+        "action": {
+          "source": "action",
+          "tests": {
+            "unit": [
+              "test/action-bootstrap.bats",
+              "test/action-dispatch.bats"
+            ]
+          }
+        },
+        "init": {
+          "source": "init",
+          "tests": {}
+        },
+        "ops": {
+          "source": "ops",
+          "tests": {
+            "unit": [
+              "test/ops.bats"
+            ]
+          }
+        },
+        "lefthook": {
+          "source": "lefthook.yml",
+          "tests": {
+            "unit": [
+              "test/lefthook-rc.bats"
+            ]
+          }
+        },
+        "lefthookrc": {
+          "source": ".lefthookrc",
+          "tests": {
+            "unit": [
+              "test/lefthook-rc.bats"
+            ]
+          }
+        },
+        "imports": {
+          "source": ".ops/config/imports.yaml",
+          "tests": {
+            "unit": [
+              "test/self.pins.bats",
+              "test/self.resolve.bats"
+            ]
+          }
+        },
+        "compiled": {
+          "source": ".ops",
+          "tests": {
+            "unit": [
+              "test/compile-cli.bats",
+              "test/self.compiled.bats",
+              "test/import.api.bats",
+              "test/structs-types.bats"
+            ]
+          }
+        },
+        "ecosystems": {
+          "source": ".ops/config/ecosystems.yaml",
+          "tests": {
+            "unit": [
+              "test/ecosystems.api.bats"
+            ]
+          }
+        },
+        "manifest": {
+          "source": ".ops/config/manifest.yaml",
+          "tests": {
+            "unit": [
+              "test/ecosystems.api.bats",
+              "test/forge-publish-package.bats",
+              "test/homebrew.api.bats",
+              "test/homebrew.tap.bats",
+              "test/linear-close-mentioned-issues.bats",
+              "test/linear-sync-refs.bats",
+              "test/manifest.api.bats",
+              "test/release-prepare.bats",
+              "test/releases.github.bats",
+              "test/releases.prepare.bats",
+              "test/stale-guard-cli.bats"
+            ]
+          }
+        },
+        "renovate": {
+          "source": "renovate.json",
+          "tests": {}
+        },
+        "shellcheck": {
+          "source": "shellcheck.json",
+          "tests": {}
+        },
+        "testmap": {
+          "source": "testmap.json",
+          "tests": {}
+        },
+        "tools": {
+          "source": ".ops/config/tools.yaml",
+          "tests": {}
+        },
+        "profiling": {
+          "source": ".ops/config/profiling.yaml",
+          "tests": {
+            "unit": [
+              "test/profile.declaration.bats"
+            ]
+          }
+        },
+        "lock": {
+          "source": ".ops/lock",
+          "tests": {
+            "unit": [
+              "test/action-bootstrap.bats",
+              "test/action-dispatch.bats"
+            ]
+          }
+        }
+      }
+    },
+    "testing-infra": {
+      "full_suite": true,
+      "tests": {
+        "unit": [
+          "test/untraced.bats"
+        ]
+      },
+      "areas": {
+        "ci": {
+          "source": ".gitlab-ci",
+          "areas": {
+            "contexts": {
+              "source": ".gitlab-ci/contexts",
+              "tests": {
+                "unit": [
+                  "test/ci-candidate-needs.bats"
+                ]
+              }
+            },
+            "jobs": {
+              "source": ".gitlab-ci/jobs",
+              "tests": {
+                "unit": [
+                  "test/ci-candidate-needs.bats",
+                  "test/ci-landing-rules.bats",
+                  "test/ci-trace-after-script.bats"
+                ]
+              }
+            },
+            "presets": {
+              "source": ".gitlab-ci/presets",
+              "tests": {
+                "unit": [
+                  "test/ci-git-strategy.bats",
+                  "test/ci-landing-rules.bats",
+                  "test/ci-memory-cap.bats"
+                ]
+              }
+            },
+            "sites": ".gitlab-ci/sites",
+            "stages": {
+              "source": ".gitlab-ci/stages",
+              "tests": {
+                "unit": [
+                  "test/ci-candidate-needs.bats",
+                  "test/ci-landing-rules.bats"
+                ]
+              }
+            },
+            "fixtures": {
+              "source": "test/fixtures/ci",
+              "full_suite": false,
+              "tests": {
+                "unit": [
+                  "test/ci-git-present.bats",
+                  "test/ci-jq-absent.bats"
+                ]
+              }
+            },
+            "testing": {
+              "source": ".gitlab-ci/testing",
+              "tests": {
+                "unit": [
+                  "test/ci-landing-rules.bats"
+                ]
+              }
+            }
+          }
+        },
+        "pipeline": ".gitlab-ci.yml",
+        "actions": ".github",
+        "forgejo": ".forgejo"
+      }
+    }
+  }
+}

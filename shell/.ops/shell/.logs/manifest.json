@@ -1,0 +1,7 @@
+{
+  "name": "shell-logs",
+  "description": "The shell base for reporting to stderr, in strict POSIX sh.",
+  "linear-team": "OPS",
+  "org": "creature-workshop",
+  "repo": "shell-logs"
+}

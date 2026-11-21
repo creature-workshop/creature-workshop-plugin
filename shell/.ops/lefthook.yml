@@ -1,0 +1,28 @@
+# Sourced by each installed hook before its commands run: the per-process
+# memory cap every command runs under (lib/process/memory_cap.sh).
+rc: ./.lefthookrc
+
+pre-commit:
+  parallel: true
+  commands:
+    shellcheck:
+      run: .scripts/shellcheck {staged_files}
+    lint:
+      run: .scripts/lint --added-only {staged_files}
+    rust-fmt:
+      glob: "*.rs"
+      run: cargo fmt --all --check --manifest-path engine/Cargo.toml
+    rust-clippy:
+      glob: "*.rs"
+      run: cargo clippy --workspace --all-targets --no-default-features --manifest-path engine/Cargo.toml -- -D warnings
+
+pre-push:
+  commands:
+    rust-test:
+      glob: "*.rs"
+      run: cargo test --workspace --no-default-features --manifest-path engine/Cargo.toml
+    test-scorecard:
+      # Exit 2 is an advisory finding on a complete mapping: reported, not blocking.
+      run: SHELLOPS_DIR="$PWD" PROJ="$PWD" cli/test scorecard --check || [ $? -eq 2 ]
+    review-handback:
+      run: SHELLOPS_DIR="$PWD" PROJ="$PWD" cli/request-review --check

@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+USAGE="$(cat <<HELP
+Waits for a tag to appear on a GitHub repository, then dispatches a workflow.
+Exits 0 regardless of outcome (best-effort) unless --wait is used,
+in which case exits non-zero on failure or timeout.
+
+Usage: github/dispatch [-h,--help] [-a,--attempts N] [-i,--interval S] [-w,--wait] <owner> <repo> <workflow> <tag>
+
+Arguments:
+  owner           GitHub org or user (e.g. creature-workshop).
+  repo            GitHub repository name (e.g. shellops).
+  workflow        Workflow filename to dispatch (e.g. release.yaml).
+  tag             Tag name to wait for and dispatch on.
+
+Flags:
+  -a, --attempts N   Max poll attempts for tag (default: 30).
+  -i, --interval S   Seconds between tag poll attempts (default: 10).
+  -w, --wait         Wait for the dispatched workflow run to complete.
+  -h, --help         Show this help text.
+
+Environment:
+  GITHUB_TOKEN    Required. API token with actions:write scope.
+
+HELP
+)"
+
+import "$SHELLOPS_DIR/lib/github/api.sh"
+
+RUN_POLL_ATTEMPTS=10
+RUN_POLL_INTERVAL=5
+
+ARG_OWNER=""
+ARG_REPO=""
+ARG_WORKFLOW=""
+ARG_TAG=""
+FLAG_ATTEMPTS=30
+FLAG_INTERVAL=10
+@false FLAG_WAIT
+
+main() {
+  parse_args "$@"
+  require_token
+  poll_and_dispatch
+}
+
+parse_args() {
+  # Flags are consumed in place; positionals are assigned to the ARG_*
+  # globals in order as they appear.
+  __parse_args__npos=0
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -a|--attempts) FLAG_ATTEMPTS="${2:?--attempts requires a value}"; shift ;;
+      -i|--interval) FLAG_INTERVAL="${2:?--interval requires a value}"; shift ;;
+      -w|--wait)     @true __parse_args__true_1; FLAG_WAIT="$__parse_args__true_1" ;;
+      -h|--help)     log "$USAGE"; exit 0 ;;
+      -*)            error "Unknown option: $1"; log "$USAGE"; exit 1 ;;
+      *)
+        __parse_args__npos=$((__parse_args__npos + 1))
+        case "$__parse_args__npos" in
+          1) ARG_OWNER="$1" ;;
+          2) ARG_REPO="$1" ;;
+          3) ARG_WORKFLOW="$1" ;;
+          4) ARG_TAG="$1" ;;
+        esac
+        ;;
+    esac
+    shift
+  done
+
+  if [ -z "$ARG_OWNER" ] ||
+    [ -z "$ARG_REPO" ] ||
+    [ -z "$ARG_WORKFLOW" ] ||
+    [ -z "$ARG_TAG" ]; then
+    error "<owner>, <repo>, <workflow>, and <tag> are all required."
+    log "$USAGE"
+    exit 1
+  fi
+}
+
+require_token() {
+  if [ -z "${GITHUB_TOKEN:-}" ]; then
+    error "GITHUB_TOKEN is not set."
+    exit 1
+  fi
+}
+
+poll_and_dispatch() {
+  @set __poll_and_dispatch__tag_opts "$(github__new_github_repo_options)" \
+    '.owner' "$ARG_OWNER" \
+    '.repo'  "$ARG_REPO" \
+    '.tag'   "$ARG_TAG" \
+    '.token' "$GITHUB_TOKEN"
+
+  @set __poll_and_dispatch__dispatch_opts "$(github__new_github_dispatch_options)" \
+    '.owner'    "$ARG_OWNER" \
+    '.repo'     "$ARG_REPO" \
+    '.workflow' "$ARG_WORKFLOW" \
+    '.ref'      "$ARG_TAG" \
+    '.token'    "$GITHUB_TOKEN"
+
+  if ! wait_for_tag "$__poll_and_dispatch__tag_opts"; then
+    log "Tag ${ARG_TAG} did not appear on GitHub within timeout. Skipping."
+    exit 0
+  fi
+
+  github__dispatch_workflow "$__poll_and_dispatch__dispatch_opts"
+  log "Dispatched ${ARG_WORKFLOW} for ${ARG_TAG}"
+
+  track_run "$__poll_and_dispatch__dispatch_opts"
+}
+
+wait_for_tag() {
+  __wait_for_tag__i=1
+  while [ "$__wait_for_tag__i" -le "$FLAG_ATTEMPTS" ]; do
+    if github__tag_exists "$1"; then
+      return 0
+    fi
+    log "Waiting for ${ARG_TAG} on GitHub (${__wait_for_tag__i}/${FLAG_ATTEMPTS})..."
+    sleep "$FLAG_INTERVAL"
+    __wait_for_tag__i=$((__wait_for_tag__i + 1))
+  done
+
+  return 1
+}
+
+track_run() {
+  __track_run__run_json="$(github__wait_for_run_start "$1" "$RUN_POLL_ATTEMPTS" "$RUN_POLL_INTERVAL")" || {
+    log "Could not locate workflow run. Check GitHub Actions manually."
+    return 0
+  }
+
+  @let "$__track_run__run_json" __track_run__ html_url id
+  log "Run: ${__track_run__html_url}"
+
+  if @is_false "$FLAG_WAIT"; then
+    return 0
+  fi
+
+  @set __track_run__run_opts "$(github__new_github_run_options)" \
+    '.owner'  "$ARG_OWNER" \
+    '.repo'   "$ARG_REPO" \
+    '.run_id' "$__track_run__id" \
+    '.token'  "$GITHUB_TOKEN"
+  @unlet __track_run__ html_url id
+
+  log "Waiting for run to complete..."
+  __track_run__final_json="$(github__wait_for_run_result "$__track_run__run_opts")" || {
+    log "Timed out waiting for run to complete. Cancelling..."
+    if github__cancel_run "$__track_run__run_opts"; then
+      log "Run cancelled."
+    else
+      error "Failed to cancel run."
+    fi
+    exit 1
+  }
+
+  @get __track_run__conclusion "$__track_run__final_json" '.conclusion'
+  log "Run completed: ${__track_run__conclusion}"
+
+  [ "$__track_run__conclusion" = "success" ]
+}
+
+main "$@"

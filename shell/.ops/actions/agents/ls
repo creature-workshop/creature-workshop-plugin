@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import "$SHELLOPS_DIR/lib/agents/api.sh"
+
+USAGE="$(cat <<HELP
+Lists the agents the selected provider holds for this key, newest first,
+one per line: the agent id, its lifecycle status, its latest run id and its
+name, tab separated. Archived agents are left out.
+
+Usage: action agents ls [--provider <id>] [--limit <n>] [--json] [-h,--help]
+
+Flags:
+  --provider <id>   The adaptor to read; else the manifest's sole entry under
+                    agents.providers, else SHELLOPS_AGENTS.
+  --limit <n>       At most this many agents (default 100).
+  --json            Print the provider's records as an array instead of lines.
+  -h, --help        Show this help text.
+
+Environment:
+  The selected provider's key variable (cursor: CURSOR_AGENT_API_KEY; cursor-cli:
+  CURSOR_API_KEY; claude-cli: ANTHROPIC_API_KEY).
+HELP
+)"
+
+ARG_PROVIDER=""
+ARG_LIMIT=100
+@false ARG_JSON
+
+main() {
+  parse_args "$@"
+  @set __main__options "$(agents__new_run_options "$ARG_PROVIDER")" '.list_limit' "$ARG_LIMIT"
+  __main__options="$(agents__with_key "$__main__options")" || exit 1
+  __main__agents="$(agents__list_agents "$__main__options")" || exit 1
+  if @is_true "$ARG_JSON"; then
+    println "$__main__agents"
+  else
+    @foreach print_agent "$__main__agents"
+  fi
+}
+
+: <<'FUN'
+Prints one line for the agent record $1: id, status, latest run id, name.
+FUN
+print_agent() {
+  @get __print_agent__get_1 "$1" '.id' ''
+  @get __print_agent__get_2 "$1" '.status' ''
+  @get __print_agent__get_3 "$1" '.latestRunId' ''
+  @get __print_agent__get_4 "$1" '.name' ''
+  printf '%s\t%s\t%s\t%s\n' \
+    "$__print_agent__get_1" \
+    "$__print_agent__get_2" \
+    "$__print_agent__get_3" \
+    "$__print_agent__get_4"
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      --provider) ARG_PROVIDER="$2"; shift ;;
+      --limit) ARG_LIMIT="$2"; shift ;;
+      --json) @true __parse_args__true_5; ARG_JSON="$__parse_args__true_5" ;;
+      *)
+        error "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  */agents/ls) main "$@" ;;
+esac

@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/args/api.sh" \
+  "$SHELLOPS_DIR/lib/profile/api.sh"
+
+USAGE="$(cat <<HELP
+Measures a command with the named profiler.
+
+Usage: ops profile <name> <command> [args...]
+       ops profile --list
+
+Runs the command under the profiler and prints its report:
+
+  ops profile forks shell/ops test plan
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Program                       Starts       Share
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   jq                               478       69.9%
+   grep                             113       16.5%
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Programs started                 684
+   Forks                           2506
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The command's stdout is dropped and its stderr passes through. The report
+is for reading, so it goes to stderr; the exit status is the command's own.
+
+Flags:
+  --list          Print every profiler: its name and what it measures.
+  -h, --help      Show this help text.
+HELP
+)"
+
+main() {
+  parse_args "$@"
+  require_name "$@"
+  NAME="$1"
+  shift
+  require_known "$NAME"
+  require_command "$@"
+  require_needs "$NAME"
+
+  __main__trace="$(mktemp)"
+  __main__status=0
+  profile__run "$NAME" "$__main__trace" "$@" || __main__status=$?
+
+  profile__report "$NAME" "$__main__trace" >&2
+  rm -f "$__main__trace"
+  return "$__main__status"
+}
+
+require_name() {
+  if @is_true "$(args__empty "$@")"; then
+    error "no profiler named"
+    log "$USAGE"
+    exit 1
+  fi
+}
+
+require_known() {
+  kinds__require_known profile "$1" || exit 1
+}
+
+require_command() {
+  if @is_true "$(args__empty "$@")"; then
+    error "no command given"
+    log "$USAGE"
+    exit 1
+  fi
+}
+
+require_needs() {
+  kinds__assert_needs profile "$1" || exit 1
+}
+
+parse_args() {
+  case "${1:-}" in
+    -h|--help) log "$USAGE" && exit 0 ;;
+    --list) profile__describe && exit 0 ;;
+  esac
+}
+
+main "$@"

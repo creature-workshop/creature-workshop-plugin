@@ -1,0 +1,310 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+import \
+  "$SHELLOPS_DIR/lib/areas/api.sh" \
+  "$SHELLOPS_DIR/lib/testing/api.sh" \
+  "$SHELLOPS_DIR/lib/testing/frameworks.sh" \
+  "$SHELLOPS_DIR/lib/coverage/api.sh"
+
+USAGE="$(cat <<HELP
+Runs the suites of the testing config whole, merges the coverage their
+runners measured into one report, writes it, prints the summary line and
+fails below the floor. Without --suite it runs every suite whose runner
+measures coverage; with one or more, those alone, and then the report
+gated is a baseline, the last full report, with those suites' files
+replaced by this run's, so a partial run is read as the full report would
+be with those suites re-run; without a baseline a partial run gates on
+what it measured alone, and says so. The floor is the testing config's
+coverage block: when its areas carry floors (coverage.min at the top is
+the one every area inherits), each area is gated on the report's files
+under its paths; with no area floors, the whole report is gated on
+coverage.min, or on 0. --threshold gates the whole report at that percent
+instead, whatever the config says. A named suite whose runner measures no
+coverage fails, naming the runner.
+
+Usage: action testing coverage [-s,--suite NAME]... [-b,--baseline FILE] [-o,--out FILE]
+                               [-t,--threshold PERCENT] [-h,--help]
+
+Flags:
+  -s, --suite        A suite, as the testing config's suites block names it;
+                     repeatable. Every coverage-measuring suite when omitted.
+  -b, --baseline     The last full report, as --out wrote it, that a run of
+                     some suites overlays before the gate.
+  -o, --out          Where the gated report is written, for the next run's
+                     baseline; .ops/cache/coverage/report.json by default.
+  -t, --threshold    Minimum percent for the whole report, in place of the
+                     config's floors.
+  -h, --help         Show this help text.
+HELP
+)"
+
+main() {
+  @arr ARG_SUITES
+  ARG_BASELINE=""
+  ARG_OUT="$PROJ/.ops/cache/coverage/report.json"
+  ARG_THRESHOLD=""
+  parse_args "$@"
+  __main__config="$(areas__load_areas_config)"
+  __main__suites="$(suites_to_run "$__main__config")"
+  require_suites "$__main__suites"
+  @map __main__reports run_suite "$__main__suites" || exit 1
+  __main__report="$(coverage__merge "$__main__reports")" || exit 1
+  __main__report="$(over_baseline "$__main__report")" || exit 1
+  write_report "$__main__report" "$ARG_OUT"
+  gate "$__main__config" "$__main__report" "$ARG_THRESHOLD"
+}
+
+: <<'FUN'
+Prints the report to gate: the run's report as it is for a full run, or
+when suites were named, the baseline with the run's files written over it.
+A partial run with no baseline is gated on what it measured, with a note.
+
+args:
+  $1  The run's merged report
+FUN
+over_baseline() {
+  if @empty "$ARG_SUITES"; then
+    println "$1"
+    return 0
+  fi
+  if ! @defined "$ARG_BASELINE"; then
+    log "testing coverage: no --baseline; the suites named are gated on what they measured alone, not as the full report"
+    println "$1"
+    return 0
+  fi
+  if [ ! -f "$ARG_BASELINE" ]; then
+    error "testing coverage: no baseline report at $ARG_BASELINE"
+    return 1
+  fi
+  coverage__overlay "$(cat "$ARG_BASELINE")" "$1"
+}
+
+: <<'FUN'
+Writes the report to the file, making its directory, so the next run can
+take it as a baseline.
+
+args:
+  $1  The report
+  $2  The file
+FUN
+write_report() {
+  mkdir -p "$(dirname "$2")"
+  println "$1" > "$2"
+}
+
+: <<'FUN'
+Prints the effective configs of the suites to run, as a struct array: the ones
+--suite named, each with its name under .suite, or every suite of the config
+whose runner measures coverage when none was named.
+
+args:
+  $1  The testing config
+FUN
+suites_to_run() {
+  if @empty "$ARG_SUITES"; then
+    measuring_suites "$1"
+    return 0
+  fi
+  @map __suites_to_run__out suite_config "$ARG_SUITES" "$1"
+  println "$__suites_to_run__out"
+}
+
+: <<'FUN'
+Prints the effective configs of every suite of the config whose runner has a
+coverage_summary role, as a struct array.
+
+args:
+  $1  The testing config
+FUN
+measuring_suites() {
+  @obj __measuring_suites__obj_1
+  @get __measuring_suites__get_2 "$1" '.suites' "$__measuring_suites__obj_1"
+  @entries __measuring_suites__entries_3 "$(testing__effective_suites "$__measuring_suites__get_2")"
+  @arr __measuring_suites__arr_4
+  @reduce __measuring_suites__out keep_measuring "$__measuring_suites__entries_3" "$__measuring_suites__arr_4"
+  println "$__measuring_suites__out"
+}
+
+: <<'FUN'
+@reduce callback: adds one suite's effective config, named under .suite, when
+its runner measures coverage.
+
+args:
+  $1  The configs so far
+  $2  One suite's entry, as {key, value}
+FUN
+keep_measuring() {
+  @get __keep_measuring__runner "$2" '.value.runner'
+  if ! command -v "${__keep_measuring__runner}_coverage_summary" >/dev/null 2>&1; then
+    println "$1"
+    return 0
+  fi
+  @get __keep_measuring__get_6 "$2" '.value'
+  @get __keep_measuring__get_7 "$2" '.key'
+  @set __keep_measuring__set_8 "$__keep_measuring__get_6" '.suite' "$__keep_measuring__get_7"
+  @push __keep_measuring__out "$1" "$__keep_measuring__set_8"
+  println "$__keep_measuring__out"
+}
+
+: <<'FUN'
+Exits, printing the usage, when there is no suite to run: none named and none
+of the config's suites measures coverage.
+FUN
+require_suites() {
+  if ! @empty "$1"; then
+    return 0
+  fi
+  error "testing coverage: no suite measures coverage; name one with --suite, or give a suite a runner that does"
+  log "$USAGE"
+  exit 2
+}
+
+: <<'FUN'
+@map callback: runs one suite whole and prints its coverage report. Fails when
+the run fails or the runner measures no coverage.
+
+args:
+  $1  The suite's effective config
+FUN
+run_suite() {
+  @get __run_suite__runner "$1" '.runner'
+  testing__run "$__run_suite__runner" "$1" >&2 || return 1
+  testing__coverage_summary "$__run_suite__runner" "$1"
+}
+
+: <<'FUN'
+Prints the merged report's summary line and gates it: on --threshold when
+given, else area by area when the config's areas carry floors, else on the
+config's coverage.min or 0.
+
+args:
+  $1  The testing config
+  $2  The merged report
+  $3  The --threshold value, or ""
+FUN
+gate() {
+  if @defined "$3"; then
+    coverage__gate "$2" "$(thresholds_for "$2" "$3")"
+    return
+  fi
+  __gate__areas="$(areas__compute_areas "$1")"
+  if @is_true "$(has_floors "$__gate__areas")"; then
+    coverage__summary_line "$2"
+    coverage__gate_areas "$2" "$__gate__areas"
+    return
+  fi
+  coverage__gate "$2" "$(thresholds_for "$2" "$(threshold_of "$1" "")")"
+}
+
+: <<'FUN'
+Prints true when any area of the computed set carries a floor and is not
+inert, false otherwise.
+
+args:
+  $1  The areas, as areas__compute_areas prints them
+FUN
+has_floors() {
+  @entries __has_floors__entries_9 "$1"
+  @any __has_floors__out gated_area "$__has_floors__entries_9"
+  println "$__has_floors__out"
+}
+
+: <<'FUN'
+Succeeds when the area entry {key, value} is not inert and carries a floor;
+the callback @any runs over the areas.
+FUN
+gated_area() {
+  @get __gated_area__inert "$1" '.value.inert' false
+  @get __gated_area__floor "$1" '.value.coverage.min' ""
+  ! @is_true "$__gated_area__inert" && @defined "$__gated_area__floor"
+}
+
+: <<'FUN'
+Prints the effective config of the suite named in the testing config: its
+runner's defaults overlaid with the config's overrides, with the suite's
+name under .suite so the report attributes its files to it. Exits naming the
+suites the config has when the name matches none. A @map callback over the
+names --suite gave.
+
+args:
+  $1  The suite's name, as a struct string
+  $2  The testing config
+FUN
+suite_config() {
+  @unwrap __suite_config__name "$1"
+  @obj __suite_config__obj_11
+  @get __suite_config__get_12 "$2" '.suites' "$__suite_config__obj_11"
+  __suite_config__suites="$(testing__effective_suites "$__suite_config__get_12")"
+  @get __suite_config__cfg "$__suite_config__suites" ".\"$__suite_config__name\"" ""
+  if ! @defined "$__suite_config__cfg"; then
+    @keys __suite_config__keys_13 "$__suite_config__suites"
+    @join __suite_config__join_14 "$__suite_config__keys_13" " "
+    error "testing coverage: no suite named '$__suite_config__name' in the testing config; it has: $__suite_config__join_14"
+    exit 1
+  fi
+  @set __suite_config__out "$__suite_config__cfg" '.suite' "$__suite_config__name"
+  println "$__suite_config__out"
+}
+
+: <<'FUN'
+Prints the floor to gate at: the --threshold given, else the testing config's
+coverage.min, else 0.
+
+args:
+  $1  The testing config
+  $2  The --threshold value, or ""
+FUN
+threshold_of() {
+  if @defined "$2"; then
+    println "$2"
+    return 0
+  fi
+  @get __threshold_of__out "$1" '.coverage.min' 0
+  println "$__threshold_of__out"
+}
+
+: <<'FUN'
+Prints a thresholds struct gating the report's own metric at the given percent.
+FUN
+thresholds_for() {
+  @obj __thresholds_for__out ".\"$(coverage__metric "$1")\"" "$2"
+  println "$__thresholds_for__out"
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      -s|--suite)
+        @wrap __parse_args__wrap_15 "${2:?--suite requires a value}"
+        @push ARG_SUITES "$ARG_SUITES" "$__parse_args__wrap_15"
+        shift
+        ;;
+      -b|--baseline)
+        ARG_BASELINE="${2:?--baseline requires a value}"
+        shift
+        ;;
+      -o|--out)
+        ARG_OUT="${2:?--out requires a value}"
+        shift
+        ;;
+      -t|--threshold)
+        ARG_THRESHOLD="${2:?--threshold requires a value}"
+        shift
+        ;;
+      *)
+        error "Unknown option: $1"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+: <<'DOC'
+Runs main only when the file is executed; a test that sources it skips main.
+DOC
+case "$0" in
+  *coverage) main "$@" ;;
+esac

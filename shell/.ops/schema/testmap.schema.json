@@ -1,0 +1,697 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/creature-workshop/shellops/schema/testmap.schema.json",
+  "title": "Testmap",
+  "description": "A repo's Test Impact Analysis (TIA) block: the areas a change maps to, the per-suite runner config, and the dispatch/coverage gates. Used either inline as manifest.json's \"testing\" value, or hoisted into a sibling testmap file that \"testing\" names by path.",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Coverage gate for an area: minimum percentage and measurement mode. Inherited per-field by nested sub-areas, so a child overriding only \"min\" keeps the inherited \"mode\".",
+      "properties": {
+        "min": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Minimum coverage percentage (0-100) required for this area."
+        },
+        "mode": {
+          "enum": ["line", "branch"],
+          "description": "Coverage measurement mode. Defaults to \"line\" when omitted."
+        }
+      }
+    },
+    "areaNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One testing area. Its source path roots the diff->area mapping (the deepest source prefix wins); nested \"areas\" are sub-areas that inherit this area's full_suite/coverage unless they override them.",
+      "properties": {
+        "source": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "Repo-relative source path this area owns (e.g. \"lib/testing\"). null marks a virtual grouping area that owns no path: it contributes no prefix to the diff->area map but still passes its inherited full_suite/coverage down to children."
+        },
+        "tests": {
+          "type": "object",
+          "description": "Explicit test selection, keyed by suite name -> array of test-file globs. An explicit empty object {} marks an inert area (no tests; never trips the unmapped-file fallback).",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "full_suite": {
+          "type": "boolean",
+          "description": "Blast-radius tag: a change touching this area runs every registered runner's full suite. Cascades to nested sub-areas unless a child overrides it with false."
+        },
+        "coverage": { "$ref": "#/$defs/coverage" },
+        "areas": {
+          "type": "object",
+          "description": "Nested sub-areas; each inherits this area's full_suite/coverage as defaults. Keys are single segments matching ^[a-z0-9][a-z0-9-]*$ (no \"/\" or \".\"; \"new\" reserved).",
+          "properties": { "new": false },
+          "patternProperties": {
+            "^[a-z0-9][a-z0-9-]*$": { "$ref": "#/$defs/areaEntry" }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "areaEntry": {
+      "description": "An entry in an areas map: either a full area object, or a non-empty string naming the area's source path -- shorthand equivalent to {\"source\": <that string>} with no other fields. Use the object form to set tests, full_suite, coverage, nested areas, or a null (virtual) source.",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "description": "Source-path shorthand: \"name\": \"path\" declares an area whose only field is source: \"path\"."
+        },
+        { "$ref": "#/$defs/areaNode" }
+      ]
+    }
+  },
+  "properties": {
+    "dispatch": {
+      "type": "boolean",
+      "description": "Opt-in toggle for label-driven impacted-test dispatch. Defaults to false: labeling and the scorecard still run, but selection does not gate the pipeline until this is true (rollout phase 2)."
+    },
+    "coverage": {
+      "$ref": "#/$defs/coverage",
+      "description": "Default coverage gate inherited by every area (overridable per area)."
+    },
+    "selectors": {
+      "type": "object",
+      "description": "The mode each selector runs in, keyed by selector id (lib/testing/selectors): active, its answer composed into the run, or shadow, its answer recorded beside the run and composed into nothing, so a new selector is judged by the escape check before it may leave a test out. A selector the block does not name is active.",
+      "additionalProperties": { "enum": ["active", "shadow"] }
+    },
+    "areas": {
+      "type": "object",
+      "description": "The repo's testing areas, keyed by area name. Each declares its own source path; the diff->area map picks the deepest source prefix. Areas may nest (sub-areas inherit full_suite/coverage). Area names are single segments matching ^[a-z0-9][a-z0-9-]*$ (no \"/\" or \".\"; \"new\" is reserved for the area/new label for added-unmapped files).",
+      "properties": { "new": false },
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9-]*$": { "$ref": "#/$defs/areaEntry" }
+      },
+      "additionalProperties": false
+    },
+    "suites": {
+      "type": "object",
+      "description": "Test suites for impacted-test dispatch, keyed by suite name. Each suite's shape is contributed by its framework runner; this block is composed from the registered runners' schema fragments (see lib/testing/adapter.sh testing__suites_schema). Do not hand-edit beyond mirroring that composition.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["runner"],
+        "properties": {
+          "runner": {
+            "enum": ["bats", "cargo", "llvm_cov", "nextest", "node_test", "playwright", "pytest", "rust_doctest", "tarpaulin", "unittest", "vitest"],
+            "description": "Framework runner id that executes this suite. Must be one of the registered runners."
+          }
+        },
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Bats suite: file/glob-based test selection. Tests are discovered by filename glob, either as siblings under the area's own paths or under a central root whose filename stem matches a changed source file.",
+            "required": ["runner"],
+            "properties": {
+              "runner": {
+                "const": "bats"
+              },
+              "root": {
+                "type": "string",
+                "description": "Directory under which the \"filename\" strategy looks for centralized tests (e.g. \"test\"). Defaults to \"test\"."
+              },
+              "glob": {
+                "description": "Filename glob(s) identifying this suite's test files: a single pattern or an array of patterns whose matches are unioned. Defaults to \"*.bats\".",
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1
+                  }
+                ]
+              },
+              "exclude": {
+                "description": "Filename glob(s) to drop from the matched test files: a single pattern or an array of patterns (e.g. \"*_generated.bats\").",
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1
+                  }
+                ]
+              },
+              "jobs": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "How many tests to run at once. Defaults to 1, bats's serial path. Above 1 bats needs GNU parallel on PATH, and without it runs no tests and exits non-zero, so raise this only where the runner installs it. A suite whose tests share state stays at 1."
+              },
+              "test_timeout_secs": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "How many seconds one test may run before bats fails it as timed out. Defaults to 600. A test that hangs then fails by name, instead of holding the job until the job's own timeout ends it with nothing in the log to say which test it was."
+              },
+              "discovery": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["default", "sibling", "filename"]
+                },
+                "description": "Test-discovery strategies to union. \"default\" expands to the runner's own suite_defaults.discovery; the rest are the strategies this runner supports (resolver-owned \"sibling\"/\"filename\", or runner-specific)."
+              },
+              "reach": {
+                "enum": ["in_tree", "out_of_tree"],
+                "description": "Whether the suite's tests stay inside their own process tree. in_tree, the default: the trace map records what a test reads, and the trace selector may select by it. out_of_tree: the tests reach a service, a daemon or a container the trace cannot follow, so the trace selector never claims a file for the suite, and the suite runs whole on a change under any of its depends_on areas, or on every change that is not inert when it declares none."
+              },
+              "depends_on": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "description": "The dotted area names an out_of_tree suite depends on: a change under any of them, or under a nested area of one, selects the whole suite. A declared edge, for a dependency nothing can observe."
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Cargo suite: package-based test selection. Changed files are mapped to their owning cargo package (the nearest ancestor Cargo.toml) and the package's tests are run; there is no file glob to configure.",
+            "required": ["runner"],
+            "properties": {
+              "runner": {
+                "const": "cargo"
+              },
+              "manifest": {
+                "type": "string",
+                "description": "Repo-relative path to the Cargo workspace manifest (e.g. \"engine/Cargo.toml\") for a workspace that is not at the repo root. Omitted, cargo runs against whatever workspace the working directory roots."
+              },
+              "discovery": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["default", "native"]
+                },
+                "description": "Test-discovery strategies to union. \"default\" expands to the runner's own suite_defaults.discovery; the rest are the strategies this runner supports (resolver-owned \"sibling\"/\"filename\", or runner-specific)."
+              },
+              "reach": {
+                "enum": ["in_tree", "out_of_tree"],
+                "description": "Whether the suite's tests stay inside their own process tree. in_tree, the default: the trace map records what a test reads, and the trace selector may select by it. out_of_tree: the tests reach a service, a daemon or a container the trace cannot follow, so the trace selector never claims a file for the suite, and the suite runs whole on a change under any of its depends_on areas, or on every change that is not inert when it declares none."
+              },
+              "depends_on": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "description": "The dotted area names an out_of_tree suite depends on: a change under any of them, or under a nested area of one, selects the whole suite. A declared edge, for a dependency nothing can observe."
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "llvm-cov suite. Runs the cargo tests under cargo-llvm-cov and measures region coverage: which LLVM code regions (a match arm, an early return, each side of &&) the tests executed. Test selection is cargo's (a changed file maps to its owning package), so an llvm-cov suite takes the same manifest a cargo suite does. After a run, the runner's coverage_summary reads the JSON export cargo-llvm-cov wrote to report_dir/llvm-cov.json.",
+            "required": ["runner"],
+            "properties": {
+              "runner": {
+                "const": "llvm_cov"
+              },
+              "manifest": {
+                "type": "string",
+                "description": "$PROJ-relative path to the Cargo.toml of the workspace to measure, for a workspace below the repo root (e.g. \"engine/Cargo.toml\"). Omitted, cargo measures whatever workspace the working directory is in."
+              },
+              "ignore": {
+                "type": ["string", "array"],
+                "items": {
+                  "type": "string"
+                },
+                "description": "Source files to leave out of the measurement, as regular expressions matched against the file path (e.g. \"src/bin/\"). One regex or a list; a list is joined with | into cargo-llvm-cov's single --ignore-filename-regex."
+              },
+              "report_dir": {
+                "type": "string",
+                "description": "$PROJ-relative directory the JSON export is written into, as llvm-cov.json. Defaults to \"target/coverage/llvm-cov\"."
+              },
+              "cargo_args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Extra arguments for the instrumented cargo build, one shell word per element (e.g. [\"--features\", \"ml\"]). Defaults to [\"--no-default-features\", \"--locked\"]."
+              },
+              "harness": {
+                "enum": ["cargo", "nextest"],
+                "description": "The test runner cargo-llvm-cov drives. \"cargo\" (the default) runs cargo test and measures the selected packages with -p. \"nextest\" runs cargo nextest under the runner's tia profile, building the whole workspace and filtering the run to the selected packages, so the run also leaves the JUnit report the escape join reads."
+              },
+              "discovery": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["default", "native"]
+                },
+                "description": "Test-discovery strategies to union. \"default\" expands to the runner's own suite_defaults.discovery; the rest are the strategies this runner supports (resolver-owned \"sibling\"/\"filename\", or runner-specific)."
+              },
+              "reach": {
+                "enum": ["in_tree", "out_of_tree"],
+                "description": "Whether the suite's tests stay inside their own process tree. in_tree, the default: the trace map records what a test reads, and the trace selector may select by it. out_of_tree: the tests reach a service, a daemon or a container the trace cannot follow, so the trace selector never claims a file for the suite, and the suite runs whole on a change under any of its depends_on areas, or on every change that is not inert when it declares none."
+              },
+              "depends_on": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "description": "The dotted area names an out_of_tree suite depends on: a change under any of them, or under a nested area of one, selects the whole suite. A declared edge, for a dependency nothing can observe."
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "nextest suite. Runs the cargo tests under cargo-nextest, building the whole workspace and filtering the run to the selected packages, and leaves a JUnit report at target/nextest/<profile>/junit.xml under the workspace. Test selection is cargo's (a changed file maps to its owning package), so a nextest suite takes the same manifest a cargo suite does.",
+            "required": ["runner"],
+            "properties": {
+              "runner": {
+                "const": "nextest"
+              },
+              "manifest": {
+                "type": "string",
+                "description": "$PROJ-relative path to the Cargo.toml of the workspace to test, for a workspace below the repo root (e.g. \"engine/Cargo.toml\"). Omitted, nextest runs against whatever workspace the working directory is in."
+              },
+              "profile": {
+                "type": "string",
+                "description": "The nextest profile the run uses. Defaults to \"tia\", which the runner defines with the JUnit report enabled; a repository's own .config/nextest.toml may extend that profile or name another, as long as its junit path stays junit.xml."
+              },
+              "cargo_args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Extra arguments for the build and run, one shell word per element (e.g. [\"--no-default-features\", \"--locked\"]). Defaults to none."
+              },
+              "discovery": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["default", "native"]
+                },
+                "description": "Test-discovery strategies to union. \"default\" expands to the runner's own suite_defaults.discovery; the rest are the strategies this runner supports (resolver-owned \"sibling\"/\"filename\", or runner-specific)."
+              },
+              "reach": {
+                "enum": ["in_tree", "out_of_tree"],
+                "description": "Whether the suite's tests stay inside their own process tree. in_tree, the default: the trace map records what a test reads, and the trace selector may select by it. out_of_tree: the tests reach a service, a daemon or a container the trace cannot follow, so the trace selector never claims a file for the suite, and the suite runs whole on a change under any of its depends_on areas, or on every change that is not inert when it declares none."
+              },
+              "depends_on": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "description": "The dotted area names an out_of_tree suite depends on: a change under any of them, or under a nested area of one, selects the whole suite. A declared edge, for a dependency nothing can observe."
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "node:test suite: Node's own test runner over the files named. Tests are discovered by filename glob, either as siblings under the area's own paths or under a central root whose filename stem matches a changed source file.",
+            "required": ["runner"],
+            "properties": {
+              "runner": {
+                "const": "node_test"
+              },
+              "project_dir": {
+                "type": "string",
+                "description": "The directory the tests resolve their imports from, relative to the repository root. Defaults to \".\"."
+              },
+              "root": {
+                "type": "string",
+                "description": "Directory under which the \"filename\" strategy looks for centralized tests, and the whole suite is found. Defaults to \".\"."
+              },
+              "glob": {
+                "description": "Filename glob(s) identifying this suite's test files: a single pattern or an array of patterns whose matches are unioned. Defaults to \"*.test.js\".",
+                "oneOf": [
+                  { "type": "string" },
+                  {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1
+                  }
+                ]
+              },
+              "exclude": {
+                "description": "Filename glob(s) to drop from the matched test files: a single pattern or an array of patterns.",
+                "oneOf": [
+                  { "type": "string" },
+                  {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1
+                  }
+                ]
+              },
+              "discovery": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["default", "sibling", "filename"]
+                },
+                "description": "Test-discovery strategies to union. \"default\" expands to the runner's own suite_defaults.discovery; the rest are the strategies this runner supports (resolver-owned \"sibling\"/\"filename\", or runner-specific)."
+              },
+              "reach": {
+                "enum": ["in_tree", "out_of_tree"],
+                "description": "Whether the suite's tests stay inside their own process tree. in_tree, the default: the trace map records what a test reads, and the trace selector may select by it. out_of_tree: the tests reach a service, a daemon or a container the trace cannot follow, so the trace selector never claims a file for the suite, and the suite runs whole on a change under any of its depends_on areas, or on every change that is not inert when it declares none."
+              },
+              "depends_on": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "description": "The dotted area names an out_of_tree suite depends on: a change under any of them, or under a nested area of one, selects the whole suite. A declared edge, for a dependency nothing can observe."
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Playwright suite: browser or component tests run by file through the project's own playwright. Tests are discovered by filename glob, either as siblings under the area's own paths or under a central root whose filename stem matches a changed source file; the whole suite runs as the playwright config defines it.",
+            "required": ["runner"],
+            "properties": {
+              "runner": {
+                "const": "playwright"
+              },
+              "project_dir": {
+                "type": "string",
+                "description": "$PROJ-relative directory holding package.json and node_modules, for repos whose app lives below the repo root. The runner resolves its binary and runs from here. Defaults to \".\"."
+              },
+              "config": {
+                "type": "string",
+                "description": "The playwright config file, relative to project_dir, passed as --config. Empty by default, so playwright finds its own."
+              },
+              "root": {
+                "type": "string",
+                "description": "Directory under which the \"filename\" strategy looks for centralized tests. Defaults to \"tests\"."
+              },
+              "glob": {
+                "description": "Filename glob(s) identifying this suite's test files: a single pattern or an array of patterns whose matches are unioned. Defaults to \"*.spec.ts\"; a component suite names \"*.ct.jsx\" or \"*.ct.tsx\".",
+                "oneOf": [
+                  { "type": "string" },
+                  {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1
+                  }
+                ]
+              },
+              "exclude": {
+                "description": "Filename glob(s) to drop from the matched test files: a single pattern or an array of patterns.",
+                "oneOf": [
+                  { "type": "string" },
+                  {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1
+                  }
+                ]
+              },
+              "discovery": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["default", "sibling", "filename"]
+                },
+                "description": "Test-discovery strategies to union. \"default\" expands to the runner's own suite_defaults.discovery; the rest are the strategies this runner supports (resolver-owned \"sibling\"/\"filename\", or runner-specific)."
+              },
+              "reach": {
+                "enum": ["in_tree", "out_of_tree"],
+                "description": "Whether the suite's tests stay inside their own process tree. in_tree, the default: the trace map records what a test reads, and the trace selector may select by it. out_of_tree: the tests reach a service, a daemon or a container the trace cannot follow, so the trace selector never claims a file for the suite, and the suite runs whole on a change under any of its depends_on areas, or on every change that is not inert when it declares none."
+              },
+              "depends_on": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "description": "The dotted area names an out_of_tree suite depends on: a change under any of them, or under a nested area of one, selects the whole suite. A declared edge, for a dependency nothing can observe."
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "pytest suite: pytest by file, under coverage.py when the suite names the packages it measures; a unittest suite runs under it unchanged. Tests are discovered by filename glob, either as siblings under the area's own paths or under a central root whose filename stem matches a changed source file; the whole suite is what pytest collects under the root.",
+            "required": ["runner"],
+            "properties": {
+              "runner": {
+                "const": "pytest"
+              },
+              "project_dir": {
+                "type": "string",
+                "description": "The directory the tests import from and run in, relative to the repository root; \".\" by default."
+              },
+              "root": {
+                "type": "string",
+                "description": "Directory under which the \"filename\" strategy looks for centralized tests, and the whole suite is collected from. Defaults to \"tests\"."
+              },
+              "glob": {
+                "description": "Filename glob(s) identifying this suite's test files: a single pattern or an array of patterns whose matches are unioned. Defaults to \"test_*.py\".",
+                "oneOf": [
+                  { "type": "string" },
+                  {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1
+                  }
+                ]
+              },
+              "exclude": {
+                "description": "Filename glob(s) to drop from the matched test files: a single pattern or an array of patterns.",
+                "oneOf": [
+                  { "type": "string" },
+                  {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1
+                  }
+                ]
+              },
+              "interpreter": {
+                "type": "string",
+                "description": "The command that runs Python, one or several words: \"python3\" by default, or \"uv run python\" for a project whose environment uv keeps."
+              },
+              "source": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "description": "The packages or directories coverage.py measures, as its --source takes them. Empty by default, which runs the tests with no coverage and leaves coverage_summary with nothing to report."
+              },
+              "report_dir": {
+                "type": "string",
+                "description": "Where coverage.py's JSON report is written, relative to the repository root. Defaults to \".ops/cache/coverage/pytest\"."
+              },
+              "discovery": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["default", "sibling", "filename"]
+                },
+                "description": "Test-discovery strategies to union. \"default\" expands to the runner's own suite_defaults.discovery; the rest are the strategies this runner supports (resolver-owned \"sibling\"/\"filename\", or runner-specific)."
+              },
+              "reach": {
+                "enum": ["in_tree", "out_of_tree"],
+                "description": "Whether the suite's tests stay inside their own process tree. in_tree, the default: the trace map records what a test reads, and the trace selector may select by it. out_of_tree: the tests reach a service, a daemon or a container the trace cannot follow, so the trace selector never claims a file for the suite, and the suite runs whole on a change under any of its depends_on areas, or on every change that is not inert when it declares none."
+              },
+              "depends_on": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "description": "The dotted area names an out_of_tree suite depends on: a change under any of them, or under a nested area of one, selects the whole suite. A declared edge, for a dependency nothing can observe."
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Doctest suite. Runs the workspace's doctests with cargo test --doc, always in full: a doctest cannot be selected or filtered on stable Rust, so a narrowed run still runs every doctest and the record lists the Rust sources the selection touched, found by cargo's package walk. The run's report is translated from libtest's text into a JUnit report at target/rust_doctest/junit.xml under the workspace, each doctest keyed by the repo-relative file it lives in, so the escape join reads it under file-path.",
+            "required": ["runner"],
+            "properties": {
+              "runner": {
+                "const": "rust_doctest"
+              },
+              "manifest": {
+                "type": "string",
+                "description": "$PROJ-relative path to the Cargo.toml of the workspace whose doctests run, for a workspace below the repo root (e.g. \"engine/Cargo.toml\"). Omitted, cargo runs against whatever workspace the working directory is in."
+              },
+              "cargo_args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Extra arguments for the build and run, one shell word per element (e.g. [\"--no-default-features\", \"--locked\"]). Defaults to none."
+              },
+              "discovery": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["default", "native"]
+                },
+                "description": "Test-discovery strategies to union. \"default\" expands to the runner's own suite_defaults.discovery; the rest are the strategies this runner supports (resolver-owned \"sibling\"/\"filename\", or runner-specific)."
+              },
+              "reach": {
+                "enum": ["in_tree", "out_of_tree"],
+                "description": "Whether the suite's tests stay inside their own process tree. in_tree, the default: the trace map records what a test reads, and the trace selector may select by it. out_of_tree: the tests reach a service, a daemon or a container the trace cannot follow, so the trace selector never claims a file for the suite, and the suite runs whole on a change under any of its depends_on areas, or on every change that is not inert when it declares none."
+              },
+              "depends_on": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "description": "The dotted area names an out_of_tree suite depends on: a change under any of them, or under a nested area of one, selects the whole suite. A declared edge, for a dependency nothing can observe."
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Tarpaulin suite. Runs the cargo tests under cargo-tarpaulin and measures line coverage: which source lines the tests executed. Test selection is cargo's (a changed file maps to its owning package), so a tarpaulin suite takes the same manifest a cargo suite does. After a run, the runner's coverage_summary reads the JSON report tarpaulin left in report_dir.",
+            "required": ["runner"],
+            "properties": {
+              "runner": {
+                "const": "tarpaulin"
+              },
+              "manifest": {
+                "type": "string",
+                "description": "$PROJ-relative path to the Cargo.toml of the workspace to measure, for a workspace below the repo root (e.g. \"engine/Cargo.toml\"). Omitted, cargo measures whatever workspace the working directory is in."
+              },
+              "ignore": {
+                "type": ["string", "array"],
+                "items": {
+                  "type": "string"
+                },
+                "description": "Source files to leave out of the measurement, as tarpaulin file globs (e.g. \"src/bin/*\"). One glob or a list; each is passed to tarpaulin as its own --exclude-files."
+              },
+              "report_dir": {
+                "type": "string",
+                "description": "$PROJ-relative directory tarpaulin writes tarpaulin-report.json into. Defaults to \"target/coverage/tarpaulin\"."
+              },
+              "cargo_args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Extra arguments for the instrumented cargo build, one shell word per element (e.g. [\"--features\", \"ml\"]). Defaults to [\"--no-default-features\", \"--locked\"]."
+              },
+              "discovery": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["default", "native"]
+                },
+                "description": "Test-discovery strategies to union. \"default\" expands to the runner's own suite_defaults.discovery; the rest are the strategies this runner supports (resolver-owned \"sibling\"/\"filename\", or runner-specific)."
+              },
+              "reach": {
+                "enum": ["in_tree", "out_of_tree"],
+                "description": "Whether the suite's tests stay inside their own process tree. in_tree, the default: the trace map records what a test reads, and the trace selector may select by it. out_of_tree: the tests reach a service, a daemon or a container the trace cannot follow, so the trace selector never claims a file for the suite, and the suite runs whole on a change under any of its depends_on areas, or on every change that is not inert when it declares none."
+              },
+              "depends_on": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "description": "The dotted area names an out_of_tree suite depends on: a change under any of them, or under a nested area of one, selects the whole suite. A declared edge, for a dependency nothing can observe."
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "unittest suite: the standard library's runner by file, under coverage.py when the suite names the packages it measures. Tests are discovered by filename glob, either as siblings under the area's own paths or under a central root whose filename stem matches a changed source file.",
+            "required": ["runner"],
+            "properties": {
+              "runner": {
+                "const": "unittest"
+              },
+              "project_dir": {
+                "type": "string",
+                "description": "The directory the tests import from and run in, relative to the repository root; \".\" by default."
+              },
+              "root": {
+                "type": "string",
+                "description": "Directory under which the \"filename\" strategy looks for centralized tests, and the whole suite is collected from. Defaults to \"tests\"."
+              },
+              "glob": {
+                "description": "Filename glob(s) identifying this suite's test files: a single pattern or an array of patterns whose matches are unioned. Defaults to \"test_*.py\".",
+                "oneOf": [
+                  { "type": "string" },
+                  {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1
+                  }
+                ]
+              },
+              "exclude": {
+                "description": "Filename glob(s) to drop from the matched test files: a single pattern or an array of patterns.",
+                "oneOf": [
+                  { "type": "string" },
+                  {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1
+                  }
+                ]
+              },
+              "interpreter": {
+                "type": "string",
+                "description": "The command that runs Python, one or several words: \"python3\" by default, or \"uv run python\" for a project whose environment uv keeps."
+              },
+              "source": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "description": "The packages or directories coverage.py measures, as its --source takes them. Empty by default, which runs the tests with no coverage and leaves coverage_summary with nothing to report."
+              },
+              "report_dir": {
+                "type": "string",
+                "description": "Where coverage.py's JSON report is written, relative to the repository root. Defaults to \".ops/cache/coverage/unittest\"."
+              },
+              "discovery": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["default", "sibling", "filename"]
+                },
+                "description": "Test-discovery strategies to union. \"default\" expands to the runner's own suite_defaults.discovery; the rest are the strategies this runner supports (resolver-owned \"sibling\"/\"filename\", or runner-specific)."
+              },
+              "reach": {
+                "enum": ["in_tree", "out_of_tree"],
+                "description": "Whether the suite's tests stay inside their own process tree. in_tree, the default: the trace map records what a test reads, and the trace selector may select by it. out_of_tree: the tests reach a service, a daemon or a container the trace cannot follow, so the trace selector never claims a file for the suite, and the suite runs whole on a change under any of its depends_on areas, or on every change that is not inert when it declares none."
+              },
+              "depends_on": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "description": "The dotted area names an out_of_tree suite depends on: a change under any of them, or under a nested area of one, selects the whole suite. A declared edge, for a dependency nothing can observe."
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Vitest suite. What counts as a test file is vitest's own answer (the project's vitest config), asked via native discovery; TIA adds only the mapping from areas to the files their paths cover.",
+            "required": ["runner"],
+            "properties": {
+              "runner": {
+                "const": "vitest"
+              },
+              "project_dir": {
+                "type": "string",
+                "description": "$PROJ-relative directory holding package.json and the vitest config, for repos whose app lives below the repo root. The runner resolves its binary and runs from here. Defaults to \".\"."
+              },
+              "discovery": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["default", "native"]
+                },
+                "description": "Test-discovery strategies to union. \"default\" expands to the runner's own suite_defaults.discovery; the rest are the strategies this runner supports (resolver-owned \"sibling\"/\"filename\", or runner-specific)."
+              },
+              "reach": {
+                "enum": ["in_tree", "out_of_tree"],
+                "description": "Whether the suite's tests stay inside their own process tree. in_tree, the default: the trace map records what a test reads, and the trace selector may select by it. out_of_tree: the tests reach a service, a daemon or a container the trace cannot follow, so the trace selector never claims a file for the suite, and the suite runs whole on a change under any of its depends_on areas, or on every change that is not inert when it declares none."
+              },
+              "depends_on": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "description": "The dotted area names an out_of_tree suite depends on: a change under any of them, or under a nested area of one, selects the whole suite. A declared edge, for a dependency nothing can observe."
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "One test suite. `runner` selects the framework runner; the remaining fields are validated by that runner's contributed fragment."
+      }
+    }
+  }
+}

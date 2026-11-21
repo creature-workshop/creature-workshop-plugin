@@ -1,0 +1,19 @@
+query($fullPath: ID!, $branch: String!, $since: Time, $cursor: String) {
+  project(fullPath: $fullPath) {
+    mergeRequests(state: merged, targetBranches: [$branch], updatedAfter: $since, first: 100, after: $cursor) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        iid
+        mergedAt
+        labels {
+          nodes {
+            title
+          }
+        }
+      }
+    }
+  }
+}

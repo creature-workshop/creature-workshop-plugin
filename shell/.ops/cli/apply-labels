@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJ="${PROJ:-$SHELLOPS_DIR}"
+export PROJ
+
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/git/api.sh" \
+  "$SHELLOPS_DIR/lib/labels/apply.sh"
+
+USAGE="$(cat <<HELP
+Applies area/* labels to the current merge request.
+
+The labels say which areas the diff touches, and a later stage reads them back
+to decide which tests to run.
+
+Usage: ops apply-labels [-h,--help] [path...]
+
+With no path arguments, the changed files come from the review's diff range.
+Pass explicit paths to preview the reconcile for a hand-picked file set.
+
+Environment (GitLab CI):
+  CI_MERGE_REQUEST_IID           MR iid (no MR in context -> graceful skip)
+  CI_API_V4_URL                  GitLab REST v4 base
+  CI_PROJECT_ID                  Numeric project id
+  GITLAB_TOKEN                   Write-scoped token (falls back to
+                                 FORGE_PR_TOKEN, then CI_JOB_TOKEN)
+HELP
+)"
+
+main() {
+  parse_args "$@"
+
+  if [ "$#" -gt 0 ]; then
+    __main__changed="$(paths_to_json "$@")"
+    __main__added="$__main__changed"
+  else
+    __main__changed="$(changed_paths_from_diff)"
+    __main__added="$(added_paths_from_diff)"
+  fi
+
+  labels__apply "$__main__changed" "$__main__added"
+}
+
+review_diff_base() {
+  printf '%s' "${FORGE_REVIEW_BASE_SHA:-${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}}"
+}
+
+review_diff_head() {
+  printf '%s' "${FORGE_REVIEW_HEAD_SHA:-${CI_COMMIT_SHA:-HEAD}}"
+}
+
+changed_paths_from_diff() {
+  __changed_paths_from_diff__base="$(review_diff_base)"
+  if ! @defined "$__changed_paths_from_diff__base"; then
+    @split __changed_paths_from_diff__out ""
+    println "$__changed_paths_from_diff__out"
+    return 0
+  fi
+  __changed_paths_from_diff__head="$(review_diff_head)"
+  __changed_paths_from_diff__names="$(git__diff_name_only \
+    "$__changed_paths_from_diff__base" \
+    "$__changed_paths_from_diff__head" \
+    2>/dev/null \
+    || true
+  )"
+  @split __changed_paths_from_diff__out "$__changed_paths_from_diff__names"
+  println "$__changed_paths_from_diff__out"
+}
+
+added_paths_from_diff() {
+  __added_paths_from_diff__base="$(review_diff_base)"
+  if ! @defined "$__added_paths_from_diff__base"; then
+    @split __added_paths_from_diff__out ""
+    println "$__added_paths_from_diff__out"
+    return 0
+  fi
+  __added_paths_from_diff__head="$(review_diff_head)"
+  __added_paths_from_diff__names="$(git__diff_added_name_only \
+    "$__added_paths_from_diff__base" \
+    "$__added_paths_from_diff__head" \
+    2>/dev/null \
+    || true
+  )"
+  @split __added_paths_from_diff__out "$__added_paths_from_diff__names"
+  println "$__added_paths_from_diff__out"
+}
+
+paths_to_json() {
+  @arr __paths_to_json__acc
+  for __paths_to_json__path in "$@"; do
+    @push __paths_to_json__acc "$__paths_to_json__acc" "$__paths_to_json__path"
+  done
+  echo "$__paths_to_json__acc"
+}
+
+parse_args() {
+  case "${1:-}" in
+    -h|--help) log "$USAGE"; exit 0 ;;
+    -*)
+      log "Unknown option: $1"
+      log "$USAGE"
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

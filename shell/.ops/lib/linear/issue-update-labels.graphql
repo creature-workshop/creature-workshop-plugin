@@ -1,0 +1,5 @@
+mutation($id: String!, $labelIds: [String!]!) {
+  issueUpdate(id: $id, input: { labelIds: $labelIds }) {
+    success
+  }
+}

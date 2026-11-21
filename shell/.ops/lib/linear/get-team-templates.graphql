@@ -1,0 +1,11 @@
+query($key: String!) {
+  teams(filter: { key: { eq: $key } }) {
+    nodes {
+      id
+      key
+      templates {
+        nodes { id name }
+      }
+    }
+  }
+}

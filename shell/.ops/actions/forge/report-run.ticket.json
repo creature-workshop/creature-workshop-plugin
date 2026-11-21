@@ -1,0 +1,4 @@
+{
+  "title": "Red run on {status_name}",
+  "body": "{forge} failed its run on commit {sha}: {url}\n\nThe failure stops nothing: the commit is merged and its tag is minted either way. This ticket is who owns the failure. It is the only one for {status_name}, so a later red run adds nothing to the backlog; close it once that run is green."
+}

@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/creature-workshop/shellops/schema/manifest.schema.json",
+  "title": "Project Manifest",
+  "description": "Standard manifest for creature-workshop projects consumed by shellops scripts.",
+  "type": "object",
+  "required": [
+    "name",
+    "description",
+    "org",
+    "repo"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Human-readable project name."
+    },
+    "description": {
+      "type": "string",
+      "description": "One-line summary of the project's purpose. Used for agent-assisted triage routing."
+    },
+    "org": {
+      "type": "string",
+      "description": "GitHub organization (e.g. creature-workshop)."
+    },
+    "repo": {
+      "type": "string",
+      "description": "GitHub repository name."
+    },
+    "latest": {
+      "type": "string",
+      "description": "The release name the tree records: on the default branch the version and its certification with no count (0.67.0-dev), on a record off it the tag's name (0.67.0-6.rc), and a version alone on a stable record. A release writes it to the lock, .ops/lock; a repository that has not converted still carries it here.",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-.+)?$"
+    },
+    "stable": {
+      "type": "string",
+      "description": "The last clean release. A release writes it to the lock, .ops/lock; a repository that has not converted still carries it here.",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "command-name": {
+      "$ref": "manifest.optional.schema.json#/properties/command-name"
+    },
+    "default-channel": {
+      "$ref": "manifest.optional.schema.json#/properties/default-channel"
+    },
+    "auto-promote-until": {
+      "$ref": "manifest.optional.schema.json#/properties/auto-promote-until"
+    },
+    "promotion": {
+      "$ref": "manifest.optional.schema.json#/properties/promotion"
+    },
+    "version-format": {
+      "$ref": "manifest.optional.schema.json#/properties/version-format"
+    },
+    "linear-team": {
+      "$ref": "manifest.optional.schema.json#/properties/linear-team"
+    },
+    "blizz": {
+      "$ref": "manifest.optional.schema.json#/properties/blizz"
+    },
+    "labels": {
+      "$ref": "manifest.optional.schema.json#/properties/labels"
+    },
+    "testing": {
+      "$ref": "manifest.optional.schema.json#/properties/testing"
+    },
+    "build-targets": {
+      "$ref": "manifest.optional.schema.json#/properties/build-targets"
+    },
+    "naming": {
+      "type": ["object", "null"],
+      "description": "Optional names for the version lines, which a release's title carries after the version: the current major's and the current minor's. A repository that names none titles a release by its version alone.",
+      "required": [
+        "major",
+        "minor"
+      ],
+      "properties": {
+        "major": {
+          "type": "string",
+          "description": "Name for the current major version era."
+        },
+        "minor": {
+          "type": "string",
+          "description": "Name for the current minor version focus."
+        },
+        "patch": {
+          "type": "string",
+          "deprecated": true,
+          "description": "Deprecated. Patch titles are now derived from the tagged commit subject."
+        }
+      },
+      "additionalProperties": false
+    },
+    "ecosystems": {
+      "type": ["object", "null"],
+      "description": "The ecosystems this repository is written in, declared once (ADR 000006), keyed by ecosystem id. Each id's block is described by the ecosystem's own fragment beside its module (lib/<id>/ecosystem.schema.json); this block mirrors that composition, so an id with no fragment is rejected. Registries that select by ecosystem read this, and a release syncs every version file the declared ecosystems name.",
+      "properties": {
+        "cargo": {
+          "$ref": "../lib/cargo/ecosystem.schema.json"
+        }
+      },
+      "additionalProperties": false
+    },
+    "agents": {
+      "$ref": "../lib/agents/agents.schema.json"
+    }
+  },
+  "additionalProperties": true
+}

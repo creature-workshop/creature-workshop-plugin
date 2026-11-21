@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2119  # bare @arr is the structs empty constructor
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/forge/api.sh" \
+  "$SHELLOPS_DIR/lib/tarball/api.sh"
+
+USAGE="$(cat <<HELP
+Attaches files to the release for a tag on the active forge, as release
+assets: every path in the artifacts.json a build wrote beside its outputs, and any given directly. The
+release must already exist; on a tag pipeline forge--publish-release creates
+it.
+
+Usage: action forge attach-artifacts --tag <tag> [--artifacts <file>] [artifact...]
+
+Arguments:
+  artifact          A file to attach. Repeatable.
+
+Flags:
+  --tag <tag>       Required. The tag whose release the files attach to.
+  --artifacts <f>   Load artifact paths from a JSON array file (e.g. artifacts.json).
+                    A file that does not exist attaches nothing and succeeds: a
+                    build with nothing to ship writes none.
+  -h, --help        Show this help text.
+
+Environment:
+  FORGE_ADMIN_TOKEN   Required. API token for the upload.
+  SHELLOPS_FORGE      Active forge; only "gitlab" keys a release by its tag.
+HELP
+)"
+
+ARG_TAG=""
+@arr ARG_ARTIFACTS
+
+main() {
+  parse_args "$@"
+  validate_args
+
+  @foreach attach_one "$ARG_ARTIFACTS" "$ARG_TAG"
+  @len __main__len_1 "$ARG_ARTIFACTS"
+  log "Attached $__main__len_1 artifact(s) to release $ARG_TAG"
+}
+
+: <<'FUN'
+Uploads the file at the wrapped path $1 as a release asset on the release for
+tag $2, named after its base name. A directory is refused: packaging is the
+build's job (lib/tarball), and this action ships only what a build produced.
+FUN
+attach_one() {
+  @unwrap __attach_one__path "$1"
+  if [ -d "$__attach_one__path" ]; then
+    error "attach-artifacts: $__attach_one__path is a directory; package it in the build (tarball_package) and attach the archive"
+    exit 1
+  fi
+  __attach_one__filename="${__attach_one__path##*/}"
+  @set __attach_one__options "$(forge__new_upload_options)" \
+    '.tag_name' "$2" \
+    '.filename' "$__attach_one__filename" \
+    '.filepath' "$__attach_one__path" \
+    '.token'    "$FORGE_ADMIN_TOKEN"
+
+  log "Uploading $__attach_one__filename..."
+  forge__upload_artifact "$__attach_one__options" > /dev/null
+}
+
+: <<'FUN'
+Appends every path the artifacts file $1 names to the artifacts to attach. A
+file that does not exist is a build that shipped nothing: the action logs it
+and exits clean. A file naming a missing path fails the call before anything
+uploads.
+FUN
+load_manifest() {
+  if [ ! -f "$1" ]; then
+    log "no artifacts file at $1: nothing to attach"
+    exit 0
+  fi
+  __load_manifest__paths="$(tarball__load_artifacts "$1")" || exit 1
+  @split __load_manifest__split_2 "$__load_manifest__paths"
+  @concat ARG_ARTIFACTS "$ARG_ARTIFACTS" "$__load_manifest__split_2"
+}
+
+validate_args() {
+  if ! @defined "$ARG_TAG"; then
+    error "--tag is required"
+    log "$USAGE"
+    exit 1
+  fi
+  if ! @defined "${FORGE_ADMIN_TOKEN:-}"; then
+    error "FORGE_ADMIN_TOKEN is not set"
+    exit 1
+  fi
+  if [ "$(forge__selected)" != gitlab ]; then
+    error "attach-artifacts: only the gitlab forge keys a release by its tag (SHELLOPS_FORGE=$(forge__selected))"
+    exit 1
+  fi
+  if @len __validate_args__len_3 "$ARG_ARTIFACTS"; [ "$__validate_args__len_3" -eq 0 ]; then
+    error "nothing to attach: give --artifacts <file> or artifact paths"
+    log "$USAGE"
+    exit 1
+  fi
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      --tag) ARG_TAG="$2"; shift ;;
+      --artifacts) load_manifest "$2"; shift ;;
+      -*)
+        error "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+      *) @wrap __parse_args__wrap_4 "$1"; @push __parse_args__push_5 "$ARG_ARTIFACTS" "$__parse_args__wrap_4"; ARG_ARTIFACTS="$__parse_args__push_5" ;;
+    esac
+    shift
+  done
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  */forge/attach-artifacts) main "$@" ;;
+esac

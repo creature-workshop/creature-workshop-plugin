@@ -1,0 +1,17 @@
+mutation($projectPath: ID!, $tagName: String!, $name: String, $description: String, $ref: String) {
+  releaseCreate(input: {
+    projectPath: $projectPath
+    tagName: $tagName
+    name: $name
+    description: $description
+    ref: $ref
+  }) {
+    release {
+      tagName
+      name
+      description
+      releasedAt
+    }
+    errors
+  }
+}

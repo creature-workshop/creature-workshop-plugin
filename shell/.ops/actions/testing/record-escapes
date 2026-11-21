@@ -1,0 +1,577 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+USAGE="$(cat <<'HELP'
+Surfaces a review's escapes: failing full-suite tests the run's selection
+did not run, whether it narrowed the run or found nothing to run. Each one
+is a mapping bug, so it lands in two places -- a managed comment on the
+review naming the tests, and a Linear ticket whose existence restarts the
+escape-free count the phase gates read. No escapes takes the comment down
+and files nothing. Either way the verdict goes onto the run's record, so the
+rollout of a later pipeline counts this run as clean or as the escape that
+restarts the count, with each selector's own escapes beside it.
+
+Two pipelines carry the check. On a review's own pipeline, where the full
+suite runs beside the selection, a failure the selection skipped is a
+would-be escape: the review is the one the pipeline builds, and the record
+is the one the impacted run left in this pipeline. On the default branch,
+with --landed, the full suite runs on the tree a review landed and the
+selection ran on the review's own pipeline: the review is the one the landed
+commit names, its record is collected from that pipeline's archives, and a
+failure the selection did not run is an escape, a mapping bug that reached
+the branch.
+
+The ticket is filed only when the comment was posted or changed, so a retried
+job on an unchanged review does not file the same bug twice.
+
+A pipeline without a review or a token is a no-op skip: the job is
+allow_failure, and the run's own result already gated. A pipeline whose
+record cannot be read, or whose full suite left no junit report for a suite
+selection left out, carries no verdict at all: the managed comment says so
+and names the job to retry, and the action fails so the pipeline shows the
+gap rather than reading as clean.
+
+A review targeting a branch other than the default branch is stacked: its
+full-suite jobs run the unmerged layers beneath it, so their failures show
+up here too. Those belong to the review that owns the branch beneath, so
+they are read off that review's latest pipeline and left out; what remains
+is this review's own, and an escape among them is still an escape. A branch
+beneath whose reports cannot be read leaves this review without a verdict.
+A landed review is judged on the branch it landed on, so nothing is stacked
+beneath it.
+
+Usage: action testing record-escapes [--landed] [-h,--help]
+
+Flags:
+  --landed     Judge the review the landed commit names, against this
+               pipeline's full suite, as the default branch does.
+  -h, --help   Show this help text.
+HELP
+)"
+
+import \
+  "$SHELLOPS_DIR/lib/manifest/api.sh" \
+  "$SHELLOPS_DIR/lib/git/commits.sh" \
+  "$SHELLOPS_DIR/lib/testing/escapes.sh" \
+  "$SHELLOPS_DIR/lib/testing/metrics/api.sh" \
+  "$SHELLOPS_DIR/lib/linear/api.sh" \
+  "$SHELLOPS_DIR/lib/forge/api.sh" \
+  "$SHELLOPS_DIR/lib/forge/managed_comment.sh"
+
+__record_escapes__MARKER="<!-- shellops:testing-escapes -->"
+
+: <<'CONST'
+Where the full-suite jobs leave their junit reports, one directory per suite
+named as the testing config spells the suite. Outside the tools cache, so a
+report found here is this pipeline's own.
+CONST
+__record_escapes__REPORTS_DIR=".ops/test-reports"
+
+ARG_LANDED=""
+
+main() {
+  parse_args "$@"
+
+  __main__review="$(review)"
+  if ! @defined "$__main__review"; then
+    log "No code review context, skipping."
+    return 0
+  fi
+
+  __main__token="${FORGE_PR_TOKEN:-${FORGE_ADMIN_TOKEN:-}}"
+  if [ -z "$__main__token" ]; then
+    log "FORGE_PR_TOKEN not set, skipping."
+    return 0
+  fi
+
+  @obj __main__options \
+    '.review_number' "$__main__review" \
+    '.token' "$__main__token"
+  __main__comments="$(forge__list_review_comments "$__main__options")" || return 1
+
+  __main__record_files="$(record_files "$__main__options" "$__main__review")"
+  if ! @defined "$__main__record_files"; then
+    no_verdict \
+      "$__main__options" \
+      "$__main__comments" \
+      "$(no_record_reason "$__main__review")"
+    return 1
+  fi
+  __main__record="$(testing__metrics__fold_files "$__main__record_files")"
+
+  __main__missing="$(testing__escapes_missing_reports "$__record_escapes__REPORTS_DIR" "$__main__record")"
+  if ! @empty "$__main__missing"; then
+    @join __main__join_1 "$__main__missing" ", "
+    no_verdict \
+      "$__main__options" \
+      "$__main__comments" \
+      "the full suite left no junit report for $__main__join_1 under $__record_escapes__REPORTS_DIR/<suite>"
+    return 1
+  fi
+
+  __main__failed="$(testing__escapes_failed_by_suite "$__record_escapes__REPORTS_DIR" "$__main__record")"
+
+  __main__target="$(stacked_target "$__main__options")" || return 1
+  if @defined "$__main__target"; then
+    __main__failed="$(own_failures_on_stack \
+      "$__main__failed" \
+      "$__main__record" \
+      "$__main__options" \
+      "$__main__review" \
+      "$__main__target"
+    )" || {
+      no_verdict \
+        "$__main__options" \
+        "$__main__comments" \
+        "the branch this review targets, '$__main__target', has no finished full-suite reports to judge against"
+      return 1
+    }
+    @set __main__set_2 "$__main__record" '.selection.stack_target' "$__main__target"
+    @compact __main__record "$__main__set_2"
+  fi
+
+  __main__escapes="$(testing__escapes "$__main__record" "$__main__failed")"
+  __main__by_selector="$(testing__escapes_by_selector "$__main__record" "$__main__failed")"
+  record_verdict_on_each "$__main__record_files" "$__main__escapes" "$__main__by_selector"
+
+  if @len __main__len_3 "$__main__escapes"; [ "$__main__len_3" -eq 0 ]; then
+    forge__delete_managed_comment \
+      "$__main__options" \
+      "$__main__comments" \
+      "$__record_escapes__MARKER" \
+      > /dev/null
+    log "No $(escape_word)s."
+    return 0
+  fi
+
+  __main__synced="$(forge__sync_managed_comment \
+    "$__main__options" \
+    "$__main__comments" \
+    "$__record_escapes__MARKER" \
+    "$(comment_body "$__main__escapes" "$__main__record")"
+  )" || return 1
+
+  # Sync prints an id only when it posted or rewrote the comment, so an
+  # unchanged review files no duplicate ticket.
+  if @defined "$__main__synced"; then
+    file_ticket "$__main__escapes" "$__main__record" "$__main__review"
+  fi
+
+  @len __main__len_4 "$__main__escapes"
+  log "Recorded $__main__len_4 $(escape_word)(s) on review $__main__review."
+}
+
+:<<'FUN'
+The review to judge: under --landed, the one the landed commit names; else
+the one this pipeline builds, from FORGE_REVIEW_IID or the forge's own
+variable. Nothing when there is none.
+FUN
+review() {
+  if @defined "$ARG_LANDED"; then
+    landed_review
+    return 0
+  fi
+  println "${FORGE_REVIEW_IID:-${CI_MERGE_REQUEST_IID:-}}"
+}
+
+:<<'FUN'
+The review the commit at HEAD names, as the forge's merge commit spells a
+reference to it; nothing when it names none.
+FUN
+landed_review() {
+  forge__code_review_refs "$(git__commit_message HEAD)" | head -n 1
+}
+
+:<<'FUN'
+The files holding the record of the run to judge, one per line, one per
+shard when the run was sharded: under --landed, the landed review's records
+collected from its pipeline's archives; else the newest run in the metrics
+directory, which this pipeline's impacted run left. Nothing when there is
+none to read.
+
+  $1 forge options   $2 review number
+FUN
+record_files() {
+  if @defined "$ARG_LANDED"; then
+    landed_record_files "$1" "$2"
+    return 0
+  fi
+  testing__metrics__latest_record_files
+}
+
+:<<'FUN'
+The landed review's records, collected into the metrics directory from the
+archives its pipeline kept them in, and the files they now sit in. Nothing
+when the collection fails, which the collector logs the reason for.
+
+  $1 forge options   $2 review number
+FUN
+landed_record_files() {
+  testing__metrics__collect_review "$1" "$2" > /dev/null || return 0
+  testing__metrics__record_files_for_review "$2"
+}
+
+:<<'FUN'
+Puts the verdict on every record file of the run, so each shard's record
+carries it and the folded run reads as judged.
+
+  $1 record files, one per line   $2 escapes   $3 escapes per selector
+FUN
+record_verdict_on_each() {
+  println "$1" \
+    | while IFS= read -r __record_verdict_on_each__file; do
+        if @defined "$__record_verdict_on_each__file"; then
+          testing__metrics__record_verdict "$__record_verdict_on_each__file" "$2" "$3"
+        fi
+      done
+}
+
+:<<'FUN'
+Why no record could be read, as a clause for the no-verdict comment.
+
+  $1 review number
+FUN
+no_record_reason() {
+  if @defined "$ARG_LANDED"; then
+    println "no record of review !$1's selection could be collected from its pipeline"
+    return 0
+  fi
+  println "the impacted run left no metrics record in $(testing__metrics__dir)"
+}
+
+:<<'FUN'
+What a failure the selection did not run is called: an escape once the
+review has landed, a would-be escape while its full suite still runs beside
+the selection.
+FUN
+escape_word() {
+  if @defined "$ARG_LANDED"; then
+    printf 'escape\n'
+    return 0
+  fi
+  printf 'would-be escape\n'
+}
+
+:<<'FUN'
+The same, capitalised for a heading or a title.
+FUN
+escape_noun() {
+  if @defined "$ARG_LANDED"; then
+    printf 'Escape\n'
+    return 0
+  fi
+  printf 'Would-be escape\n'
+}
+
+:<<'FUN'
+The branch beneath a stacked review: the one it targets, when that is not
+the default branch. Nothing for a review targeting the default branch, and
+nothing under --landed, since a landed review is judged on the branch it
+landed on.
+
+  $1 forge options
+FUN
+stacked_target() {
+  if @defined "$ARG_LANDED"; then
+    return 0
+  fi
+  __stacked_target__target="$(review_target "$1")" || return 1
+  if [ "$__stacked_target__target" = "$(forge__default_branch)" ]; then
+    return 0
+  fi
+  println "$__stacked_target__target"
+}
+
+:<<'FUN'
+The branch the review targets.
+
+  $1 forge options
+FUN
+review_target() {
+  __review_target__review="$(forge__get_review "$1")" || return 1
+  @get __review_target__out "$__review_target__review" '.base'
+  println "$__review_target__out"
+}
+
+:<<'FUN'
+This pipeline's failed keys with those already failing on the branch the
+review targets left out, per suite. Fails when that branch's reports cannot
+be read, since a stacked review cannot be judged without them.
+
+  $1 failed keys by suite   $2 record   $3 forge options
+  $4 review number   $5 target branch
+FUN
+own_failures_on_stack() {
+  __own_failures_on_stack__reports="$(target_reports "$3" "$5")" || return 1
+  __own_failures_on_stack__target_failed="$(testing__escapes_failed_by_suite \
+    "$__own_failures_on_stack__reports" \
+    "$2"
+  )"
+  log "Review $4 targets '$5': failures already failing there are that branch's review's, not this one's."
+  testing__escapes_own_failures "$1" "$__own_failures_on_stack__target_failed"
+}
+
+:<<'FUN'
+The directory of full-suite junit reports the branch's open review left on
+its latest pipeline, laid out as this repository's jobs leave them: every
+job's artifacts archive unpacked into one tree. Fails when the branch has no
+open review, when a job that kept an archive has not finished, or when no
+job kept one.
+
+  $1 forge options   $2 branch
+FUN
+target_reports() {
+  @set __target_reports__set_5 "$1" '.branch' "$2"
+  __target_reports__review="$(forge__review_for_branch "$__target_reports__set_5")" || return 1
+  @arr __target_reports__arr_6
+  @get __target_reports__get_7 "$__target_reports__review" '.jobs' "$__target_reports__arr_6"
+  @filter __target_reports__jobs "$__target_reports__get_7" silt__text_is .archive true
+  if @empty "$__target_reports__jobs"; then
+    log "No job on the latest pipeline of '$2' kept an artifacts archive."
+    return 1
+  fi
+  if @filter __target_reports__not_passed "$__target_reports__jobs" silt__text_is_not .status SUCCESS; @filter __target_reports__filter_8 "$__target_reports__not_passed" silt__text_is_not .status FAILED; ! @empty "$__target_reports__filter_8"; then
+    log "A job on the latest pipeline of '$2' that keeps an archive has not finished."
+    return 1
+  fi
+
+  __target_reports__dir="$(mktemp -d)"
+  @len __target_reports__count "$__target_reports__jobs"
+  __target_reports__i=0
+  while [ "$__target_reports__i" -lt "$__target_reports__count" ]; do
+    @get __target_reports__get_9 "$__target_reports__jobs" ".[$__target_reports__i].id"
+    forge__unpack_job_artifacts \
+      "$1" \
+      "$__target_reports__get_9" \
+      "$__target_reports__dir" \
+      || return 1
+    __target_reports__i=$((__target_reports__i + 1))
+  done
+
+  println "$__target_reports__dir/$__record_escapes__REPORTS_DIR"
+}
+
+:<<'FUN'
+Marks the review as carrying no escape verdict: rewrites the managed comment
+to say why and which job to retry, and logs the same.
+
+  $1 forge options   $2 review comments   $3 the reason, as a clause
+FUN
+no_verdict() {
+  forge__sync_managed_comment \
+    "$1" \
+    "$2" \
+    "$__record_escapes__MARKER" \
+    "$(no_verdict_body "$3")" \
+    > /dev/null || return 1
+  log "No escape verdict: $3."
+}
+
+:<<'FUN'
+The managed comment's body when the pipeline carries no verdict: the reason,
+and the retry that produces one.
+
+  $1 the reason, as a clause
+FUN
+no_verdict_body() {
+  printf '%s\n\n' "## No escape verdict"
+  printf '%s\n\n' "This pipeline reached no escape verdict: $1."
+  println "The check reads the record and reports present when it starts, and retrying the impacted or full-suite job alone does not run it again. Once those jobs have finished, retry \`shellops/testing/escapes\` for the verdict."
+}
+
+:<<'FUN'
+The managed comment's body: the failing tests selection did not run, and
+what to do about them.
+
+  $1 escapes (struct array)   $2 record
+FUN
+comment_body() {
+  printf '%s\n\n' "## $(escape_noun)"
+  printf '%s\n\n' "$(comment_finding "$2")"
+  @foreach comment_body_line "$1"
+  comment_body_stack "$2"
+  printf '\n%s\n' "$(comment_instruction)"
+}
+
+:<<'FUN'
+The comment's opening line: which full suite failed, on tests which
+selection left out.
+
+  $1 record
+FUN
+comment_finding() {
+  @get __comment_finding__get_10 "$1" '.selection.areas'
+  @join __comment_finding__areas "$__comment_finding__get_10" ", "
+  if @defined "$ARG_LANDED"; then
+    println "The full suite on the default branch failed on tests this review's selection (areas: $__comment_finding__areas) did not run:"
+    return 0
+  fi
+  println "The full suite failed on tests this review's selection (areas: $__comment_finding__areas) would not have run:"
+}
+
+:<<'FUN'
+The comment's closing line: what each escape is, and what to do.
+FUN
+comment_instruction() {
+  if @defined "$ARG_LANDED"; then
+    println "Each one is a mapping bug that reached the default branch: the failing test depends on this change through a path the testmap does not record. Fix the mapping, note the cause, and the escape-free count restarts."
+    return 0
+  fi
+  println "Each one is a mapping bug: the failing test depends on this change through a path the testmap does not record. Fix the mapping, and the escape-free count restarts."
+}
+
+:<<'FUN'
+The comment's note on a stacked review: which branch it targets, and that
+failures already failing there were left to that branch's review. Prints
+nothing for a review targeting the default branch.
+
+  $1 record
+FUN
+comment_body_stack() {
+  @get __comment_body_stack__target "$1" '.selection.stack_target' ''
+  if ! @defined "$__comment_body_stack__target"; then
+    return 0
+  fi
+  printf '\n%s\n' "This review targets \`$__comment_body_stack__target\`; failures already failing on that branch are left to its own review, so the tests above are this review's alone."
+}
+
+:<<'FUN'
+@foreach callback: one escaped test as a list line.
+
+  $1 test file (wrapped)
+FUN
+comment_body_line() {
+  @unwrap __comment_body_line__unwrap_11 "$1"
+  printf -- "- \`%s\`\\n" "$__comment_body_line__unwrap_11"
+}
+
+:<<'FUN'
+Files the mapping-bug ticket on the manifest's Linear team. A missing key or
+team is a logged skip rather than a failure: the comment already carries the
+finding, and the job must not gate the review.
+
+  $1 escapes (struct array)   $2 record   $3 review number
+FUN
+file_ticket() {
+  if [ -z "${LINEAR_API_KEY:-}" ]; then
+    log "LINEAR_API_KEY not set; escape comment posted, no ticket filed."
+    return 0
+  fi
+
+  __file_ticket__team_key="$(manifest__get linear_team)" || {
+    log "No linear-team in manifest.json; escape comment posted, no ticket filed."
+    return 0
+  }
+
+  @obj __file_ticket__options '.token' "${LINEAR_API_KEY}"
+  __file_ticket__team_id="$(team_id "$__file_ticket__team_key" "$__file_ticket__options")"
+  if ! @defined "$__file_ticket__team_id"; then
+    log "Linear team '$__file_ticket__team_key' not found; escape comment posted, no ticket filed."
+    return 0
+  fi
+
+  __file_ticket__issue="$(linear__create_issue \
+    "$__file_ticket__team_id" \
+    "$(ticket_title "$1" "$3")" \
+    "$(ticket_body "$1" "$2" "$3")" \
+    "$__file_ticket__options"
+  )" || return 1
+
+  @get __file_ticket__get_12 "$__file_ticket__issue" '.identifier'
+  log "Filed $__file_ticket__get_12 for the mapping bug."
+}
+
+:<<'FUN'
+The id of the Linear team KEY names, or nothing when no team matches.
+
+  $1 team key   $2 linear options
+FUN
+team_id() {
+  __team_id__teams="$(linear__list_teams "$2")" || return 0
+  @find __team_id__match team_has_key "$__team_id__teams" "$1"
+  if ! @defined "$__team_id__match"; then
+    return 0
+  fi
+  @get __team_id__out "$__team_id__match" '.id'
+  println "$__team_id__out"
+}
+
+:<<'FUN'
+@find callback: whether one team's key is KEY.
+
+  $1 team   $2 key
+FUN
+team_has_key() {
+  @get __team_has_key__get_13 "$1" '.key' ''
+  [ "$__team_has_key__get_13" = "$2" ]
+}
+
+:<<'FUN'
+The ticket's title: the first escaped test, and how many more.
+
+  $1 escapes (struct array)   $2 review number
+FUN
+ticket_title() {
+  @len __ticket_title__count "$1"
+  @first __ticket_title__first_14 "$1"
+  @unwrap __ticket_title__first "$__ticket_title__first_14"
+  if [ "$__ticket_title__count" -gt 1 ]; then
+    printf '%s: %s (+%s more) on !%s\n' \
+      "$(escape_noun)" \
+      "$__ticket_title__first" \
+      "$((__ticket_title__count - 1))" \
+      "$2"
+    return 0
+  fi
+  printf '%s: %s on !%s\n' "$(escape_noun)" "$__ticket_title__first" "$2"
+}
+
+:<<'FUN'
+The ticket's body: the escapes, the run context that proves them, and the
+standing instruction.
+
+  $1 escapes (struct array)   $2 record   $3 review number
+FUN
+ticket_body() {
+  printf '%s\n\n' "$(ticket_finding "$3")"
+  @foreach comment_body_line "$1"
+  @get __ticket_body__get_15 "$2" '.selection.areas'
+  @join __ticket_body__join_16 "$__ticket_body__get_15" ", "
+  @get __ticket_body__get_17 "$2" '.selection.reason'
+  @get __ticket_body__get_18 "$2" '.run.pipeline'
+  @get __ticket_body__get_19 "$2" '.run.commit'
+  printf '\n%s\n\n' "Selection context: areas $__ticket_body__join_16, reason \`$__ticket_body__get_17\`, pipeline $__ticket_body__get_18, commit $__ticket_body__get_19."
+  println "The failing test depends on the change through a path the testmap does not record. Fix the mapping; the escape-free count the phase gates read restarts at this ticket."
+}
+
+:<<'FUN'
+The ticket's opening line: which full suite failed, on tests which review's
+selection left out.
+
+  $1 review number
+FUN
+ticket_finding() {
+  if @defined "$ARG_LANDED"; then
+    println "The full suite on the default branch failed on tests review !$1's selection did not run:"
+    return 0
+  fi
+  println "The full suite failed on tests review !$1's selection would not have run:"
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      --landed) ARG_LANDED=1 ;;
+      *)
+        error "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+main "$@"

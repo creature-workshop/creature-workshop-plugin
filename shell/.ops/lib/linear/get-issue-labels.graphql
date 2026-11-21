@@ -1,0 +1,10 @@
+query($id: String!) {
+  issue(id: $id) {
+    labels {
+      nodes {
+        id
+        name
+      }
+    }
+  }
+}

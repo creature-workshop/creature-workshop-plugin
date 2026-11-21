@@ -1,0 +1,434 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2119  # bare @arr is the structs empty constructor
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+USAGE="$(cat <<'HELP'
+Projects the Linear issues a code review names onto a managed comment
+and, when a Linear key is present, onto those issues.
+
+A managed comment (<!-- shellops:linear-prompt -->) lists every referenced
+issue as a link, rewritten as the set changes, or asks for identifiers
+when none have been named yet. The list has two parts: the issues the merge
+closes, by the rules linear/close-mentioned-issues applies at landing, and
+the issues merely mentioned, each line saying where and how the issue was
+named. Each referenced issue gets an attachment whose URL is the code
+review; the same URL is idempotent, so a rerun does not duplicate. Bare
+identifiers in the description become markdown links.
+
+An identifier is one of any team Linear lists, so a review in one repository
+can name another team's ticket. Without a Linear key, it is one of the single
+team the manifest names.
+
+Every mention counts, wherever it appears: the title, the description, the
+head branch, the commit messages the pipeline builds, the conversation, and
+the threads on the diff.
+
+The projection runs one way. An attachment is not removed if a mention
+disappears, and mentions that live only on the Linear issue are not
+copied onto the code review. Fenced blocks and backtick spans are not
+prose, so they name nothing and are not rewritten.
+
+A missing FORGE_PR_TOKEN (or FORGE_ADMIN_TOKEN) skips the action. A
+missing LINEAR_API_KEY still keeps the comment, listing bare identifiers:
+every link is built under one issue's URL, which is also what the
+attachments and the description rewrite need.
+HELP
+)"
+
+import \
+  "$SHELLOPS_DIR/lib/manifest/api.sh" \
+  "$SHELLOPS_DIR/lib/linear/api.sh" \
+  "$SHELLOPS_DIR/lib/linear/refs.sh" \
+  "$SHELLOPS_DIR/lib/linear/mentions.sh" \
+  "$SHELLOPS_DIR/lib/linear/links.sh" \
+  "$SHELLOPS_DIR/lib/markdown/api.sh" \
+  "$SHELLOPS_DIR/lib/string/api.sh" \
+  "$SHELLOPS_DIR/lib/forge/api.sh" \
+  "$SHELLOPS_DIR/lib/forge/managed_comment.sh" \
+  "$SHELLOPS_DIR/lib/git/api.sh"
+
+__sync_refs__MARKER="$(linear__prompt_marker)"
+
+main() {
+  case "${1:-}" in
+    -h|--help)
+      log "$USAGE"
+      exit 0
+      ;;
+  esac
+
+  __main__review_number="$(forge__review_in_context)"
+  if ! @defined "$__main__review_number"; then
+    error "No code review number available. Is this running in a code-review pipeline?"
+    exit 1
+  fi
+
+  __main__token="$(forge__comment_token)"
+  if ! @defined "$__main__token"; then
+    warn "FORGE_PR_TOKEN is not set, skipping sync-refs."
+    return 0
+  fi
+
+  @obj __main__forge_options \
+    '.review_number' "$__main__review_number" \
+    '.token' "$__main__token"
+  __main__keys="$(team_keys)" || return 1
+
+  __main__review="$(read_review "$__main__forge_options")" || return 1
+  __main__comments="$(forge__code_review_comments "$__main__forge_options" "$__main__review_number")"
+
+  __main__records="$(mention_records \
+    "$__main__forge_options" \
+    "$__main__review" \
+    "$__main__comments" \
+    "$__main__keys"
+  )"
+  __main__mentioned="$(linear__mentioned_ids "$__main__records")"
+  __main__resolved="$(linear__resolve_mentions "$__main__mentioned" "$__main__keys")"
+
+  sync_managed_comment \
+    "$__main__forge_options" \
+    "$__main__comments" \
+    "$__main__records" \
+    "$__main__resolved" \
+    "$__main__keys"
+
+  project_onto_issues \
+    "$__main__forge_options" \
+    "$__main__review" \
+    "$__main__keys" \
+    "$__main__mentioned" \
+    "$__main__resolved"
+}
+
+:<<'FUN'
+Prints the teams whose identifiers a text can name, as the pattern the
+reference grammar takes: every team Linear lists when LINEAR_API_KEY is
+present, and otherwise the one team the manifest names, so the comment still
+lists bare identifiers without a key. Nothing when neither names a team, in
+which case no text can name an issue. A Linear request rejected with the key
+present fails the run.
+
+Usage: team_keys
+FUN
+team_keys() {
+  if @defined "${LINEAR_API_KEY:-}"; then
+    linear_team_keys
+    return
+  fi
+
+  manifest_team_keys
+}
+
+:<<'FUN'
+Prints the pattern for every team Linear lists, failing loudly when Linear
+rejects the key.
+FUN
+linear_team_keys() {
+  __linear_team_keys__options="$(linear__key_options)"
+  __linear_team_keys__teams="$(linear__list_teams "$__linear_team_keys__options")" || {
+    error "Linear rejected LINEAR_API_KEY (HTTP status above)."
+    return 1
+  }
+  __linear_team_keys__keys="$(linear__team_keys "$__linear_team_keys__teams")"
+
+  linear__keys_pattern "$__linear_team_keys__keys"
+}
+
+:<<'FUN'
+Prints the pattern for the one team the manifest names, and nothing when it
+names none.
+FUN
+manifest_team_keys() {
+  __manifest_team_keys__key="$(manifest__get linear_team)" || return 0
+  if ! @defined "$__manifest_team_keys__key"; then
+    return 0
+  fi
+  @arr __manifest_team_keys__keys "$__manifest_team_keys__key"
+
+  linear__keys_pattern "$__manifest_team_keys__keys"
+}
+
+:<<'FUN'
+Prints one record per mention on the code review, {id, where, how}: its
+title, description and branch, the conversation, the threads on its diff and
+the commit messages the pipeline builds. The threads are read here, beside
+the conversation the managed comment lives in, because a mention is a mention
+wherever it was made; the commits because the landing reads them
+(linear/close-mentioned-issues), so the panel can say what the landing will
+do.
+
+Usage: mention_records "$forge_options" "$review" "$comments" "$keys"
+FUN
+mention_records() {
+  @get __mention_records__number "$1" '.review_number'
+  __mention_records__threads="$(
+    forge__code_review_thread_comments "$1" "$__mention_records__number"
+  )"
+  __mention_records__commits="$(review_commit_texts)"
+
+  linear__review_mention_records "$2" "$3" "$__mention_records__threads" "$__mention_records__commits" "$4"
+}
+
+:<<'FUN'
+Prints the commit messages the code-review pipeline builds, as a struct array
+of one text, and an empty array outside such a pipeline or when git cannot
+resolve the range, which a clone too shallow to reach the base leaves it
+unable to.
+FUN
+review_commit_texts() {
+  __review_commit_texts__range="$(forge__review_commit_range)"
+  if ! @defined "$__review_commit_texts__range"; then
+    @arr __review_commit_texts__out
+    println "$__review_commit_texts__out"
+    return 0
+  fi
+
+  __review_commit_texts__text="$(git__commit_text "$__review_commit_texts__range")"
+  if ! @defined "$__review_commit_texts__text"; then
+    @arr __review_commit_texts__out
+    println "$__review_commit_texts__out"
+    return 0
+  fi
+
+  @arr __review_commit_texts__out "$__review_commit_texts__text"
+  println "$__review_commit_texts__out"
+}
+
+:<<'FUN'
+Prints the code review, failing loudly: without it there is nothing to read
+mentions out of.
+FUN
+read_review() {
+  forge__get_review "$1" || {
+    @get __read_review__get_1 "$1" '.review_number'
+    error "Could not read code review #$__read_review__get_1."
+    return 1
+  }
+}
+
+:<<'FUN'
+Writes the managed comment so it matches the current references, and says in
+the log which comment now carries them.
+
+Usage: sync_managed_comment "$forge_options" "$comments" "$records" "$resolved" "$keys"
+FUN
+sync_managed_comment() {
+  __sync_managed_comment__body="$(managed_comment_body "$3" "$4" "$5")"
+  __sync_managed_comment__written="$(
+    forge__sync_managed_comment \
+      "$1" \
+      "$2" \
+      "$__sync_refs__MARKER" \
+      "$__sync_managed_comment__body"
+  )"
+
+  if ! @defined "$__sync_managed_comment__written"; then
+    log "Linear issue prompt already matches the referenced issues."
+    return 0
+  fi
+
+  @get __sync_managed_comment__review "$1" '.review_number'
+  __sync_managed_comment__said="$(
+    printf 'Wrote the Linear issue prompt as comment %s on code review #%s' \
+      "$__sync_managed_comment__written" \
+      "$__sync_managed_comment__review"
+  )"
+
+  log "$__sync_managed_comment__said"
+}
+
+:<<'FUN'
+Prints the managed comment's body: the panel of the mention records, or the
+ask when nothing has been named yet.
+
+Usage: managed_comment_body "$records" "$resolved_issues" "$keys"
+FUN
+managed_comment_body() {
+  if @len __managed_comment_body__len_2 "$1"; [ "$__managed_comment_body__len_2" -eq 0 ]; then
+    build_prompt "$3"
+    return 0
+  fi
+
+  __managed_comment_body__panel="$(linear__reference_panel "$1" "$2")"
+  __managed_comment_body__listed="$(
+    string__trim_newlines "$__managed_comment_body__panel"
+  )"
+
+  printf '%s\n\nReply with more identifiers to add them.\n' \
+    "$__managed_comment_body__listed"
+}
+
+:<<'FUN'
+Says on each mentioned issue that this code review names it, and links the
+identifiers in the review's own description.
+
+Both need a URL, so both wait on a resolved issue to take one from: with no
+Linear key the comment still lists what was mentioned, and that is all.
+FUN
+project_onto_issues() {
+  if ! @defined "${LINEAR_API_KEY:-}"; then
+    if @len __project_onto_issues__len_3 "$4"; [ "$__project_onto_issues__len_3" -gt 0 ]; then
+      log "LINEAR_API_KEY is not set; skipping attachments and description links."
+    fi
+    return 0
+  fi
+  if @len __project_onto_issues__len_4 "$5"; [ "$__project_onto_issues__len_4" -eq 0 ]; then
+    return 0
+  fi
+
+  __project_onto_issues__options="$(linear__key_options)"
+
+  attach_review_to_issues "$5" "$2" "$__project_onto_issues__options"
+  linkify_review_description "$1" "$2" "$3" "$5"
+}
+
+:<<'FUN'
+Attaches the code review to each resolved issue. The attachment URL is
+the review's html_url, which Linear treats as idempotent per issue.
+FUN
+attach_review_to_issues() {
+  @let "$2" __attach_review_to_issues__ html_url title
+  __attach_review_to_issues__url="$__attach_review_to_issues__html_url"
+  if ! @defined "$__attach_review_to_issues__url"; then
+    log "Code review has no html_url; skipping attachments."
+    return 0
+  fi
+  if ! @defined "$__attach_review_to_issues__title"; then
+    __attach_review_to_issues__title="$__attach_review_to_issues__url"
+  fi
+
+  @foreach try_attach_review \
+    "$1" \
+    "$__attach_review_to_issues__url" \
+    "$__attach_review_to_issues__title" \
+    "$3"
+  __attach_review_to_issues__status=$?
+  @unlet __attach_review_to_issues__ html_url title
+  return "$__attach_review_to_issues__status"
+}
+
+try_attach_review() {
+  @let "$1" __try_attach_review__ id identifier
+  __try_attach_review__issue_id="$__try_attach_review__id"
+  __try_attach_review__ref="$__try_attach_review__identifier"
+  @unlet __try_attach_review__ id identifier
+  if ! @defined "$__try_attach_review__issue_id"; then
+    return 0
+  fi
+
+  @obj __try_attach_review__attachment \
+      '.title' "$3" \
+      '.url' "$2"
+  if linear__add_attachment \
+    "$__try_attach_review__issue_id" \
+    "$__try_attach_review__attachment" \
+    "$4"
+  then
+    log "  Attached code review on ${__try_attach_review__ref}"
+  else
+    log "  Failed to attach code review on ${__try_attach_review__ref}"
+  fi
+}
+
+:<<'FUN'
+Rewrites bare references in the description into markdown links when the
+text actually changes.
+FUN
+linkify_review_description() {
+  @get __linkify_review_description__body "$2" '.body' ''
+  __linkify_review_description__prefix="$(linear__issues_url_prefix "$4")"
+  if ! @defined "$__linkify_review_description__prefix"; then
+    log "Resolved issues have no url; skipping description links."
+    return 0
+  fi
+
+  __linkify_review_description__linked="$(
+    linear__linkify_refs \
+      "$__linkify_review_description__body" \
+      "$3" \
+      "$__linkify_review_description__prefix"
+  )"
+  if description_is_unchanged \
+    "$__linkify_review_description__body" \
+    "$__linkify_review_description__linked"
+  then
+    log "Description already linkifies the referenced issues."
+    return 0
+  fi
+
+  @set __linkify_review_description__options "$1" '.body' "$__linkify_review_description__linked"
+  forge__update_review "$__linkify_review_description__options" > /dev/null
+  @get __linkify_review_description__get_5 "$1" '.review_number'
+  log "Linkified Linear references in the description of code review #$__linkify_review_description__get_5"
+}
+
+:<<'FUN'
+Returns 0 when the rewritten description says the same thing as the original.
+
+Compared without their surrounding blank lines, so a trailing newline the rewrite
+added or dropped does not read as an edit worth sending.
+FUN
+description_is_unchanged() {
+  __description_is_unchanged__before="$(string__trim_newlines "$1")"
+  __description_is_unchanged__after="$(string__trim_newlines "$2")"
+
+  [ "$__description_is_unchanged__before" = "$__description_is_unchanged__after" ]
+}
+
+:<<'FUN'
+Prints the comment asking which issues the review addresses, naming any
+identifier of the teams in KEYS the branch already hints at.
+
+Usage: build_prompt "$keys"
+FUN
+build_prompt() {
+  __build_prompt__detected="$(detect_branch_ref "$1")"
+
+  __build_prompt__hint=""
+  if @defined "$1"; then
+    __build_prompt__hint=" (e.g. \`ABC-###\`)"
+  fi
+
+  __build_prompt__detection=""
+  if @defined "$__build_prompt__detected"; then
+    __build_prompt__detection="
+
+Detected from branch name: \`${__build_prompt__detected}\`"
+  fi
+
+  cat <<EOF
+**What Linear issue(s) does this code review address?**
+
+Reply to this comment with issue identifiers${__build_prompt__hint}.${__build_prompt__detection}
+EOF
+}
+
+:<<'FUN'
+Prints the first identifier the head branch name carries, and nothing when it
+carries none.
+FUN
+detect_branch_ref() {
+  __detect_branch_ref__branch="$(linear__review_head_branch)"
+  if ! @defined "$__detect_branch_ref__branch" || ! @defined "$1"; then
+    return 0
+  fi
+
+  __detect_branch_ref__ids="$(
+    linear__extract_mentioned_ids "$__detect_branch_ref__branch" "$1"
+  )"
+  if @len __detect_branch_ref__len_6 "$__detect_branch_ref__ids"; [ "$__detect_branch_ref__len_6" -eq 0 ]; then
+    return 0
+  fi
+
+  @first __detect_branch_ref__first "$__detect_branch_ref__ids"
+
+  @unwrap __detect_branch_ref__out "$__detect_branch_ref__first"
+  println "$__detect_branch_ref__out"
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *sync-refs) main "$@" ;;
+esac

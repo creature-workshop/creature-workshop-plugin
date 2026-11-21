@@ -1,0 +1,15 @@
+# What this repository declares about itself (ADR 000049): its identity, how
+# it releases and how its versions are named. The release record, latest and
+# stable, lives in .ops/lock, which the release job writes.
+name: Shellops
+command-name: ops
+description: Shell-based CI/CD toolkit and project automation framework
+linear-team: OPS
+org: creature-workshop
+repo: shellops
+promotion: shellops
+auto-promote-until: rc
+naming:
+  major: Shellops Official Release
+  minor: Library Expansion
+  patch: ""

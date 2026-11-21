@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "description": "Doctest suite. Runs the workspace's doctests with cargo test --doc, always in full: a doctest cannot be selected or filtered on stable Rust, so a narrowed run still runs every doctest and the record lists the Rust sources the selection touched, found by cargo's package walk. The run's report is translated from libtest's text into a JUnit report at target/rust_doctest/junit.xml under the workspace, each doctest keyed by the repo-relative file it lives in, so the escape join reads it under file-path.",
+  "required": ["runner"],
+  "properties": {
+    "runner": { "const": "rust_doctest" },
+    "manifest": {
+      "type": "string",
+      "description": "$PROJ-relative path to the Cargo.toml of the workspace whose doctests run, for a workspace below the repo root (e.g. \"engine/Cargo.toml\"). Omitted, cargo runs against whatever workspace the working directory is in."
+    },
+    "cargo_args": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Extra arguments for the build and run, one shell word per element (e.g. [\"--no-default-features\", \"--locked\"]). Defaults to none."
+    }
+  },
+  "additionalProperties": false
+}

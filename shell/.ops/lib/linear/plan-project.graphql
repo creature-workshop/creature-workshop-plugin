@@ -1,0 +1,9 @@
+query($name: String!) {
+  projects(filter: { name: { eq: $name } }) {
+    nodes {
+      id
+      name
+      projectMilestones { nodes { id name targetDate sortOrder } }
+    }
+  }
+}

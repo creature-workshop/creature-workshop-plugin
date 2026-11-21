@@ -1,0 +1,9 @@
+[submodule "shell/.ops"]
+	path = shell/.ops
+	url = https://gitlab.creature-workshop.com/ksoft/shellops.git
+[submodule "shell/.logs"]
+	path = shell/.logs
+	url = https://gitlab.creature-workshop.com/ksoft/libraries/shell-logs.git
+[submodule "shell/.golden"]
+	path = shell/.golden
+	url = https://gitlab.creature-workshop.com/ksoft/libraries/shell-goldens.git

@@ -1,0 +1,16 @@
+query {
+  teams {
+    nodes {
+      id
+      name
+      key
+      states {
+        nodes {
+          id
+          name
+          type
+        }
+      }
+    }
+  }
+}

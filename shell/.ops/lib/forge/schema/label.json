@@ -1,0 +1,7 @@
+{
+  "$comment": "Canonical label shape. Both backends normalize to this for labels__diff_labels and sync-labels.",
+  "id": 1,
+  "name": "bug",
+  "color": "#d73a4a",
+  "description": "Something is broken"
+}

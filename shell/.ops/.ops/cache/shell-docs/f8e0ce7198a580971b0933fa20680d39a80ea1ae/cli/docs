@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+SHELL_DOCS_DIR="${SHELL_DOCS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+export SHELL_DOCS_DIR
+
+import "$SHELL_DOCS_DIR/shell/docs/api.sh"
+
+USAGE="$(cat <<HELP
+Writes the reference of a shell library: one page per module and an index,
+rendered from the doc blocks by the docs system named, under .ops/docs by
+default.
+
+Usage: cli/docs [-h,--help] [--list] [--system <name>] [--out <dir>] <library>
+
+Arguments:
+  <library>        The directory the library's modules are under.
+
+Flags:
+  --system <name>  The docs system; docusaurus by default.
+  --out <dir>      Where the pages go; .ops/docs by default. It is emptied
+                   first.
+  --list           Print every docs system and what it renders for.
+  -h, --help       Show this help text
+
+shell-scan and shell-tree are read from SHELL_SCAN_DIR and SHELL_TREE_DIR,
+or from the copies vendored here when those are unset.
+HELP
+)"
+
+# CONST: Where the docs systems this repository ships are found.
+SYSTEMS="$SHELL_DOCS_DIR/shell/docs"
+
+SYSTEM=docusaurus
+OUT=.ops/docs
+LIBRARY=""
+FLAG_LIST="$(@false)"
+
+main() {
+  parse_args "$@"
+  docs__docgen__load_all "$SYSTEMS"
+  if @is_true "$FLAG_LIST"; then
+    list_systems
+    exit 0
+  fi
+  require_system
+  require_library
+  require_scan_and_tree
+
+  docs__write "$SYSTEM" "$LIBRARY" "$OUT"
+
+  report
+}
+
+: <<'FUN'
+Collects the flags and the library: SYSTEM is the docs system, OUT where
+the pages go, LIBRARY the directory rendered, FLAG_LIST whether to list the
+systems instead.
+FUN
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help)
+        log "$USAGE"
+        exit 0
+        ;;
+      --list)
+        FLAG_LIST="$(@true)"
+        ;;
+      --system)
+        require_value "$@"
+        SYSTEM="$2"
+        shift
+        ;;
+      --system=*)
+        SYSTEM="${1#--system=}"
+        ;;
+      --out)
+        require_value "$@"
+        OUT="$2"
+        shift
+        ;;
+      --out=*)
+        OUT="${1#--out=}"
+        ;;
+      -*)
+        error "docs: unknown option: $1"
+        exit 1
+        ;;
+      *)
+        LIBRARY="$1"
+        ;;
+    esac
+    shift
+  done
+}
+
+: <<'FUN'
+Exits, naming the flag, when the flag <flag> has no value after it.
+FUN
+require_value() {
+  if [ "$#" -lt 2 ]; then
+    error "docs: $1 requires a value"
+    exit 1
+  fi
+}
+
+: <<'FUN'
+Exits, naming the systems there are, when SYSTEM is not a loaded docs
+system.
+FUN
+require_system() {
+  if @is_true "$(kinds__registered docgen "$SYSTEM")"; then
+    return 0
+  fi
+  error "docs: no docs system named $SYSTEM; the systems are $(@join "$(docs__docgen__names)" ', ')"
+  exit 1
+}
+
+: <<'FUN'
+Exits, saying so, when no library was given or the directory given does
+not exist.
+FUN
+require_library() {
+  if ! @defined "$LIBRARY"; then
+    error "docs: name the library to render, the directory its modules are under"
+    exit 1
+  fi
+  if [ ! -d "$LIBRARY" ]; then
+    error "docs: $LIBRARY is not a directory"
+    exit 1
+  fi
+}
+
+: <<'FUN'
+Exports the roots of shell-scan and shell-tree: the host's when it exports
+them, else this repository's vendored copies. Exits, saying what to
+declare, when neither is there.
+FUN
+require_scan_and_tree() {
+  SHELL_SCAN_DIR="${SHELL_SCAN_DIR:-$SHELL_DOCS_DIR/shell/.scan}"
+  SHELL_TREE_DIR="${SHELL_TREE_DIR:-$SHELL_DOCS_DIR/shell/.tree}"
+  export SHELL_SCAN_DIR SHELL_TREE_DIR
+  if [ ! -f "$SHELL_SCAN_DIR/shell/scan/scan.awk" ] || [ ! -f "$SHELL_TREE_DIR/shell/tree/tree.awk" ]; then
+    error "docs: SHELL_SCAN_DIR and SHELL_TREE_DIR name the shell-scan and shell-tree trees; declare both beside shell-docs in the git channel of .ops/config/tools.yaml"
+    exit 1
+  fi
+}
+
+: <<'FUN'
+Prints every docs system with its summary, one per line.
+FUN
+list_systems() {
+  @foreach list_system "$(docs__docgen__names)"
+}
+
+: <<'FUN'
+@foreach callback: prints the wrapped system <name> with its summary.
+FUN
+list_system() {
+  __list_system__name="$(@unwrap "$1")"
+  println "$__list_system__name  $(docs__docgen__summary "$__list_system__name")"
+}
+
+: <<'FUN'
+Says where the pages went and how many there are.
+FUN
+report() {
+  __report__index="$(docs__docgen__index_path "$SYSTEM")"
+  __report__pages="$(find "$OUT" -type f ! -path "$OUT/$__report__index" | wc -l | tr -d ' ')"
+  println "wrote $OUT: $__report__pages pages and $__report__index"
+}
+
+main "$@"

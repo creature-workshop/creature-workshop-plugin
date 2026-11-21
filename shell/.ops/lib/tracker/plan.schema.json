@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shellops.kernelle-soft.com/schema/plan.schema.json",
+  "title": "A project's plan: a DAG of tickets with blocking edges, laid out by milestone, from one tracker or the union of every declared one",
+  "type": "object",
+  "required": ["states", "milestones", "tickets", "edges"],
+  "additionalProperties": false,
+  "properties": {
+    "scope": {"$ref": "#/$defs/scope"},
+    "scopes": {"type": "array", "items": {"$ref": "#/$defs/scope"}},
+    "states": {"type": "array", "items": {"$ref": "#/$defs/state"}, "description": "The tracker's states in its order, or every declared tracker's in a union plan"},
+    "milestones": {"type": "array", "items": {"$ref": "#/$defs/milestone"}},
+    "tickets": {"type": "array", "items": {"$ref": "#/$defs/ticket"}},
+    "edges": {"type": "array", "items": {"$ref": "#/$defs/edge"}}
+  },
+  "$defs": {
+    "type": {"type": "string", "enum": ["backlog", "todo", "in_progress", "in_review", "done", "cancelled"], "description": "The kind of state, in the order work moves through them"},
+    "state": {
+      "type": "object",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string", "description": "The tracker's own name for the state"},
+        "type": {"$ref": "#/$defs/type"},
+        "tracker": {"type": "string", "description": "The scope's name, in a union plan's states"}
+      }
+    },
+    "scope": {
+      "type": "object",
+      "required": ["name", "kind", "org", "key", "project"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string", "description": "The scope's name among the repository's trackers; the kind when it gives none"},
+        "kind": {"type": "string", "description": "The tracker: file, linear, github"},
+        "org": {"type": "string", "description": "The org the tracker's account belongs to: a GitHub owner; empty where the credential implies it"},
+        "key": {"type": "string", "description": "The key of what owns the tickets within the org: a Linear team's key, a GitHub repository's name, a plan file's path"},
+        "project": {"type": "string", "description": "The project inside the key, or empty"}
+      }
+    },
+    "milestone": {
+      "type": "object",
+      "required": ["id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "target": {"type": ["string", "null"], "description": "The end date, ISO 8601, or null"},
+        "tracker": {"type": "string", "description": "The scope's name, in a union plan"}
+      }
+    },
+    "ticket": {
+      "type": "object",
+      "required": ["id", "key", "title", "state", "stub"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "description": "The tracker's own id, for writes"},
+        "key": {"type": "string", "description": "The name the tracker gives the ticket, and the name edges use: SHOP-44, org/repo#12"},
+        "title": {"type": "string"},
+        "state": {"$ref": "#/$defs/state", "description": "One of the tracker's states"},
+        "estimate": {"type": ["integer", "number", "null"]},
+        "priority": {"type": ["integer", "null"]},
+        "assignee": {"type": ["string", "null"]},
+        "milestone": {"type": ["string", "null"], "description": "The id of the milestone it sits under"},
+        "lane": {"type": ["string", "null"], "description": "The column the ticket stacks in: its initiative, else its project, as the tracker names it; null when the tracker gives none"},
+        "url": {"type": ["string", "null"]},
+        "description": {"type": "string"},
+        "stub": {"type": "boolean", "description": "True for a ticket outside the scope that an edge reaches"},
+        "tracker": {"type": ["string", "null"], "description": "The scope's name; null for a stub no declared tracker holds"}
+      }
+    },
+    "edge": {
+      "type": "object",
+      "required": ["blocker", "blocked"],
+      "additionalProperties": false,
+      "properties": {
+        "blocker": {"type": "string", "description": "The key of the ticket that blocks"},
+        "blocked": {"type": "string", "description": "The key of the ticket that is blocked"}
+      }
+    }
+  }
+}

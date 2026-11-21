@@ -1,0 +1,371 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2119  # bare @arr is the structs empty constructor
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+USAGE="$(cat <<'HELP'
+Transitions the Linear issues a pushed commit range declares closed to their
+team's Done state. An issue's team is the prefix of its identifier, and a
+text can name an issue of any team Linear lists, so a merge in one repository
+closes another team's ticket too. Nothing else shaped like an identifier,
+such as SHA-256, is read as one.
+
+A declaration is a closing keyword followed by the issue ID, using a superset of
+GitLab's own keyword set: "Closes OPS-1", "fixes OPS-1, OPS-2 and OPS-3", or a
+bulleted list beneath a bare "Closes:" line. A commit message and a
+referenced review's description can declare anywhere in their text. A comment
+on the review's conversation declares only when the whole comment is the
+answer linear/sync-refs asks for: issue IDs alone, or a closing clause or
+list and nothing else. A comment in a thread on the diff never declares: an
+identifier on a line points at the issue the line relates to, so it is read
+for mentions alone. Anything merely mentioned, wherever it is mentioned, is
+reported and left alone.
+
+Fenced code blocks and backtick spans are not read, and neither is a comment or
+description too long to be anything but a paste.
+
+A missing LINEAR_API_KEY or FORGE_ADMIN_TOKEN is a no-op skip; a Linear
+request rejected with the key present fails the action.
+HELP
+)"
+
+import \
+  "$SHELLOPS_DIR/lib/linear/api.sh" \
+  "$SHELLOPS_DIR/lib/linear/refs.sh" \
+  "$SHELLOPS_DIR/lib/forge/api.sh" \
+  "$SHELLOPS_DIR/lib/git/api.sh"
+
+# CONST: How far back to read when the forge reports no baseline, which is a first push.
+__close_mentioned__FALLBACK_DEPTH=10
+
+: <<'CONST'
+Past a few hundred lines, a comment or description is a paste -- a job log, a
+diff, a stack trace -- rather than something written to be read.
+CONST
+__close_mentioned__MAX_SCAN_LINES=500
+
+main() {
+  case "${1:-}" in
+    -h|--help)
+      log "$USAGE"
+      exit 0
+      ;;
+  esac
+
+  if [ -z "${FORGE_ADMIN_TOKEN:-}" ]; then
+    log "FORGE_ADMIN_TOKEN not set, skipping."; return 0
+  fi
+
+  if [ -z "${LINEAR_API_KEY:-}" ]; then
+    log "LINEAR_API_KEY not set, skipping."; return 0
+  fi
+
+  __main__review_numbers="$(collect_review_numbers)"
+  @obj __main__linear_options '.token' "${LINEAR_API_KEY:-}"
+  @obj __main__forge_options '.token' "${FORGE_ADMIN_TOKEN:-}"
+
+  __main__teams_json="$(linear__list_teams "$__main__linear_options")" || {
+    error "Linear rejected LINEAR_API_KEY (HTTP status above)."
+    return 1
+  }
+  __main__team_keys="$(linear__team_keys "$__main__teams_json")"
+  __main__keys="$(linear__keys_pattern "$__main__team_keys")"
+  if ! @defined "$__main__keys"; then
+    log "Linear lists no teams, skipping."; return 0
+  fi
+
+  __main__comments="$(review_comments "$__main__review_numbers" "$__main__forge_options")"
+  __main__threads="$(review_thread_comments "$__main__review_numbers" "$__main__forge_options")"
+  __main__declaring="$(
+    declaring_sources "$__main__review_numbers" "$__main__forge_options"
+  )"
+  __main__sources="$(
+    mention_sources "$__main__declaring" "$__main__comments" "$__main__threads"
+  )"
+  __main__records="$(linear__mention_records_in "$__main__sources" "$__main__keys")"
+
+  __main__closing="$(linear__closing_ids "$__main__records")"
+  __main__mentioned="$(linear__mentioned_ids "$__main__records")"
+
+  @difference __main__difference_1 "$__main__mentioned" "$__main__closing"
+  report_unclaimed "$__main__difference_1"
+
+  if @len __main__len_2 "$__main__closing"; [ "$__main__len_2" -eq 0 ]; then
+    if @len __main__len_3 "$__main__review_numbers"; [ "$__main__len_3" -eq 0 ]; then
+      log "No code review references found in recent commits."
+    fi
+    log "No issues declared closed."; return 0
+  fi
+
+  @join __main__join_4 "$__main__closing" ", "
+  log "Declared closed: $__main__join_4"
+  close_mentioned_issues "$__main__closing" "$__main__teams_json" "$__main__linear_options"
+}
+
+: <<'FUN'
+Prints every text a mention counts in, each paired with where it was
+written, as a struct array of {where, text}: the declaring sources, then
+what each comment's author wrote, on the conversation and then in the
+threads on the diff. Where a text was written is what decides whether a
+keyword in it closes an issue (linear__mention_closes), so the closures and
+the mention report are both read from this one list.
+
+Usage: mention_sources "$declaring_sources" "$comments" "$thread_comments"
+FUN
+mention_sources() {
+  __mention_sources__conversation="$(conversation_sources "$2")"
+  __mention_sources__threads="$(thread_sources "$3")"
+  @concat __mention_sources__spoken "$1" "$__mention_sources__conversation"
+
+  @concat __mention_sources__out "$__mention_sources__spoken" "$__mention_sources__threads"
+  println "$__mention_sources__out"
+}
+
+: <<'FUN'
+Prints the text of a comment that its author is answerable for: their own
+words, and only if there are few enough of them to be worth reading.
+
+Usage: authored_text "$comment"
+FUN
+authored_text() {
+  __authored_text__body="$(forge__comment_authored_body "$1")"
+
+  scannable "$__authored_text__body" "a comment"
+}
+
+: <<'FUN'
+Prints the text when it is short enough to be worth reading, and nothing when
+it is not, naming what it skipped. See __close_mentioned__MAX_SCAN_LINES.
+
+Usage: scannable "$text" "$what_it_is"
+FUN
+scannable() {
+  __scannable__lines="$(println "$1" | wc -l | tr -d '[:space:]')"
+
+  if [ "$__scannable__lines" -le "$__close_mentioned__MAX_SCAN_LINES" ]; then
+    println "$1"
+    return 0
+  fi
+
+  log "Skipping ${2} of ${__scannable__lines} lines; too long to be a declaration."
+}
+
+: <<'FUN'
+Logs the issues that were referenced without being declared closed.
+
+They are named rather than silently dropped: an author who wrote "see OPS-1"
+meaning "Closes OPS-1" otherwise gets no signal that nothing happened.
+
+Usage: report_unclaimed "$issue_ids"
+FUN
+report_unclaimed() {
+  if @len __report_unclaimed__len_5 "$1"; [ "$__report_unclaimed__len_5" -eq 0 ]; then
+    return 0
+  fi
+
+  @join __report_unclaimed__join_6 "$1" ", "
+  log "Mentioned without a closing keyword, left open: $__report_unclaimed__join_6"
+}
+
+: <<'FUN'
+Prints the commit messages the push introduced.
+
+The forge reports the range it was triggered for. A first push has no baseline to
+report, and reading the last few commits instead is this action's guess rather
+than something the forge could know: the commits are already merged, so a
+declaration among them has not been acted on yet.
+FUN
+commit_text() {
+  __commit_text__range="$(forge__pushed_range)"
+
+  if ! @defined "$__commit_text__range"; then
+    __commit_text__range="$(git__recent_range "$__close_mentioned__FALLBACK_DEPTH")"
+  fi
+
+  if @defined "$__commit_text__range"; then
+    git__commit_text "$__commit_text__range"
+  fi
+}
+
+:<<'FUN'
+Prints the code-review numbers the pushed commit range references, as a struct
+array, deduplicated.
+FUN
+collect_review_numbers() {
+  @split __collect_review_numbers__split_7 "$(forge__code_review_refs "$(commit_text)" || true)"
+  @unique __collect_review_numbers__out "$__collect_review_numbers__split_7"
+  println "$__collect_review_numbers__out"
+}
+
+: <<'FUN'
+Prints the texts whose author speaks as the author, each paired with where
+it was written, as a struct array of {where, text}: the commit messages the
+push introduced, and the description of each referenced code review. A
+closing keyword in one of these declares the issue closed.
+
+Usage: declaring_sources "$review_numbers" "$forge_options"
+FUN
+declaring_sources() {
+  __declaring_sources__commits="$(commit_text)"
+  __declaring_sources__committed="$(linear__source "$linear__refs__WHERE_COMMIT" "$__declaring_sources__commits")"
+  @arr __declaring_sources__sources "$__declaring_sources__committed"
+
+  @reduce __declaring_sources__out collect_review_description "$1" "$__declaring_sources__sources" "$2"
+  println "$__declaring_sources__out"
+}
+
+: <<'FUN'
+@reduce callback: the sources so far plus the description of the code review
+whose number is wrapped in $2, read from the forge with the options $3, when
+it is short enough to read.
+FUN
+collect_review_description() {
+  @unwrap __collect_review_description__number "$2"
+  __collect_review_description__body="$(
+    forge__code_review_description "$3" "$__collect_review_description__number"
+  )"
+  __collect_review_description__text="$(
+    scannable \
+      "$__collect_review_description__body" \
+      "the description of review ${__collect_review_description__number}"
+  )"
+  __collect_review_description__source="$(
+    linear__source "$linear__refs__WHERE_DESCRIPTION" "$__collect_review_description__text"
+  )"
+
+  @push __collect_review_description__out "$1" "$__collect_review_description__source"
+  println "$__collect_review_description__out"
+}
+
+: <<'FUN'
+Prints one source per comment on the conversation, {where, text}, each what
+its author wrote.
+
+Usage: conversation_sources "$comments"
+FUN
+conversation_sources() {
+  comment_sources "$1" "$linear__refs__WHERE_COMMENT"
+}
+
+: <<'FUN'
+Prints one source per comment in a thread on the diff, {where, text}, each
+what its author wrote.
+
+Usage: thread_sources "$thread_comments"
+FUN
+thread_sources() {
+  comment_sources "$1" "$linear__refs__WHERE_THREAD"
+}
+
+: <<'FUN'
+Prints one source per comment, each what its author wrote, written at WHERE.
+
+Kept per comment rather than concatenated: whether a comment is nothing but
+IDs is a question about that one comment, which a blob cannot answer.
+
+Usage: comment_sources "$comments" "$where"
+FUN
+comment_sources() {
+  @arr __comment_sources__arr_8
+  @reduce __comment_sources__out collect_comment_source "$1" "$__comment_sources__arr_8" "$2"
+  println "$__comment_sources__out"
+}
+
+: <<'FUN'
+@reduce callback: the sources so far plus the comment $2's, as its author
+wrote it, written at $3.
+FUN
+collect_comment_source() {
+  __collect_comment_source__text="$(authored_text "$2")"
+  __collect_comment_source__source="$(linear__source "$3" "$__collect_comment_source__text")"
+
+  @push __collect_comment_source__out "$1" "$__collect_comment_source__source"
+  println "$__collect_comment_source__out"
+}
+
+: <<'FUN'
+Prints every comment on the conversation of the referenced code reviews, as a
+struct array.
+
+Usage: review_comments "$review_numbers" "$forge_options"
+FUN
+review_comments() {
+  @arr __review_comments__arr_9
+  @reduce __review_comments__out collect_review_comments "$1" "$__review_comments__arr_9" "$2"
+  println "$__review_comments__out"
+}
+
+collect_review_comments() {
+  @unwrap __collect_review_comments__unwrap_10 "$2"
+  @concat __collect_review_comments__out "$1" "$(forge__code_review_comments "$3" "$__collect_review_comments__unwrap_10")"
+  println "$__collect_review_comments__out"
+}
+
+: <<'FUN'
+Prints every comment in the threads on the diff of the referenced code reviews,
+as a struct array.
+
+Usage: review_thread_comments "$review_numbers" "$forge_options"
+FUN
+review_thread_comments() {
+  @arr __review_thread_comments__arr_11
+  @reduce __review_thread_comments__out collect_review_thread_comments "$1" "$__review_thread_comments__arr_11" "$2"
+  println "$__review_thread_comments__out"
+}
+
+collect_review_thread_comments() {
+  @unwrap __collect_review_thread_comments__unwrap_12 "$2"
+  @concat __collect_review_thread_comments__out "$1" "$(forge__code_review_thread_comments "$3" "$__collect_review_thread_comments__unwrap_12")"
+  println "$__collect_review_thread_comments__out"
+}
+
+: <<'FUN'
+Moves each declared issue to the Done state of its own team, the team its
+identifier names among TEAMS, the array linear__list_teams prints.
+
+Usage: close_mentioned_issues "$closing" "$teams" "$linear_options"
+FUN
+close_mentioned_issues() {
+  @foreach try_close_issue "$1" "$2" "$3"
+}
+
+: <<'FUN'
+@foreach callback: moves the wrapped issue $1 to Done in its own team, found
+among the teams $2, with the Linear options $3, and says why when it cannot:
+a team with no Done state, an issue Linear does not answer for, or one that
+is already completed or cancelled.
+FUN
+try_close_issue() {
+  @unwrap __try_close_issue__issue_ref "$1"
+  __try_close_issue__team_key="$(linear__issue_team_key "$__try_close_issue__issue_ref")"
+  __try_close_issue__done_state_id="$(linear__find_done_state "$2" "$__try_close_issue__team_key")"
+  if ! @defined "$__try_close_issue__done_state_id"; then
+    log "  Could not find Done state for team ${__try_close_issue__team_key}, skipping ${__try_close_issue__issue_ref}."
+    return 0
+  fi
+
+  __try_close_issue__issue_json="$(linear__get_issue "$__try_close_issue__issue_ref" "$3" 2>/dev/null)" || {
+    log "  Could not fetch ${__try_close_issue__issue_ref}, skipping."
+    return 0
+  }
+
+  @get __try_close_issue__current_state "$__try_close_issue__issue_json" '.state.type'
+  case "$__try_close_issue__current_state" in
+    completed|cancelled)
+      log "  ${__try_close_issue__issue_ref} is already ${__try_close_issue__current_state}, skipping."
+      return 0
+      ;;
+  esac
+
+  @get __try_close_issue__issue_id "$__try_close_issue__issue_json" '.id'
+  if linear__update_issue_state "$__try_close_issue__issue_id" "$__try_close_issue__done_state_id" "$3" 2>/dev/null; then
+    log "  Closed ${__try_close_issue__issue_ref}"
+  else
+    log "  Failed to close ${__try_close_issue__issue_ref}"
+  fi
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *close-mentioned-issues) main "$@" ;;
+esac

@@ -1,0 +1,10 @@
+{
+  "$comment": "Canonical repository / project shape. Both backends flatten org-repo listings to this structure.",
+  "name": "shellops",
+  "full_name": "creature-workshop/shellops",
+  "description": "Shared bash scripting framework",
+  "url": "https://forge.example.com/creature-workshop/shellops",
+  "default_branch": "main",
+  "archived": false,
+  "private": false
+}

@@ -1,0 +1,8 @@
+{
+  "include": [
+    "test/scan.bats"
+  ],
+  "exclude": [
+    "shell/.ops"
+  ]
+}

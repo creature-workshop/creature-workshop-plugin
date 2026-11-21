@@ -1,0 +1,259 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# CONST: compute SHELLOPS_DIR and PROJ from this script's location.
+SHELLOPS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export SHELLOPS_DIR
+
+PROJ="$(cd "$SHELLOPS_DIR" && git rev-parse --show-superproject-working-tree 2>/dev/null)"
+
+# structs-lint: allow -- init runs before the structs API is loaded
+if [[ -z "$PROJ" ]]; then
+  PROJ="$(cd "$SHELLOPS_DIR" && git rev-parse --show-toplevel)"
+fi
+
+export PROJ
+
+: <<'FUN'
+Checks out shell-logs, the submodule at shell/.logs that .envrc loads the
+reporting verbs from, when it is missing: a consumer's boot checks shellops
+out without its submodules, and nothing can report until the verbs are there.
+FUN
+checkout_logs() {
+  if [ -e "$SHELLOPS_DIR/shell/.logs/.git" ]; then
+    return 0
+  fi
+  git -C "$SHELLOPS_DIR" submodule --quiet update --init -- shell/.logs
+}
+
+checkout_logs
+source "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/releases/record/api.sh" \
+  "$SHELLOPS_DIR/lib/self/config.sh" \
+  "$SHELLOPS_DIR/lib/self/lock/api.sh" \
+  "$SHELLOPS_DIR/lib/self/boot.sh" \
+  "$SHELLOPS_DIR/lib/opx/seed.sh"
+
+USAGE="$(cat <<'HELP'
+Initializes a consumer repository for shellops.
+
+Usage: shell/.ops/init [-h,--help] [-n,--no-install] [--install tool...]
+
+Idempotent: safe to re-run on an already-initialized repo.
+
+Sets up:
+  - An ops dispatcher at $PROJ/shell/ops
+  - An action dispatcher at $PROJ/shell/action
+  - The seeds this project's Strata LIDs are drawn from, in the lock at
+    $PROJ/.ops/lock, minted once and kept, and the release record beside
+    them, copied there once from a manifest.json that still carries it
+    (ADR 000049)
+  - A boot at $PROJ/.ops/boot: the generic hand-off to this init, which a
+    fresh clone runs once (ADR 000047); rewritten only when its shape
+    changes, and the seeds it carried before the lock took them copied
+    there once
+  - An .envrc that exports PROJ and sources shellops's .envrc, creating the
+    file or appending to an existing one
+  - .gitignore entries for the paths derived from the submodule (shell/ops,
+    shell/action, /.version)
+  - Tool installation from the tools declaration, when one exists
+
+Flags:
+  -n, --no-install      Skip all tool installation.
+  --install tool...     Install only the specified tools (implies
+                        --no-install for everything else).
+  -h, --help            Show this help text.
+HELP
+)"
+
+# shellcheck disable=SC2016
+ENVRC_SOURCE='source "$PROJ/shell/.ops/.envrc"'
+
+ENVRC_TEMPLATE="$(cat <<'TMPL'
+#!/usr/bin/env bash
+
+export PROJ="$(git rev-parse --show-toplevel)"
+
+source "$PROJ/shell/.ops/.envrc"
+TMPL
+)"
+
+: <<'CONST'
+/.ops/cache is runner and local scratch — provisioned tools (SHELLOPS_TOOLS_HOME
+in the creatures shellops-base template) and the env.sh PATH fragment; it must
+never be tracked or linted. Committed pipeline output lives in ops/.
+CONST
+GITIGNORE_ENTRIES=("shell/ops" "shell/action" "/.version" "/.ops/cache" "/.ops/__compiled__*" "/.ops/docs")
+
+# CONST: The line written above each entry in the consumer's .gitignore, naming its source.
+GITIGNORE_COMMENT="# Derived from shellops submodule"
+
+FLAG_NO_INSTALL=false
+FLAG_INSTALL_TOOLS=()
+
+function main() {
+  parse_args "$@"
+
+  log "Initializing shellops in $PROJ..."
+
+  install_dispatcher "ops"
+  install_dispatcher "action"
+  install_boot
+  install_record
+  ensure_envrc
+  ensure_gitignore
+  persist_env
+
+  if [[ "$FLAG_NO_INSTALL" = true ]]; then
+    log "Done (skipped tool installation)."
+    return
+  fi
+
+  if ! @is_true "$(self__config__present tools "$PROJ")" && ! @is_true "$(self__config__present tools "$SHELLOPS_DIR")"; then
+    log "Done."
+    return
+  fi
+
+  if [[ ${#FLAG_INSTALL_TOOLS[@]} -gt 0 ]]; then
+    log "Installing tools: ${FLAG_INSTALL_TOOLS[*]}..."
+    "$SHELLOPS_DIR/cli/install" "${FLAG_INSTALL_TOOLS[@]}"
+  else
+    log "Installing tools..."
+    "$SHELLOPS_DIR/cli/install"
+  fi
+
+  log "Done."
+}
+
+function install_dispatcher() {
+  local name="$1"
+  local target="$PROJ/shell/$name"
+  mkdir -p "$(dirname "$target")"
+  cp "$SHELLOPS_DIR/$name" "$target"
+  chmod +x "$target"
+  log "  Installed dispatcher at shell/$name"
+}
+
+: <<'FUN'
+Keeps the seeds the project's Strata LIDs are drawn from in the lock: the
+ones it has, read from the lock, else from a boot written before the seeds
+moved there, else ones minted here and never again (ADR 000035, ADR
+000049). Then writes the project's boot, .ops/boot, the generic hand-off
+to shellops where the submodule mounts it (ADR 000047).
+FUN
+function install_boot() {
+  local shellops="${SHELLOPS_DIR#"$PROJ"/}"
+  local doc_seed line_seed
+  doc_seed="$(opx__seed__of_owner)"
+  line_seed="$(self__lock__seed line "$PROJ")"
+  @defined "$line_seed" || line_seed="$(self__boot__line_seed "$PROJ")"
+  if ! @defined "$doc_seed" || ! @defined "$line_seed"; then
+    log "  Minted the seeds this project's Strata LIDs are drawn from"
+  fi
+  @defined "$doc_seed" || doc_seed="$(opx__seed__mint)"
+  @defined "$line_seed" || line_seed="$(opx__seed__mint)"
+  self__lock__set_seeds "$doc_seed" "$line_seed" "$PROJ"
+  self__boot__write "$PROJ" "$shellops"
+}
+
+: <<'FUN'
+Copies the release record into the lock from a manifest that still carries
+it, once (releases__record__copy_from_manifest), and says so when it did.
+FUN
+function install_record() {
+  if @is_true "$(releases__record__copy_from_manifest "$PROJ")"; then
+    log "  Copied the release record into the lock"
+  fi
+}
+
+function ensure_envrc() {
+  local envrc="$PROJ/.envrc"
+
+  if [[ ! -f "$envrc" ]]; then
+    create_envrc "$envrc"
+    return
+  fi
+
+  patch_envrc "$envrc"
+}
+
+function create_envrc() {
+  local envrc="$1"
+  println "$ENVRC_TEMPLATE" > "$envrc"
+  log "  Created .envrc"
+}
+
+function patch_envrc() {
+  local envrc="$1"
+
+  if grep -qF "$ENVRC_SOURCE" "$envrc"; then
+    log "  .envrc already sources shellops"
+    return
+  fi
+
+  printf '\n%s\n' "$ENVRC_SOURCE" >> "$envrc"
+  log "  Patched .envrc with shellops source"
+}
+
+function ensure_gitignore() {
+  local gitignore="$PROJ/.gitignore"
+
+  for entry in "${GITIGNORE_ENTRIES[@]}"; do
+    ensure_gitignore_entry "$gitignore" "$entry"
+  done
+}
+
+function ensure_gitignore_entry() {
+  local gitignore="$1" entry="$2"
+
+  if [[ ! -f "$gitignore" ]]; then
+    printf '%s\n%s\n' "$GITIGNORE_COMMENT" "$entry" > "$gitignore"
+    log "  Created .gitignore with $entry"
+    return
+  fi
+
+  if grep -qxF "$entry" "$gitignore"; then
+    log "  .gitignore already has $entry"
+    return
+  fi
+
+  printf '\n%s\n%s\n' "$GITIGNORE_COMMENT" "$entry" >> "$gitignore"
+  log "  Added $entry to .gitignore"
+}
+
+function persist_env() {
+  if [[ -z "${GITHUB_ENV:-}" ]]; then
+    return
+  fi
+
+  echo "PROJ=$PROJ" >> "$GITHUB_ENV"
+  echo "SHELLOPS_DIR=$SHELLOPS_DIR" >> "$GITHUB_ENV"
+  log "  Exported PROJ and SHELLOPS_DIR to GITHUB_ENV"
+}
+
+function parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -n|--no-install) FLAG_NO_INSTALL=true ;;
+      --install)
+        shift
+        while [[ $# -gt 0 && "$1" != -* ]]; do
+          FLAG_INSTALL_TOOLS+=("$1")
+          shift
+        done
+        continue
+        ;;
+      -h|--help) log "$USAGE" && exit 0 ;;
+      -*)
+        log "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+main "$@"

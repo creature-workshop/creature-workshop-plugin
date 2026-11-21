@@ -1,0 +1,379 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/args/api.sh" \
+  "$SHELLOPS_DIR/lib/tracker/api.sh"
+
+USAGE="$(cat <<'HELP'
+The project's plan, through the trackers its declaration names: a DAG of
+tickets with blocking edges, laid out by milestone, as one plan however
+many trackers hold it. Every verb prints a struct on stdout, so an agent or
+a pane reads it as it is.
+
+Usage: ops plan read
+       ops plan scopes
+       ops plan states
+       ops plan tickets [--tracker <name>] [--state <state>] [--type <type>]
+                        [--milestone <id>] [--assignee <name>]
+       ops plan ticket --key <key>
+       ops plan update --key <key> [--state <state>] [--milestone <id>]
+       ops plan link --blocker <key> --blocked <key>
+       ops plan unlink --blocker <key> --blocked <key>
+       ops plan create --title <text> [--tracker <name>] [--state <state>]
+                       [--milestone <id>] [--estimate <n>] [--description <text>]
+       ops plan delete --key <key>
+
+  read      The plan of every declared tracker as one: {scopes, milestones,
+            tickets, edges}, each ticket carrying its tracker's name.
+  scopes    The scopes the declaration names: [{name, kind, org, key, project}].
+  states    The states of every declared tracker: [{name, type, tracker}].
+  tickets   The tickets of the tracker --tracker names, the first declared
+            when none is, that match every filter flag given; every ticket
+            when none is.
+  ticket    One ticket, from the tracker that holds its key.
+  update    Sets a ticket's state, its milestone, or both; prints it. The
+            ticket's tracker is the one that holds its key.
+  link      Records that one ticket blocks another, in their tracker; prints
+            the edge. Two tickets of different trackers are linked by a
+            "Blocked by <key>" line in a description, not by this verb.
+  unlink    Drops that edge.
+  create    Creates a ticket in the tracker --tracker names, the first
+            declared when none is; prints it with the key the tracker gave it.
+            Without --state the tracker applies its own default state.
+  delete    Deletes a ticket, with the edges that reach it, from the tracker
+            that holds its key.
+
+Each tracker has its own states, and --state names one as the tracker
+names it; each state is of a type, which is what a reader groups by:
+backlog, todo, in_progress, in_review, done, cancelled. The
+scopes come from the trackers list of .ops/config/manifest.yaml, or its
+tracker block, or the linear-team it names and a plan file at
+.ops/data/plan.yaml; the --kind, --org, --scope-key and --project flags name
+one scope in their place for one call.
+
+Flags:
+  --key <key>            The ticket, by its key (SHOP-44).
+  --state <state>        The state to set, of a new ticket, or to list by.
+  --type <type>          The state type to list by.
+  --milestone <id>       The milestone to set, of a new ticket, or to list by.
+  --assignee <name>      The assignee to list by.
+  --blocker <key>        The ticket that blocks.
+  --blocked <key>        The ticket that is blocked.
+  --title <text>         A new ticket's title.
+  --description <text>   A new ticket's description.
+  --estimate <n>         A new ticket's estimate, in hours of attention.
+  --tracker <name>       The declared tracker a new ticket goes in, or whose tickets to list.
+  --kind <kind>          The tracker kind of a scope in place of the declaration's.
+  --org <org>            The org of that scope.
+  --scope-key <key>      The key of that scope: a team, a repository, a file.
+  --project <name>       The project of that scope.
+  -h, --help             Show this help text.
+HELP
+)"
+
+main() {
+  parse_args "$@"
+  require_verb
+  @succeeds AD_HOC @defined "$ARG_KIND$ARG_ORG$ARG_SCOPE_KEY$ARG_PROJECT"
+  SCOPES="$(scopes_of)" || exit 1
+  case "$VERB" in
+    read) read_plan ;;
+    scopes) print_scopes ;;
+    states) print_states ;;
+    tickets) print_tickets ;;
+    ticket) print_ticket ;;
+    update) update_ticket ;;
+    link) link_tickets ;;
+    unlink) unlink_tickets ;;
+    create) create_ticket ;;
+    delete) delete_ticket ;;
+    *) reject_verb ;;
+  esac
+}
+
+: <<'FUN'
+Collects the verb, the first bare word, and the flags into the ARG_ globals.
+FUN
+parse_args() {
+  VERB=""
+  ARG_KEY=""
+  ARG_STATE=""
+  ARG_MILESTONE=""
+  ARG_TYPE=""
+  ARG_ASSIGNEE=""
+  ARG_BLOCKER=""
+  ARG_BLOCKED=""
+  ARG_TITLE=""
+  ARG_DESCRIPTION=""
+  ARG_ESTIMATE=""
+  ARG_TRACKER=""
+  ARG_KIND=""
+  ARG_ORG=""
+  ARG_SCOPE_KEY=""
+  ARG_PROJECT=""
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help)
+        log "$USAGE"
+        exit 0
+        ;;
+      --key) args__require_value "$@" || exit 1; ARG_KEY="$2"; shift ;;
+      --state) args__require_value "$@" || exit 1; ARG_STATE="$2"; shift ;;
+      --milestone) args__require_value "$@" || exit 1; ARG_MILESTONE="$2"; shift ;;
+      --type) args__require_value "$@" || exit 1; ARG_TYPE="$2"; shift ;;
+      --assignee) args__require_value "$@" || exit 1; ARG_ASSIGNEE="$2"; shift ;;
+      --blocker) args__require_value "$@" || exit 1; ARG_BLOCKER="$2"; shift ;;
+      --blocked) args__require_value "$@" || exit 1; ARG_BLOCKED="$2"; shift ;;
+      --title) args__require_value "$@" || exit 1; ARG_TITLE="$2"; shift ;;
+      --description) args__require_value "$@" || exit 1; ARG_DESCRIPTION="$2"; shift ;;
+      --estimate) args__require_value "$@" || exit 1; ARG_ESTIMATE="$2"; shift ;;
+      --tracker) args__require_value "$@" || exit 1; ARG_TRACKER="$2"; shift ;;
+      --kind) args__require_value "$@" || exit 1; ARG_KIND="$2"; shift ;;
+      --org) args__require_value "$@" || exit 1; ARG_ORG="$2"; shift ;;
+      --scope-key) args__require_value "$@" || exit 1; ARG_SCOPE_KEY="$2"; shift ;;
+      --project) args__require_value "$@" || exit 1; ARG_PROJECT="$2"; shift ;;
+      -*)
+        error "Unknown option: $1"
+        exit 1
+        ;;
+      *)
+        VERB="$1"
+        ;;
+    esac
+    shift
+  done
+}
+
+: <<'FUN'
+Exits, showing the usage, when no verb was given.
+FUN
+require_verb() {
+  if @defined "$VERB"; then
+    return 0
+  fi
+
+  error "no verb given"
+  log "$USAGE"
+  exit 1
+}
+
+: <<'FUN'
+Exits naming the verbs when the verb is not one of them.
+FUN
+reject_verb() {
+  error "Unknown verb: $VERB"
+  hint "Expected one of: read, scopes, states, tickets, ticket, update, link, unlink, create, delete"
+  exit 1
+}
+
+: <<'FUN'
+Prints the scopes the call runs over: the declaration's, or the one scope
+the --kind, --org, --scope-key and --project flags name when any is given.
+FUN
+scopes_of() {
+  if @is_true "$AD_HOC"; then
+    @arr __scopes_of__out "$(tracker__new_scope "${ARG_KIND:-file}" "$ARG_SCOPE_KEY" "$ARG_PROJECT" "" "$ARG_ORG")"
+    println "$__scopes_of__out"
+    return 0
+  fi
+
+  tracker__scopes
+}
+
+: <<'FUN'
+Exits naming the flag when the required flag <name> holds nothing.
+FUN
+require_flag() {
+  if @defined "$2"; then
+    return 0
+  fi
+
+  error "$1 is required for $VERB"
+  exit 1
+}
+
+: <<'FUN'
+Prints the plan of every scope the call runs over, as one.
+FUN
+read_plan() {
+  if @is_true "$AD_HOC"; then
+    @first __read_plan__first_1 "$SCOPES"
+    tracker__plan "$__read_plan__first_1"
+    return
+  fi
+
+  tracker__declared_plan
+}
+
+: <<'FUN'
+Prints the scopes.
+FUN
+print_scopes() {
+  println "$SCOPES"
+}
+
+: <<'FUN'
+Prints the states of every scope the call runs over, each with its tracker.
+FUN
+print_states() {
+  if @is_true "$AD_HOC"; then
+    @first __print_states__first_2 "$SCOPES"
+    tracker__states "$__print_states__first_2"
+    return
+  fi
+
+  tracker__declared_states
+}
+
+: <<'FUN'
+Prints the tickets of the tracker --tracker names, or of the first scope,
+that the filter flags keep.
+FUN
+print_tickets() {
+  if @is_true "$AD_HOC" || ! @defined "$ARG_TRACKER"; then
+    @first __print_tickets__first_3 "$SCOPES"
+    tracker__tickets "$__print_tickets__first_3" "$(filter_of)"
+    return
+  fi
+
+  __print_tickets__scope="$(tracker__scope_named "$SCOPES" "$ARG_TRACKER")" || exit 1
+  tracker__tickets "$__print_tickets__scope" "$(filter_of)"
+}
+
+: <<'FUN'
+Prints the filter the --state, --type, --milestone and --assignee flags
+make.
+FUN
+filter_of() {
+  @wrap __filter_of__wrap_4 "$ARG_STATE"
+  @wrap __filter_of__wrap_5 "$ARG_TYPE"
+  @wrap __filter_of__wrap_6 "$ARG_MILESTONE"
+  @wrap __filter_of__wrap_7 "$ARG_ASSIGNEE"
+  @set __filter_of__out "$(tracker__new_filter)" \
+    '.state' "$__filter_of__wrap_4" \
+    '.type' "$__filter_of__wrap_5" \
+    '.milestone' "$__filter_of__wrap_6" \
+    '.assignee' "$__filter_of__wrap_7"
+  println "$__filter_of__out"
+}
+
+: <<'FUN'
+Prints the ticket --key.
+FUN
+print_ticket() {
+  require_flag --key "$ARG_KEY"
+  if @is_true "$AD_HOC"; then
+    @first __print_ticket__first_8 "$SCOPES"
+    tracker__ticket "$__print_ticket__first_8" "$ARG_KEY"
+    return
+  fi
+
+  tracker__find_ticket "$ARG_KEY"
+}
+
+: <<'FUN'
+Deletes the ticket --key.
+FUN
+delete_ticket() {
+  require_flag --key "$ARG_KEY"
+  if @is_true "$AD_HOC"; then
+    @first __delete_ticket__first_9 "$SCOPES"
+    tracker__delete "$__delete_ticket__first_9" "$ARG_KEY"
+    return
+  fi
+
+  tracker__delete_ticket "$ARG_KEY"
+}
+
+: <<'FUN'
+Sets the state and the milestone of the ticket --key, and prints it.
+FUN
+update_ticket() {
+  require_flag --key "$ARG_KEY"
+  @wrap __update_ticket__wrap_10 "$ARG_STATE"
+  @wrap __update_ticket__wrap_11 "$ARG_MILESTONE"
+  @set __update_ticket__changes "$(tracker__new_changes)" \
+    '.state' "$__update_ticket__wrap_10" \
+    '.milestone' "$__update_ticket__wrap_11"
+  if @is_true "$AD_HOC"; then
+    @first __update_ticket__first_12 "$SCOPES"
+    tracker__update "$__update_ticket__first_12" "$ARG_KEY" "$__update_ticket__changes"
+    return
+  fi
+
+  tracker__update_ticket "$ARG_KEY" "$__update_ticket__changes"
+}
+
+: <<'FUN'
+Records that --blocker blocks --blocked, and prints the edge.
+FUN
+link_tickets() {
+  require_flag --blocker "$ARG_BLOCKER"
+  require_flag --blocked "$ARG_BLOCKED"
+  if @is_true "$AD_HOC"; then
+    @first __link_tickets__first_13 "$SCOPES"
+    tracker__link "$__link_tickets__first_13" "$ARG_BLOCKER" "$ARG_BLOCKED"
+    return
+  fi
+
+  tracker__link_tickets "$ARG_BLOCKER" "$ARG_BLOCKED"
+}
+
+: <<'FUN'
+Drops the edge from --blocker to --blocked.
+FUN
+unlink_tickets() {
+  require_flag --blocker "$ARG_BLOCKER"
+  require_flag --blocked "$ARG_BLOCKED"
+  if @is_true "$AD_HOC"; then
+    @first __unlink_tickets__first_14 "$SCOPES"
+    tracker__unlink "$__unlink_tickets__first_14" "$ARG_BLOCKER" "$ARG_BLOCKED"
+    return
+  fi
+
+  tracker__unlink_tickets "$ARG_BLOCKER" "$ARG_BLOCKED"
+}
+
+: <<'FUN'
+Creates a ticket from --title and the other flags, and prints it.
+FUN
+create_ticket() {
+  require_flag --title "$ARG_TITLE"
+  @wrap __create_ticket__wrap_15 "$ARG_TITLE"
+  @wrap __create_ticket__wrap_16 "$ARG_STATE"
+  @wrap __create_ticket__wrap_17 "$ARG_MILESTONE"
+  @wrap __create_ticket__wrap_18 "$ARG_DESCRIPTION"
+  @set __create_ticket__ticket "$(tracker__new_ticket)" \
+    '.title' "$__create_ticket__wrap_15" \
+    '.state' "$__create_ticket__wrap_16" \
+    '.milestone' "$__create_ticket__wrap_17" \
+    '.estimate' "$(estimate_value)" \
+    '.description' "$__create_ticket__wrap_18"
+  if @is_true "$AD_HOC"; then
+    @first __create_ticket__first_19 "$SCOPES"
+    tracker__create "$__create_ticket__first_19" "$__create_ticket__ticket"
+    return
+  fi
+
+  tracker__create_in "$ARG_TRACKER" "$__create_ticket__ticket"
+}
+
+: <<'FUN'
+Prints the estimate as the struct value a ticket carries: the number, or
+the empty string when none was given.
+FUN
+estimate_value() {
+  if @defined "$ARG_ESTIMATE"; then
+    println "$ARG_ESTIMATE"
+  else
+    @wrap __estimate_value__out ""
+    println "$__estimate_value__out"
+  fi
+}
+
+case "$0" in
+  */plan|plan) main "$@" ;;
+esac

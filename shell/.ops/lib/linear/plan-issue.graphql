@@ -1,0 +1,15 @@
+query($id: String!) {
+  issue(id: $id) {
+    id
+    identifier
+    title
+    url
+    description
+    estimate
+    priority
+    state { name type }
+    assignee { name }
+    projectMilestone { id }
+    project { name initiatives { nodes { name } } }
+  }
+}

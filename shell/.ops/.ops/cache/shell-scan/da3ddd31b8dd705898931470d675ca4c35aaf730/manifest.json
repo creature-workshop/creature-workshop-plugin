@@ -1,0 +1,7 @@
+{
+  "name": "shell-scan",
+  "description": "The heredoc scanner for shell sources, in POSIX awk.",
+  "linear-team": "OPS",
+  "org": "creature-workshop",
+  "repo": "shell-scan"
+}

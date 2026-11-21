@@ -1,0 +1,18 @@
+mutation($input: IssueCreateInput!) {
+  issueCreate(input: $input) {
+    success
+    issue {
+      id
+      identifier
+      title
+      url
+      description
+      estimate
+      priority
+      state { name type }
+      assignee { name }
+      projectMilestone { id }
+      project { name initiatives { nodes { name } } }
+    }
+  }
+}

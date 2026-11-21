@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/testing/scorecard/api.sh" \
+  "$SHELLOPS_DIR/lib/testing/scorecard/gate.sh" \
+  "$SHELLOPS_DIR/lib/testing/scorecard/summary.sh" \
+  "$SHELLOPS_DIR/lib/testing/frameworks.sh" \
+  "$SHELLOPS_DIR/lib/forge/api.sh"
+
+USAGE="$(cat <<HELP
+Scores the mapping and reports the verdict where it is read: the full report
+in the job log and, when the mapping is incomplete or carries advisory
+findings, a comment on the review so the author reads it there. Returns the
+status the verdict carries: blocked fails, advisory warns, clean passes.
+
+Every red or yellow run posts a fresh comment rather than rewriting one, so
+each pipeline's finding stands on its own and the thread shows how the
+mapping moved across pushes. A green run posts nothing. Outside a review, or
+without a token, the log and the code are the whole output.
+
+Usage: action testing report-scorecard [--clean-streak-goal <n>] [-h,--help]
+
+Flags:
+  --clean-streak-goal <n>  A confidence gate threshold. Measures the streak
+                           of test runs without escaped failures. Runs that
+                           widen to the full suite are filtered from the
+                           streak. Defaults to the gate into phase 2.
+  -h, --help               Show this help text.
+HELP
+)"
+
+ARG_CLEAN_STREAK_GOAL=""
+
+main() {
+  parse_args "$@"
+  __main__options="$(options)"
+  __main__report="$(testing__scorecard__scorecard "$__main__options")" || return 1
+  testing__scorecard__render "$__main__report"
+
+  __main__verdict="$(testing__scorecard__verdict "$__main__report")"
+  if [ "$__main__verdict" != "$__testing__scorecard__gate__CLEAN" ]; then
+    post_verdict "$__main__report" "$__main__verdict"
+  fi
+  return "$(testing__scorecard__exit_status "$__main__verdict")"
+}
+
+:<<'FUN'
+Posts the verdict on the review, or logs why it could not. No review context
+or no token is a skip, since the exit status already carries the verdict; a
+failed post is logged and leaves it alone.
+
+  $1 report   $2 verdict (blocked or advisory)
+FUN
+post_verdict() {
+  __post_verdict__review="${FORGE_REVIEW_IID:-${CI_MERGE_REQUEST_IID:-}}"
+  if [ -z "$__post_verdict__review" ]; then
+    log "No code review context; the verdict stays in the log."
+    return 0
+  fi
+
+  __post_verdict__token="${FORGE_PR_TOKEN:-${FORGE_ADMIN_TOKEN:-}}"
+  if [ -z "$__post_verdict__token" ]; then
+    log "FORGE_PR_TOKEN not set; the verdict stays in the log."
+    return 0
+  fi
+
+  @obj __post_verdict__options \
+    '.review_number' "$__post_verdict__review" \
+    '.token' "$__post_verdict__token"
+  if forge__create_review_comment "$__post_verdict__options" "$(comment_body "$1" "$2")" > /dev/null; then
+    log "Posted the scorecard verdict on review $__post_verdict__review."
+  else
+    log "Could not post the scorecard verdict on review $__post_verdict__review; it stays in the log."
+  fi
+}
+
+:<<'FUN'
+The comment: the markdown summary, the verdict in words, the findings behind
+the counts, and where the full report is.
+
+  $1 report   $2 verdict (blocked or advisory)
+FUN
+comment_body() {
+  testing__scorecard__summary "$1"
+  printf '\n%s\n' "$(verdict_line "$2")"
+  testing__scorecard__findings_section "$1"
+  printf '\n%s\n' "Full report in the \`${CI_JOB_NAME:-testing scorecard}\` job of pipeline ${CI_PIPELINE_ID:-(local)}."
+}
+
+:<<'FUN'
+The verdict in words: a block names itself; an advisory says the areas could
+be narrower and where to do it, and the findings below name the declarations.
+
+  $1 verdict (blocked or advisory)
+FUN
+verdict_line() {
+  if [ "$1" = "$__testing__scorecard__gate__BLOCKED" ]; then
+    println "**Verdict:** mapping incomplete, this review is blocked until it is."
+    return 0
+  fi
+  println "**Verdict:** your testing areas could probably be narrower. Make the declarations below here, or file a follow-up to add granularity to this testmap."
+}
+
+:<<'FUN'
+The scorecard options the flags chose: the clean streak goal when one was
+given, nothing otherwise.
+FUN
+options() {
+  if @defined "$ARG_CLEAN_STREAK_GOAL"; then
+    @obj __options__out '.clean_streak_goal' "$ARG_CLEAN_STREAK_GOAL"
+    println "$__options__out"
+    return 0
+  fi
+  @obj __options__out
+  println "$__options__out"
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      --clean-streak-goal)
+        case "${2:-}" in
+          ''|*[!0-9]*)
+            error "--clean-streak-goal takes a whole number of runs"
+            log "$USAGE"
+            exit 1
+            ;;
+        esac
+        ARG_CLEAN_STREAK_GOAL="$2"
+        shift
+        ;;
+      *)
+        error "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+main "$@"

@@ -1,0 +1,104 @@
+{
+  "crit": {
+    "color": "#aa2222",
+    "items": {
+      "breaking": "Introduces breaking API changes",
+      "removal": "Removes existing functionality"
+    }
+  },
+  "priority": {
+    "color": "#aa5522",
+    "items": {
+      "low": "Lands behind the merge requests approved before it",
+      "high": "Lands ahead of the merge requests approved before it",
+      "urgent": "Lands ahead of everything else approved"
+    }
+  },
+  "type": {
+    "color": "#447755",
+    "items": {
+      "feature": "New functionality",
+      "fix": "Bug fix",
+      "ktlo": "Keep-the-lights-on maintenance"
+    }
+  },
+  "quality": {
+    "color": "#446655",
+    "items": {
+      "perf": "Performance improvement",
+      "security": "Security hardening",
+      "test": "Test coverage or infrastructure",
+      "hygiene": "Improvements to repo hygiene such as linting"
+    }
+  },
+  "ops": {
+    "color": "#666688",
+    "items": {
+      "chore": "Maintenance task",
+      "cicd": "CI/CD pipeline changes",
+      "deps": "Dependency update",
+      "docs": "Documentation"
+    }
+  },
+  "lifecycle": {
+    "color": "#554422",
+    "items": {
+      "stub": "Adds stubs to be implemented later",
+      "park": "Adds 'parked' code; implemented code that is not yet integrated into active behavior",
+      "integrate": "Wires previously stubbed or parked code into active behavior",
+      "deprecate": "Marks functionality for future removal",
+      "refactor": "Code restructuring without behavior change"
+    }
+  },
+  "meta": {
+    "color": "#555566",
+    "items": {
+      "skip-changelog": "Exclude from release notes",
+      "experimental": "Start a prerelease dev series for the next version",
+      "promote": "Graduate prerelease one channel up (dev->alpha->beta->rc->stable)",
+      "release": "Promote any prerelease directly to stable"
+    }
+  },
+  "testing": {
+    "color": "#aa7744",
+    "items": {
+      "full-suite": "Force the full test suite for this review, bypassing impacted-test selection"
+    }
+  },
+  "area": {
+    "color": "#4477aa",
+    "items": {
+      "new": "Changes in review that don't yet fit an existing repo area"
+    }
+  },
+  "hat": {
+    "color": "#7744aa",
+    "items": {
+      "recordkeeper": "Planning, cycles and the archive",
+      "bizdev": "The conversation with a named prospect or client",
+      "delivery": "Client engagement work after a signature",
+      "marketing": "What a stranger reads unasked",
+      "platform": "The substrate: shellops, creatures, CI, the release chain",
+      "product": "The products: releases, roadmaps, docs",
+      "ktlo": "Bugs, debt, CI and dependency breakage",
+      "research": "Research lanes: an open question scoped before it is run, reviewed in Notion",
+      "shepherd": "Approved merge requests, from approval until they land",
+      "unknown": "No Linear issue named, or its hat is unset or disputed"
+    }
+  },
+  "role": {
+    "color": "#7744aa",
+    "items": {
+      "recordkeeper": "Planning, cycles and the archive",
+      "bizdev": "The conversation with a named prospect or client",
+      "delivery": "Client engagement work after a signature",
+      "marketing": "What a stranger reads unasked",
+      "platform": "The substrate: shellops, creatures, CI, the release chain",
+      "product": "The products: releases, roadmaps, docs",
+      "ktlo": "Bugs, debt, CI and dependency breakage",
+      "research": "Research lanes: an open question scoped before it is run, reviewed in Notion",
+      "shepherd": "Approved merge requests, from approval until they land",
+      "unknown": "No Linear issue named, or its role is unset or disputed"
+    }
+  }
+}

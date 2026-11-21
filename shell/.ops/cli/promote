@@ -1,0 +1,589 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2119  # bare @arr is the structs empty constructor
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/bump/api.sh" \
+  "$SHELLOPS_DIR/lib/forge/api.sh" \
+  "$SHELLOPS_DIR/lib/git/api.sh" \
+  "$SHELLOPS_DIR/lib/git/remotes.sh" \
+  "$SHELLOPS_DIR/lib/promotion/api.sh" \
+  "$SHELLOPS_DIR/lib/releases/notes.sh"
+
+USAGE="$(cat <<HELP
+Opens the merge request that moves this repository one rung up the release ladder.
+
+Usage: ops promote [--up | --release] [--assignee USER] [--reviewer USER] [-h,--help]
+
+Every rung is a tag, and a tag is minted by a merge into the default branch
+carrying the label that plans it, so a promotion is a merge request like any
+other. This cuts promote/<version> from the tip of the default branch, puts one
+empty commit on it to carry the label to the merge, opens the merge request
+and prints its URL.
+
+The version it plans is the one the default branch's tip records, run through
+the ladder ops plan-version walks, so the title says what the merge will ship. A plan
+that is not a climb is refused: --up from a clean version plans a dev series
+rather than a rung, and stable is earned from the rc alone.
+
+A hop the release pipeline makes by itself is refused too: manifest.json's
+auto-promote-until names the last rung minted with no merge request, and only
+the rungs above it are opened here. A release is refused unless the default
+branch still stands at the rc tag, so the stable ships what the rc was proven
+as.
+
+The diff is empty, so the merge request's body carries what there is to
+review: for --release, the release notes since the last stable, the read that
+earns stable (ADR 000025).
+
+Run again while the merge request is open, it prints that merge request and
+opens nothing, so a promotion costs one command however many times it is run.
+
+Modes:
+  --up             Move one rung up: dev to alpha, alpha to beta, beta to rc.
+                   The default.
+  --release        Release the rc as the clean version.
+
+Options:
+  --assignee USER  Assign the merge request to USER. Whoever runs this owns
+                   the merge request otherwise: the user the token is.
+  --reviewer USER  Ask USER to review it.
+  -h, --help       Show this help text.
+
+Environment:
+  FORGE_PR_TOKEN   Bot token for the merge request, then FORGE_ADMIN_TOKEN.
+  SHELLOPS_FORGE   The forge the repository is on ("gitlab" or "forgejo").
+HELP
+)"
+
+ARG_MODE="up"
+ARG_ASSIGNEE=""
+ARG_REVIEWER=""
+
+# CONST: The remote the release line is read from and pushed to.
+__promote__REMOTE="origin"
+
+: <<'CONST'
+The release line every promotion lands on, the repository's default branch,
+bound once main has asked the forge which branch that is.
+CONST
+__promote__LINE=""
+
+@obj __at1 \
+    '.label' meta/promote \
+    '.verb'  promote \
+    '.check' check_climb_up \
+    '.body'  climb_body
+@obj __at2 \
+    '.label' meta/release \
+    '.verb'  release \
+    '.check' check_climb_to_stable \
+    '.body'  release_body
+@obj __at3 \
+  '.up' "$__at1" \
+  '.release' "$__at2"
+
+: <<'CONST'
+What each mode asks for: the label its merge carries, the word its title and
+commit message open with, the check that refuses a plan which is not a
+climb, and the body its merge request says.
+CONST
+__promote__MODES="$__at3"
+
+: <<'CONST'
+The forge token every call in this CLI authenticates with, bound once main
+has established there is one.
+CONST
+__promote__TOKEN=""
+
+: <<'CONST'
+The release record the line's tip carries, bound once main has read it:
+the version every plan starts from and the stable the release notes start
+after.
+CONST
+__promote__RECORD=""
+
+main() {
+  parse_args "$@"
+
+  __promote__TOKEN="$(forge__require_token)" || exit 1
+  __promote__LINE="$(forge__default_branch)" || exit 1
+  __promote__RECORD="$(record_on_line)" || exit 1
+  __main__plan="$(plan_promotion)" || exit 1
+  @let "$__main__plan" __main__ latest planned
+
+  __main__branch="$(promotion__hop_branch "$__main__planned")"
+  __main__open="$(open_promotion "$__main__branch")" || exit 1
+  if @defined "$__main__open"; then
+    log "A promotion to $__main__planned is already open; leaving it as it is."
+    println "$__main__open"
+    return 0
+  fi
+
+  push_promotion_branch "$__main__branch" "$__main__planned" || exit 1
+  __main__url="$(open_review "$__main__branch" "$__main__latest" "$__main__planned")" || exit 1
+
+  log "Opened the merge request that ships $__main__planned."
+  println "$__main__url"
+  @unlet __main__ latest planned
+}
+
+: <<'FUN'
+The climb this run makes, as {latest, planned}: the version the release line
+records and the one the merge will plan, said in the log and checked to be a
+climb. Reads the manifest main bound. Fails when it records no version, the
+plan cannot be made, or the plan is not a climb.
+
+Usage: plan_promotion   # -> {"latest": "0.66.0-dev.44", "planned": "0.66.0-alpha.1"}
+FUN
+plan_promotion() {
+  __plan_promotion__latest="$(version_on_line)" || return 1
+  __plan_promotion__planned="$(planned_version "$__plan_promotion__latest")" || return 1
+  log "Plan: $__plan_promotion__latest -> $__plan_promotion__planned, carrying $(mode_field label)."
+  check_promotion "$__plan_promotion__latest" "$__plan_promotion__planned" || return 1
+
+  @obj __plan_promotion__out '.latest' "$__plan_promotion__latest" '.planned' "$__plan_promotion__planned"
+  println "$__plan_promotion__out"
+}
+
+: <<'FUN'
+Refuses the promotion unless every precondition for it holds, saying which one
+did not: a hop to the rung version $2 sits on is a person's to open, and the
+mode's own check that the version $1 the release line records has the rung
+this run asks for above it.
+
+Usage: check_promotion "0.66.0-dev.44" "0.66.0-alpha.1"
+FUN
+check_promotion() {
+  check_hop_needs_review "$2" || return 1
+
+  __check_promotion__check="$(mode_field check)"
+  "$__check_promotion__check" "$1"
+}
+
+: <<'FUN'
+Refuses the promotion when the hop to version $1 is the release pipeline's
+rather than a person's: manifest.json's auto-promote-until names the last rung
+a green gate reaches with no merge request (ADR 000033), and a hop to that
+rung or below happens on the merge that plans it. Only the rungs above it are
+opened here.
+
+  <auto-promote-until: rc>  check_hop_needs_review 0.66.0      ->  passes
+  <auto-promote-until: rc>  check_hop_needs_review 0.66.0-rc.1 ->  refused
+FUN
+check_hop_needs_review() {
+  __check_hop_needs_review__automatic="$(promotion__hop_is_automatic "$1")" || return 1
+
+  if @is_false "$__check_hop_needs_review__automatic"; then
+    return 0
+  fi
+
+  __check_hop_needs_review__rung="$(promotion__rung_of_version "$1")"
+  error "the release pipeline mints $__check_hop_needs_review__rung on its own, as manifest.json's auto-promote-until says; nothing to open. Land the merge that plans $1 and the tag follows."
+  return 1
+}
+
+: <<'FUN'
+Refuses --up unless the version the release line records is a prerelease. Every prerelease
+has a rung above it; a clean version has only a dev series, which opens a new
+line rather than climbing one.
+
+Usage: check_climb_up "0.66.0-dev.44"
+FUN
+check_climb_up() {
+  __check_climb_up__rung="$(promotion__rung_of_version "$1")" || return 1
+
+  if [ "$__check_climb_up__rung" != stable ]; then
+    return 0
+  fi
+
+  error "$1 is a clean version, so a merge from it plans a dev series rather than a rung. Open the series with meta/experimental, then promote from it."
+  return 1
+}
+
+: <<'FUN'
+Refuses --release unless the rc the version $1 records is the one the release
+line still stands at: it sits on rc, and the line holds what the rc's tag
+holds. A stable release is earned from the rc it was proven as (ADR 000025).
+
+Usage: check_climb_to_stable "0.66.0-rc.1"
+FUN
+check_climb_to_stable() {
+  check_rung_is_rc "$1" || return 1
+  check_line_stands_at_rc "$1"
+}
+
+: <<'FUN'
+Refuses --release unless the version the release line records sits on rc. A stable release
+is earned from the rc it was proven as, so every other rung climbs to rc first.
+
+Usage: check_rung_is_rc "0.66.0-rc.1"
+FUN
+check_rung_is_rc() {
+  __check_rung_is_rc__rung="$(promotion__rung_of_version "$1")" || return 1
+
+  if [ "$__check_rung_is_rc__rung" = "rc" ]; then
+    return 0
+  fi
+
+  error "$1 does not sit on rc, and stable is earned from the rc alone. Promote up to rc first."
+  return 1
+}
+
+: <<'FUN'
+Refuses --release unless the release line still holds what the tag recording
+the rc $1 holds. The stable then differs from the rc by the promotion's own
+commits alone, so the rc's runs are the stable's runs and no candidate has to
+run again (ADR 000025). Anything landed on the line since goes through rc
+again.
+
+Usage: check_line_stands_at_rc "0.66.0-rc.1"
+FUN
+check_line_stands_at_rc() {
+  __check_line_stands_at_rc__ref="$(line_ref)"
+  __check_line_stands_at_rc__tag="$(versions__tag_for_version "$1")"
+
+  if ! @defined "$__check_line_stands_at_rc__tag"; then
+    error "no tag records the rc, $1, so there is nothing for $__check_line_stands_at_rc__ref to stand at. Wait for the rc's tag, or promote to rc again."
+    return 1
+  fi
+
+  __check_line_stands_at_rc__held="$(git__tree_of "$__check_line_stands_at_rc__ref")" || return 1
+  __check_line_stands_at_rc__proven="$(git__tree_of "$__check_line_stands_at_rc__tag")" || return 1
+
+  if [ "$__check_line_stands_at_rc__held" = "$__check_line_stands_at_rc__proven" ]; then
+    return 0
+  fi
+
+  __check_line_stands_at_rc__tip="$(git__commit_of "$__check_line_stands_at_rc__ref")" || return 1
+  error "$__check_line_stands_at_rc__ref stands at $__check_line_stands_at_rc__tip, not at the $__check_line_stands_at_rc__tag tag, so a stable from it would ship what the rc was never proven with. Promote to rc again, then release that rc."
+  return 1
+}
+
+
+: <<'FUN'
+The release record the line's tip carries, as the remote has it: the
+release map of the lock there, or the manifest.json there while the
+repository has not converted and the lock records no version (ADR 000049).
+The fetch comes first, so a stale local copy of the line cannot plan a
+version that has already shipped.
+
+Usage: record_on_line   # -> {"latest": "0.66.0-dev.44", "stable": "0.65.0", ...}
+FUN
+record_on_line() {
+  git__fetch_prune "$__promote__REMOTE" || return 1
+
+  __record_on_line__lock="$(git__file_at "$(line_ref)" .ops/lock 2>/dev/null)" || __record_on_line__lock=""
+  if @get __record_on_line__get_3 "$__record_on_line__lock" '.release.latest' ''; @defined "$__record_on_line__lock" && @defined "$__record_on_line__get_3"; then
+    @get __record_on_line__out "$__record_on_line__lock" '.release'
+    println "$__record_on_line__out"
+    return 0
+  fi
+
+  git__file_at "$(line_ref)" manifest.json
+}
+
+: <<'FUN'
+The version the line's tip records, the one every promotion is planned
+from. Every record carries it.
+
+Usage: version_on_line   # -> 0.66.0-dev.44
+FUN
+version_on_line() {
+  @get __version_on_line__out "$__promote__RECORD" '.latest'
+  println "$__version_on_line__out"
+}
+
+: <<'FUN'
+The stable version the line's tip records, which the release notes of a
+stable promotion start after. Every record carries it.
+
+Usage: stable_on_line   # -> 0.65.0
+FUN
+stable_on_line() {
+  @get __stable_on_line__out "$__promote__RECORD" '.stable'
+  println "$__stable_on_line__out"
+}
+
+: <<'FUN'
+The version the merge will plan: the same answer ops plan-version gives for a
+merge carrying this mode's label, on the channel manifest.json declares.
+
+Usage: planned_version "0.66.0-dev.44"   # --up  -> 0.66.0-alpha.1
+FUN
+planned_version() {
+  __planned_version__label="$(mode_field label)"
+  __planned_version__channel="$(bump__default_channel)" || return 1
+
+  @arr __planned_version__arr_4 "$__planned_version__label"
+  bump__compute_next_version "$1" "$__planned_version__arr_4" "$__planned_version__channel"
+}
+
+
+
+: <<'FUN'
+The line a promotion to version $1 is written on, which is both the commit's
+message and the merge request's title.
+
+  promotion_line 0.66.0-alpha.1  ->  promote: 0.66.0-alpha.1
+FUN
+promotion_line() {
+  printf '%s: %s\n' "$(mode_field verb)" "$1"
+}
+
+: <<'FUN'
+The URL of the merge request already open from branch $1, and nothing when the
+branch has none. A branch with no open merge request is the ordinary case: it
+is the one this command opens one for.
+
+Usage: open_promotion "promote/0.66.0-alpha.1"
+FUN
+open_promotion() {
+  @set __open_promotion__options "$(review_options)" '.branch' "$1"
+  __open_promotion__review="$(forge__review_for_branch "$__open_promotion__options" 2>/dev/null)" || return 0
+
+  @get __open_promotion__iid "$__open_promotion__review" '.iid' ''
+  @defined "$__open_promotion__iid" || return 0
+
+  review_url "$__open_promotion__iid"
+}
+
+: <<'FUN'
+The page a reader opens merge request $1 at.
+
+Usage: review_url 214
+FUN
+review_url() {
+  @set __review_url__options "$(review_options)" '.review_number' "$1"
+  __review_url__review="$(forge__get_review "$__review_url__options")" || return 1
+
+  forge__review_url "$__review_url__review"
+}
+
+: <<'FUN'
+Cuts branch $1 from the tip of the release line and pushes it carrying one
+empty commit whose message says the promotion to version $2, leaving the
+checkout this runs in as it was.
+
+Usage: push_promotion_branch "promote/0.66.0-alpha.1" "0.66.0-alpha.1"
+FUN
+push_promotion_branch() {
+  log "Publishing $1 from $(line_ref)."
+  git__publish_empty_commit "$__promote__REMOTE" "$(line_ref)" "$1" "$(promotion_line "$2")" > /dev/null
+}
+
+: <<'FUN'
+Opens the merge request from branch $1 that takes the repository from version
+$2 to version $3, asks for review where --reviewer named a reviewer, and
+prints the merge request's URL.
+
+Usage: open_review "promote/0.66.0-alpha.1" "0.66.0-dev.44" "0.66.0-alpha.1"
+FUN
+open_review() {
+  __open_review__options="$(create_options "$1" "$2" "$3")" || return 1
+  __open_review__review="$(forge__create_review "$__open_review__options")" || return 1
+  @get __open_review__iid "$__open_review__review" '.iid' '.number' ''
+
+  request_review "$__open_review__iid" || return 1
+
+  forge__review_url "$__open_review__review"
+}
+
+: <<'FUN'
+The merge request this run opens, as the forge takes it: what it is called,
+where it comes from and lands, what it says, and the one label the release
+plumbing reads the promotion off. $2 is the version it climbs from, $3 the
+one it plans.
+
+Usage: create_options "promote/0.66.0-alpha.1" "0.66.0-dev.44" "0.66.0-alpha.1"
+FUN
+create_options() {
+  __create_options__title="$(promotion_line "$3")"
+  __create_options__body="$(review_body "$2" "$3")" || return 1
+  @arr __create_options__labels "$(mode_field label)"
+  __create_options__assignees="$(assignees)"
+  __create_options__shape="$(forge__new_create_review_options)"
+
+  @set __create_options__out "$__create_options__shape" \
+    '.title'     "$__create_options__title" \
+    '.head'      "$1" \
+    '.base'      "$__promote__LINE" \
+    '.body'      "$__create_options__body" \
+    '.labels'    "$__create_options__labels" \
+    '.assignees' "$__create_options__assignees" \
+    '.token'     "$__promote__TOKEN"
+  println "$__create_options__out"
+}
+
+: <<'FUN'
+What the merge request says for itself, in the mode's own words: the climb
+from version $1 to version $2, and for a release what ships.
+
+Usage: review_body "0.66.0-dev.44" "0.66.0-alpha.1"
+FUN
+review_body() {
+  __review_body__body="$(mode_field body)"
+  "$__review_body__body" "$1" "$2"
+}
+
+: <<'FUN'
+The body of a merge request climbing one rung, from version $1 to version $2.
+The diff is empty, so it says what the merge does instead.
+
+Usage: climb_body "0.66.0-dev.44" "0.66.0-alpha.1"
+FUN
+climb_body() {
+  cat <<BODY
+Moves this repository one rung up the release ladder, from \`$1\` to \`$2\`.
+The commit is empty: the \`$(mode_field label)\` label it carries to the merge
+is the whole of the change. The merge's pipeline proves the commit at every
+site the new rung reaches before the tag is minted, and the release is rebuilt
+from that tag.
+BODY
+}
+
+: <<'FUN'
+The body of a merge request releasing the rc $1 as the stable version $2:
+what the approval means, then the release notes since the last stable, so the
+launch readiness read (ADR 000025) happens on the merge request. Fails when
+no tag records the last stable, since the notes have nowhere to start.
+
+Usage: release_body "0.66.0-rc.1" "0.66.0"
+FUN
+release_body() {
+  __release_body__stable="$(stable_on_line)" || return 1
+  __release_body__from="$(versions__tag_for_version "$__release_body__stable")"
+
+  if ! @defined "$__release_body__from"; then
+    error "no tag records the last stable, $__release_body__stable, so the release notes have nowhere to start."
+    return 1
+  fi
+
+  cat <<BODY
+Releases \`$2\` from \`$1\`, the rc it was proven as. The commit is empty: the
+\`$(mode_field label)\` label it carries to the merge is the whole of the change.
+Approving this merge request is the launch readiness review: what ships is
+below, read against what was promised.
+
+## What ships since $__release_body__stable
+
+$(releases__release_notes_between "$__release_body__from" "$(line_ref)" "$__promote__TOKEN")
+BODY
+}
+
+: <<'FUN'
+Whom the merge request is assigned to, as a struct array of usernames: the one
+--assignee named, else whoever runs this, the user the forge says the token
+is. Nobody when the forge cannot say, with a warning, since the merge request
+is worth opening either way.
+
+Usage: assignees   # -> ["blizz"]
+FUN
+assignees() {
+  if @defined "$ARG_ASSIGNEE"; then
+    @arr __assignees__out "$ARG_ASSIGNEE"
+    println "$__assignees__out"
+    return
+  fi
+
+  if ! __assignees__user="$(forge__current_user "$(review_options)")"; then
+    warn "The forge could not say who the token is, so the merge request is assigned to nobody."
+    @arr __assignees__out
+    println "$__assignees__out"
+    return
+  fi
+
+  @arr __assignees__out "$__assignees__user"
+  println "$__assignees__out"
+}
+
+: <<'FUN'
+Asks the reviewer --reviewer named to look at merge request $1, and asks
+nobody when the flag was left off.
+
+Usage: request_review 214
+FUN
+request_review() {
+  @defined "$ARG_REVIEWER" || return 0
+
+  @set __request_review__options "$(review_options)" \
+    '.review_number' "$1" \
+    '.reviewer'      "$ARG_REVIEWER"
+
+  forge__request_review "$__request_review__options" > /dev/null
+}
+
+: <<'FUN'
+The options every lookup and hand-back in this CLI shares: the token the forge
+is asked with.
+
+Usage: review_options
+FUN
+review_options() {
+  @set __review_options__out "$(forge__new_review_options)" '.token' "$__promote__TOKEN"
+  println "$__review_options__out"
+}
+
+: <<'FUN'
+What this run's mode asks for, read by field name.
+
+  mode_field label  # --up  ->  meta/promote
+FUN
+mode_field() {
+  @get __mode_field__out "$__promote__MODES" ".$ARG_MODE.$1"
+  println "$__mode_field__out"
+}
+
+: <<'FUN'
+The ref the release line is read at: the default branch as the remote has it.
+
+Usage: line_ref   # -> origin/main
+FUN
+line_ref() {
+  printf '%s/%s\n' "$__promote__REMOTE" "$__promote__LINE"
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE" && exit 0 ;;
+      --up) ARG_MODE="up" ;;
+      --release) ARG_MODE="release" ;;
+      --assignee)
+        ARG_ASSIGNEE="${2:-}"
+        require_value "$1" "$ARG_ASSIGNEE"
+        shift
+        ;;
+      --reviewer)
+        ARG_REVIEWER="${2:-}"
+        require_value "$1" "$ARG_REVIEWER"
+        shift
+        ;;
+      -*)
+        log "Unknown option: $1"
+        log "$USAGE"
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+: <<'FUN'
+Exits with the usage when flag $1 was given without the value $2 it takes.
+
+Usage: require_value --assignee "$ARG_ASSIGNEE"
+FUN
+require_value() {
+  @defined "$2" && return 0
+
+  log "Missing value for $1"
+  log "$USAGE"
+  exit 1
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *promote) main "$@" ;;
+esac

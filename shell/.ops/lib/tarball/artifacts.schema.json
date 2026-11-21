@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/creature-workshop/shellops/lib/tarball/artifacts.schema.json",
+  "title": "Build Artifacts",
+  "description": "List of file paths produced by a build-release action.",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "string",
+    "minLength": 1
+  }
+}

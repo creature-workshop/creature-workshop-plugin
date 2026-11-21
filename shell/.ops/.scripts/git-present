@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+USAGE="$(cat <<'HELP'
+Installs git when the image has none, so that .envrc can call it. Does
+nothing when git is already installed.
+
+Usage: .scripts/git-present [-h,--help]
+
+A CI job runs this before its first shellops command. It loads nothing from
+.envrc, because .envrc is what needs git. It installs with apt-get, as root,
+which is how a job runs in the images the presets name.
+HELP
+)"
+
+# CONST: The directory this script sits in, which the repository root is found from.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# CONST: The shellops tree this script belongs to, which the library is loaded from.
+export SHELLOPS_DIR="${SHELLOPS_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+
+source "$SHELLOPS_DIR/shell/.logs/shell/log/api.sh"
+source "$SHELLOPS_DIR/lib/stdout/api.sh"
+
+main() {
+  case "${1:-}" in
+    -h|--help)
+      println "$USAGE"
+      exit 0
+      ;;
+  esac
+
+  if command -v git >/dev/null 2>&1; then
+    return 0
+  fi
+
+  require_apt
+  install_git
+}
+
+: <<'FUN'
+Fails, saying what is missing, when the image has no apt-get to install git
+with.
+FUN
+require_apt() {
+  if ! command -v apt-get >/dev/null 2>&1; then
+    error "git is not installed and this image has no apt-get to install it with; use an image that has git"
+    exit 1
+  fi
+}
+
+: <<'FUN'
+Installs git, and the certificates it needs to fetch over https.
+FUN
+install_git() {
+  apt-get update -qq
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends git ca-certificates
+}
+
+main "$@"

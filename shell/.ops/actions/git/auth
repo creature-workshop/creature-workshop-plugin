@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+user="${1:?usage: git-auth <user> <token>}"
+token="${2:?usage: git-auth <user> <token>}"
+
+origin_url="$(git remote get-url origin)"
+
+: <<'VAR'
+Authenticate pushes as $user via an HTTP Authorization extraheader (HTTP
+Basic with the bot's access token) instead of embedding the token in the
+remote URL. Keeping the token out of the URL means it never lands in
+.git/config's remote or shows up in `git remote -v` / a `set -x` trace.
+
+Forge-neutral. We first strip whatever credential the runner pre-seeded:
+  - GitLab CI clones with a gitlab-ci-token:<job-token>@host URL, so we
+    rebuild the remote without the embedded credentials.
+  - Forgejo Actions' checkout injects its own Authorization extraheader,
+    and Forgejo's basic auth checks that runner task token BEFORE personal
+    access tokens -- leaving it in place resolves the push as the virtual
+    "actions" user (UID -2) and trips branch protection. Drop it.
+
+https:// is assumed for the origin (the only scheme our CI clones over), so
+what is left of the origin past the scheme is [user:tok@]host/group/.../repo.git.
+VAR
+rest="${origin_url#https://}"
+
+# VAR: The origin's authority: [user:tok@]host.
+authority="${rest%%/*}"
+
+# VAR: The repository's path under the host: /group/.../repo.git.
+path="${rest#"$authority"}"
+
+# VAR: The host alone, with any credential stripped.
+bare_host="${authority##*@}"
+
+# VAR: The server the header is scoped to, which the token never appears in.
+server_url="https://${bare_host}"
+
+git config --unset-all "http.${origin_url}.extraheader" 2>/dev/null || true
+git config --unset-all "http.${server_url}/.extraheader" 2>/dev/null || true
+git config --unset-all "http.extraheader" 2>/dev/null || true
+
+# Clean, credential-free remote URL.
+git remote set-url origin "${server_url}${path}"
+
+# VAR: Attach the bot credentials as a server-scoped Authorization header.
+auth_b64="$(printf '%s' "${user}:${token}" | base64 | tr -d '\n')"
+git config "http.${server_url}/.extraheader" "Authorization: Basic ${auth_b64}"

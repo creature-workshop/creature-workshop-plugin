@@ -1,0 +1,12 @@
+query($id: String!) {
+  emailIntakeAddress(id: $id) {
+    id
+    address
+    type
+    enabled
+    forwardingEmailAddress
+    repliesEnabled
+    team { id key }
+    template { id name }
+  }
+}

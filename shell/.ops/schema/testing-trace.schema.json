@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft-2020-12/schema",
+  "$id": "https://github.com/creature-workshop/shellops/schema/testing-trace.schema.json",
+  "title": "Testing trace map",
+  "description": "What every test of a repository touched when run on its own under the tracer: per suite, per test file, the tracked files it read, the repository paths it probed for and missed, the programs it started and the internet addresses it reached for. Recorded by a traced run on main, kept after every test file so a run cut short leaves what it traced, and keyed by the commit it ran at; the next run carries forward every entry whose files are unchanged since its own commit and traces the rest. The scorecard audits the static selection against it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["commit", "recorded_at", "tracer", "suites"],
+  "$defs": {
+    "paths": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Repository-relative paths, sorted and unique."
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "status", "reads", "probes", "execs", "connects"],
+      "description": "One test file's traced run.",
+      "properties": {
+        "commit": {
+          "type": ["string", "null"],
+          "description": "The commit the test was traced at, or null when that run was not in CI. An entry a later run carries forward keeps it: none of the files the entry names differ between this commit and the later run's, so the entry holds there."
+        },
+        "status": {
+          "enum": ["passed", "failed"],
+          "description": "Whether the test passed under the tracer. A failing test still read what it read."
+        },
+        "reads": {
+          "$ref": "#/$defs/paths",
+          "description": "The tracked files the run opened, stat'd, read the link of, or executed."
+        },
+        "probes": {
+          "$ref": "#/$defs/paths",
+          "description": "The repository paths the run asked for and did not find: files that did not exist then, so one added later changes what the test sees."
+        },
+        "execs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "The programs the run started, by basename, sorted and unique."
+        },
+        "connects": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "The internet addresses the run connected to, or tried to, sorted and unique."
+        }
+      }
+    },
+    "suite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runner", "tests"],
+      "properties": {
+        "runner": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The runner the suite's tests ran through."
+        },
+        "tests": {
+          "type": "object",
+          "description": "Every test file of the suite, keyed by its repository-relative path, the same key the suite's escape join reads.",
+          "additionalProperties": { "$ref": "#/$defs/observation" }
+        }
+      }
+    }
+  },
+  "properties": {
+    "commit": {
+      "type": ["string", "null"],
+      "description": "The commit the map was recorded at, or null when the run was not in CI."
+    },
+    "recorded_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "description": "When the run started, UTC."
+    },
+    "tracer": {
+      "const": "strace",
+      "description": "The tracer that recorded the map."
+    },
+    "suites": {
+      "type": "object",
+      "description": "The traced suites, keyed by name as the testing config spells them. A suite the trace cannot key by file is absent.",
+      "additionalProperties": { "$ref": "#/$defs/suite" }
+    }
+  }
+}

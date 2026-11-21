@@ -1,0 +1,21 @@
+query($groupPath: ID!, $cursor: String) {
+  group(fullPath: $groupPath) {
+    projects(first: 50, after: $cursor, includeSubgroups: false, archived: EXCLUDE) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        id
+        name
+        fullPath
+        path
+        archived
+        webUrl
+        sshUrlToRepo
+        httpUrlToRepo
+        description
+      }
+    }
+  }
+}

@@ -1,0 +1,136 @@
+system:
+  git:
+    version: latest
+  ca-certificates:
+    version: latest
+  curl:
+    version: latest
+  sudo:
+    version: latest
+  shellcheck:
+    version: 0.9.0
+  strace:
+    version: "5.16"
+  direnv:
+    postinstall: .scripts/shim_direnv.sh
+  build-essential:
+    version: latest
+  openssh-client:
+    version: latest
+  pkg-config:
+    version: latest
+  libssl-dev:
+    version: latest
+  unzip:
+    version: latest
+  xz-utils:
+    version: latest
+  pandoc:
+    version: latest
+  openssl:
+    version: latest
+  parallel:
+    version: latest
+script:
+  rustup:
+    version: 1.28.2
+    toolchain: 1.95.0
+    components:
+      - rustfmt
+      - clippy
+      - llvm-tools
+    needs:
+      - build-essential
+      - curl
+      - ca-certificates
+  cargo-binstall:
+    version: 1.18.0
+    needs:
+      - rustup
+  llvm-strip:
+    version: "14"
+  zig:
+    version: 0.16.0
+    needs:
+      - build-essential
+  node:
+    version: 24.20.0
+    needs:
+      - fnm
+  fnm:
+    version: 1.39.0
+    needs:
+      - curl
+      - ca-certificates
+      - unzip
+  vercel:
+    version: 59.10.0
+    needs:
+      - node
+  tectonic:
+    version: 0.15.0
+    needs:
+      - curl
+      - ca-certificates
+  terraform:
+    version: 1.16.4
+    needs:
+      - curl
+      - ca-certificates
+      - unzip
+# Each crate names its release archive, so the install downloads it
+# directly (lib/cargo/prebuilt.sh) and honours OPS_DOWNLOAD_MIRROR; cargo
+# binstall, whose client refuses a plain http:// mirror, does not run for it.
+# The template is the one cargo binstall resolves for the crate, so the
+# archive is the same either way.
+cargo-binstall:
+  cargo-audit:
+    version: 0.22.2
+    args: --disable-strategies compile
+    musl: true
+    release: https://github.com/rustsec/rustsec/releases/download/cargo-audit/v{ version }/cargo-audit-{ target }-v{ version }.tgz
+  cargo-tarpaulin:
+    version: 0.35.4
+    args: --disable-strategies compile
+    musl: true
+    release: https://github.com/xd009642/tarpaulin/releases/download/{ version }/cargo-tarpaulin-{ target }.tar.gz
+  cargo-llvm-cov:
+    version: 0.9.1
+    args: --disable-strategies compile
+    musl: true
+    release: https://github.com/taiki-e/cargo-llvm-cov/releases/download/v{ version }/cargo-llvm-cov-{ target }.tar.gz
+  cargo-nextest:
+    version: 0.9.144
+    args: --disable-strategies compile
+    musl: true
+    release: https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-{ version }/cargo-nextest-{ version }-{ target }.tar.gz
+  cargo-fuzz:
+    version: 0.13.2
+    args: --disable-strategies compile
+    musl: true
+    release: https://github.com/rust-fuzz/cargo-fuzz/releases/download/{ version }/cargo-fuzz-{ version }-{ target }.tar.gz
+  cargo-zigbuild:
+    version: 0.22.1
+    args: --disable-strategies compile
+    musl: true
+    release: https://github.com/rust-cross/cargo-zigbuild/releases/download/v{ version }/cargo-zigbuild-{ target }.tar.xz
+    needs:
+      - xz-utils
+go-install:
+  yq:
+    version: 4.53.6
+    pkg: github.com/mikefarah/yq/v4
+# The libraries a test, a lint or CI reads and nothing under lib/ sources,
+# each a git repository at a commit (ADR 000050): the heredoc scanner, the
+# tree lowering, the doc extractor, the golden runner and the house lint.
+git:
+  shell-scan:
+    version: da3ddd31b8dd705898931470d675ca4c35aaf730
+  shell-tree:
+    version: 0d2e619720c88827da18005539225a6bf3b0b16d
+  shell-docs:
+    version: f8e0ce7198a580971b0933fa20680d39a80ea1ae
+  shell-goldens:
+    version: 0bed61d8fa953740366e1418591d355e05f6e87a
+  shell-lint:
+    version: 125159be7eec03bc2433669e2bee63791db33bf5

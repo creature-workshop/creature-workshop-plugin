@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+
+import \
+  "$SHELLOPS_DIR/lib/profile/api.sh" \
+  "$SHELLOPS_DIR/lib/profile/columns.sh" \
+  "$SHELLOPS_DIR/lib/profile/comment.sh" \
+  "$SHELLOPS_DIR/lib/profile/gate.sh" \
+  "$SHELLOPS_DIR/lib/profile/tables.sh"
+
+USAGE="$(cat <<HELP
+Measures what the repository's profiling declaration names: each command
+under each profiler, on this head and on the review's merge base. Each is
+measured on a fresh worktree of its own commit, prepared alike: its
+submodules checked out and one boot before the first command, so the two
+columns differ in the trees alone. Keeps one managed comment on the review
+with the measurements, and fails when a command costs more than it did on
+the base, fails where the base's run passed, or costs more than the
+declaration allows.
+
+The declaration is .ops/config/profiling.yaml: one object per profiler, under
+it one object per command, under that a ceiling per measure the profiler
+reports. A repository that declares nothing is measured on nothing, and the
+job passes. The ceilings are what each command is allowed to cost today; the
+merge request that lowers a cost lowers them.
+
+The base is measured by this head's profilers over the base's own tree, so a
+base older than the profilers still gets a column. A run without a base
+reports the head alone and holds it to the ceilings only; one without a review
+or a forge token prints the report and posts nothing.
+
+PROFILE_VARIANT names one NAME=value for the commands to run under, and
+turns the two columns into this head as is and this head under it, on
+fresh worktrees of the same commit, so they differ in the assignment
+alone. The merge base goes unmeasured, the comment is a second one marked
+with the assignment, and the gate fails the job when the assignment makes
+a command cost more, or fail where it passed.
+
+Usage: action profile report [-h,--help]
+
+Environment:
+  FORGE_REVIEW_BASE_SHA          The merge base (CI_MERGE_REQUEST_DIFF_BASE_SHA
+                                 on GitLab); absent, the head is reported alone
+  FORGE_REVIEW_IID               The review to comment on (CI_MERGE_REQUEST_IID on
+                                 GitLab); absent, no comment
+  FORGE_PR_TOKEN                 Write-scoped token (falls back to FORGE_ADMIN_TOKEN)
+  PROFILE_VARIANT                One NAME=value the commands run under, measured
+                                 against this head as is; absent, the merge
+                                 base is the base column
+
+Flags:
+  -h, --help     Show this help text.
+HELP
+)"
+
+main() {
+  parse_args "$@"
+
+  __main__declaration="$(profile__declaration "$PROJ")" || return 1
+  __main__profilers="$(profile__declared_profilers "$__main__declaration")"
+  if @len __main__len_1 "$__main__profilers"; [ "$__main__len_1" -eq 0 ]; then
+    log "No profiling declaration under $PROJ/.ops/config; nothing to measure."
+    return 0
+  fi
+  @foreach require_need "$__main__profilers" || return 0
+
+  __main__columns="$(profile__columns "$__main__declaration")" || return 1
+  @get __main__base_sha "$__main__columns" '.base_sha' ''
+  @get __main__base "$__main__columns" '.base'
+  @get __main__head "$__main__columns" '.head'
+
+  __main__breaches="$(profile__breaches "$__main__base" "$__main__head" "$__main__declaration")"
+  profile__print_tables "$__main__base" "$__main__head" >&2
+  profile__sync_comment "$__main__base" "$__main__head" "$__main__base_sha" "$__main__breaches"
+  report_breaches "$__main__breaches"
+}
+
+:<<'FUN'
+@foreach callback: fails, having logged what to install, when the wrapped
+profiler <name>'s needs are off the PATH. main then skips the report rather
+than failing the job, since a missing tool is not a cost.
+FUN
+require_need() {
+  @unwrap __require_need__unwrap_2 "$1"
+  kinds__assert_needs profile "$__require_need__unwrap_2"
+}
+
+:<<'FUN'
+Logs each breach and fails when there is one, so the job fails the pipeline;
+succeeds quietly when the list is empty.
+
+  $1  The breaches, as profile__breaches prints them
+FUN
+report_breaches() {
+  if @len __report_breaches__len_3 "$1"; [ "$__report_breaches__len_3" -eq 0 ]; then
+    return 0
+  fi
+
+  @foreach report_breach "$1"
+  error "profile report: a command costs more than $(profile__base_name) or .ops/config/profiling.yaml allows, or fails where it passed; lower the cost, or raise its ceiling there in a merge request that says why."
+  return 1
+}
+
+:<<'FUN'
+@foreach callback: logs one wrapped breach line as an error.
+FUN
+report_breach() {
+  @unwrap __report_breach__unwrap_4 "$1"
+  error "$__report_breach__unwrap_4"
+}
+
+parse_args() {
+  case "${1:-}" in
+    -h|--help) log "$USAGE"; exit 0 ;;
+    -*)
+      error "Unknown option: $1"
+      exit 1
+      ;;
+  esac
+}
+
+# Run only when executed directly; sourcing (e.g. from bats) skips main.
+case "$0" in
+  *report) main "$@" ;;
+esac

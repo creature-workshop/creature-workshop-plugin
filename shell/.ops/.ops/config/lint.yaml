@@ -1,0 +1,21 @@
+indent:
+  tabs: false
+  width: 2
+exclude:
+  - .coverage
+  - .ops
+  - planning
+  - engine
+added_only:
+  - inline-comment
+  - argv-accumulation
+  - spelling-tests
+  - private-name
+  - private-file
+  - adr-shape
+  - adr-citations
+  - adr-page
+  - boolean-tests
+  - file-segment
+decisions:
+  form: one-page

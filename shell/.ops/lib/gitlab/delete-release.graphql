@@ -1,0 +1,11 @@
+mutation($projectPath: ID!, $tagName: String!) {
+  releaseDelete(input: {
+    projectPath: $projectPath
+    tagName: $tagName
+  }) {
+    release {
+      tagName
+    }
+    errors
+  }
+}

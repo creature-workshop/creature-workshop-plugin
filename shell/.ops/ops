@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Bootstrap shellops if envrc is not already loaded.
+if [ -z "${SHELLOPS_DIR:-}" ]; then
+  # shellcheck disable=SC2155
+  export SHELLOPS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.ops" && pwd)"
+  . "$SHELLOPS_DIR/.envrc"
+fi
+
+: <<'FUN'
+The ops dispatcher. Runs the command named with the arguments that follow
+it: shellops' own cli/<command> when there is one, and otherwise the
+cli/<command> of the first tool the lock pins that carries one, so a pinned
+tool's commands run as `ops <command>` with no wrapper in shellops. With no
+command, lists both and fails.
+
+Usage: ops <command> [args...]
+FUN
+main() {
+  if [ -z "${1:-}" ]; then
+    usage
+    exit 1
+  fi
+  __main__script="$SHELLOPS_DIR/cli/$1"
+  if [ ! -f "$__main__script" ]; then
+    load_envrc
+    __main__script="$(self__pins__command "$1")"
+  fi
+  if [ -z "$__main__script" ]; then  # structs-lint: allow -- plain shell, before structs loads
+    unknown "$1"
+    exit 1
+  fi
+  shift
+  exec "$__main__script" "$@"
+}
+
+: <<'FUN'
+Loads .envrc unless this shell has: it fetches the trees the lock names and
+writes the pins, so a pinned tool's command is found, and its tree named in
+the environment, however fresh the checkout.
+FUN
+load_envrc() {
+  if command -v self__pins__command >/dev/null 2>&1; then
+    return 0
+  fi
+  . "$SHELLOPS_DIR/.envrc"
+}
+
+: <<'FUN'
+Prints the usage and the commands on stderr: shellops' own, and then the
+ones the pinned tools carry, each with its tool's name.
+FUN
+usage() {
+  echo "Usage: ops <command> [args...]" >&2
+  echo "" >&2
+  echo "Commands:" >&2
+  own_commands >&2
+  pinned_commands >&2
+}
+
+: <<'FUN'
+Prints shellops' own commands, the executables under cli/, one per line.
+FUN
+own_commands() {
+  for __own_commands__path in "$SHELLOPS_DIR"/cli/*; do
+    if [ -x "$__own_commands__path" ]; then
+      echo "  ${__own_commands__path##*/}"
+    fi
+  done
+}
+
+: <<'FUN'
+Prints the commands the pinned tools carry, one per line with the tool in
+parentheses.
+FUN
+pinned_commands() {
+  load_envrc
+  self__pins__commands | while read -r __pinned_commands__name __pinned_commands__tool; do
+    echo "  $__pinned_commands__name ($__pinned_commands__tool)"
+  done
+}
+
+: <<'FUN'
+Says on stderr that no command is named <command>, and what to declare for
+a tool's command to be.
+FUN
+unknown() {
+  echo "ops: unknown command '$1'" >&2
+  echo "shellops has no cli/$1, and no tool the lock pins carries one. Declare the tool that provides it in the git channel of .ops/config/tools.yaml and run ops install." >&2
+}
+
+main "$@"

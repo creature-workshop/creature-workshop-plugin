@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$SHELLOPS_DIR/.envrc"
+import "$SHELLOPS_DIR/lib/likec4/api.sh"
+
+USAGE="$(cat <<HELP
+Exports the figure views of each LikeC4 project to PNGs beside its sources:
+the view f1a becomes 1a.png. A directory that does not exist is passed over.
+
+Usage: action likec4 export [-h,--help] [--prefix <view-prefix>] <project-dir>...
+
+Arguments:
+  project-dir    A directory of .c4 sources, such as adrs/0003-a-decision/figures.
+
+Flags:
+  --prefix <view-prefix>
+                 The start of a view id that marks it a figure. Defaults to f.
+  -h, --help     Show this help text.
+
+Expects likec4 on the PATH, where ops install puts it once ops.lock names it
+as an npm tool; a Playwright browser for the export; and Graphviz's dot where
+LikeC4 lays out through it.
+HELP
+)"
+
+main() {
+  __main__prefix=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) log "$USAGE"; exit 0 ;;
+      --prefix)
+        __main__prefix="$2"
+        shift
+        ;;
+      -*)
+        error "Unknown option: $1"
+        exit 1
+        ;;
+      *) break ;;
+    esac
+    shift
+  done
+
+  require_projects "$@"
+
+  for __main__project in "$@"; do
+    likec4__export_figures "$__main__project" "$__main__prefix"
+    log "$__main__project"
+  done
+}
+
+require_projects() {
+  if [ "$#" -eq 0 ]; then
+    error "Name at least one LikeC4 project directory."
+    exit 1
+  fi
+}
+
+case "$0" in
+  *export) main "$@" ;;
+esac
