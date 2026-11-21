@@ -5,11 +5,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { client } from '../client/index.js';
-import { describe } from '../failures/describe.js';
 import { dataOr, LOADING, remoteOf } from '../remote.js';
-
-/** What a mutation that met a change made outside the pane says. */
-export const STALE_MESSAGE = 'This changed outside the pane. Cancel to see the current value, or save again to replace it.';
+import { failureMessage, STALE_MESSAGE } from '../workshop/synced/writeMessage.js';
 
 /**
  * Queries one record of a store, and again whenever any part of its address
@@ -82,18 +79,8 @@ async function written(request, setRecord) {
     return null;
   }
   if (result.error.code !== 'STALE') {
-    return sentenceOf(result.error);
+    return failureMessage(result.error);
   }
   setRecord({ state: 'success', data: result.error.extensions.record });
   return STALE_MESSAGE;
-}
-
-/**
- * Why a save failed and what to try, as one line under the field.
- *
- * @param error The error, as client/api.js flattens it.
- */
-function sentenceOf(error) {
-  const { why, hint } = describe(error);
-  return `${why} ${hint}`;
 }
